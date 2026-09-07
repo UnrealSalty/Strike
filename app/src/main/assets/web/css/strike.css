@@ -44,9 +44,8 @@ body {
 }
 
 .topbar__brand {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--accent-text);
+    display: block;
+    flex: none;
 }
 
 .nav {
@@ -2023,6 +2022,28 @@ main {
     50% { background: var(--line); }
 }
 
+@media (max-width: 800px) {
+    .topbar {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 8px var(--pad);
+    }
+
+    .nav {
+        flex-wrap: wrap;
+        width: 100%;
+        margin-left: 0;
+        margin-top: 4px;
+    }
+
+    .nav__link {
+        flex: 1 0 auto;
+        justify-content: center;
+        margin-top: 4px;
+        padding: 0 12px;
+    }
+}
+
 @media (max-width: 720px) {
     .columns,
     .boxes,
@@ -2065,26 +2086,6 @@ main {
     .view {
         flex: none;
         height: 220px;
-    }
-
-    .topbar {
-        flex-wrap: wrap;
-        height: auto;
-        padding: 8px var(--pad);
-    }
-
-    .nav {
-        flex-wrap: wrap;
-        width: 100%;
-        margin-left: 0;
-        margin-top: 4px;
-    }
-
-    .nav__link {
-        flex: 1 0 auto;
-        justify-content: center;
-        margin-top: 4px;
-        padding: 0 12px;
     }
 
     .toolbar--stack {
