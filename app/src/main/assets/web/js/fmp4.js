@@ -3,9 +3,7 @@
 
     window.Strike = window.Strike || {};
 
-    // The head unit's WebView has no WebCodecs, so Media Source Extensions is
-    // the only hardware decoder reachable from a page. It will not take raw
-    // H.264, so every frame is wrapped as a fragmented MP4 here.
+    // Chrome 58 uses MSE for Live; wrap H.264 samples as fragmented MP4.
 
     var TIMESCALE = 90000;
     var TRACK = 1;
@@ -26,7 +24,6 @@
         return [(value >>> 8) & 0xFF, value & 0xFF];
     }
 
-    /** A 64 bit field written as two 32 bit halves, which is all MP4 needs. */
     function u64(value) {
         return u32(Math.floor(value / 4294967296)).concat(u32(value >>> 0));
     }
@@ -201,7 +198,7 @@
         return (value % 2) ? (value + 1) / 2 : -(value / 2);
     };
 
-    /** The encoder inserts a 03 after any two zero bytes; the parser must not see it. */
+    // Remove H.264 emulation-prevention bytes before parsing the SPS.
     function unescaped(nal, from) {
         var out = [];
         for (var i = from; i < nal.length; i++) {
@@ -312,22 +309,14 @@
         split: splitNals,
         nalType: nalType,
 
-        /**
-         * The encoded size, read off the parameter set. The encoder rounds up
-         * to whole macroblocks and crops back, so what it produced is the only
-         * authority on what the init segment must declare.
-         */
+        // Derive dimensions from SPS cropping, not the requested encoder size.
         sizeOf: sizeOf,
 
-        /** ftyp and moov: everything the decoder needs before the first frame. */
         init: function (width, height, sps, pps) {
             return bytesOf(ftyp().concat(moov(width, height, sps, pps)));
         },
 
-        /**
-         * One frame as a movie fragment. The base offset points past the moof
-         * to the mdat payload, so the decoder finds the sample without an index.
-         */
+        // trun's data offset points from moof to the sample in mdat.
         segment: function (sequence, decodeTime, durationTicks, nals, keyFrame) {
             var payload = toLengthPrefixed(nals);
 
@@ -345,7 +334,6 @@
                             u32(durationTicks), u32(payload.length))));
             }
 
-            // The offset counts from the moof, so it needs the moof's own size.
             var moof = moofWith(moofWith(0).length + 8);
             var out = new Uint8Array(moof.length + 8 + payload.length);
             out.set(bytesOf(moof), 0);

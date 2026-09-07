@@ -23,12 +23,7 @@ private const val CHANNELS = 1
 private const val BITRATE_BPS = 64_000
 private const val DEQUEUE_TIMEOUT_US = 10_000L
 
-/**
- * The microphone belongs to the app and the muxer belongs to the daemon, so
- * audio is encoded here and sent across. Presentation times come from
- * [System.nanoTime] because the camera's frames are stamped from the same
- * clock, which is what keeps the two tracks in step.
- */
+// Encode microphone audio in the app and send it to the daemon's muxer.
 class CabinAudio {
 
     private var record: AudioRecord? = null
@@ -172,8 +167,7 @@ class CabinAudio {
                 buffer.get(bytes)
                 val isConfig = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
                 if (isConfig) {
-                    // MediaMuxer will not take an aac track without this, and
-                    // it can only be added before the muxer is started.
+                    // Add AAC codec configuration before the muxer starts.
                     sendConfig(link, bytes)
                     sentConfig = true
                 } else if (sentConfig) {

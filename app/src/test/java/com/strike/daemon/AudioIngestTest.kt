@@ -14,10 +14,6 @@ private const val CHANNELS = 1
 private const val BITRATE_BPS = 64_000
 private val CSD = byteArrayOf(0x11, 0x88.toByte())
 
-/**
- * The app and the daemon are separate processes, so the only way to know they
- * agree on the wire is to speak it over a real socket.
- */
 class AudioIngestTest {
 
     private val ingest = AudioIngest()

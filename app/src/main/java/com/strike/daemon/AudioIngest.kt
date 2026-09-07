@@ -19,7 +19,6 @@ private const val CSD_MAX_BYTES = 64
 const val AUDIO_KIND_CONFIG = 1
 const val AUDIO_KIND_FRAME = 2
 
-/** What the muxer needs to describe an AAC track before it is started. */
 class AudioConfig(
     val sampleRate: Int,
     val channelCount: Int,
@@ -27,11 +26,7 @@ class AudioConfig(
     val csd: ByteArray
 )
 
-/**
- * Encoded cabin audio arriving from the app. Timestamps on both sides come
- * from [System.nanoTime], so audio and video share one clock across the two
- * processes and the muxer can interleave them without a correction.
- */
+// Audio and video timestamps use System.nanoTime across both processes.
 class AudioIngest {
 
     private val frames = ArrayBlockingQueue<Sample>(QUEUED_FRAMES)

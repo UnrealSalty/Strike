@@ -26,12 +26,7 @@ private const val HOLD_POLL_MS = 200L
 
 private val RED = Color.rgb(190, 20, 20)
 
-/**
- * The message someone standing at the car sees. A WebView cannot appear with
- * ACC off, because BYD only composites its own layer then, so this is a
- * SurfaceControl at the top of the z order from the daemon's uid 2000, which
- * is the same route Overdrive's deterrent takes.
- */
+// Parked display output requires a shell-owned SurfaceControl layer.
 class RedScreen {
 
     private var control: Any? = null
@@ -69,11 +64,7 @@ class RedScreen {
         DaemonLog.d(TAG, "showing the deterrent for ${seconds}s")
     }
 
-    /**
-     * Overdrive's deterrent decides its own teardown, on its own thread, every
-     * 200ms. The daemon's supervisor blocks for seconds remounting a card and
-     * reopening the strip, so it cannot be what lowers the layer.
-     */
+    // Hide on a dedicated timer; storage and camera recovery can block the supervisor.
     private fun hold(forced: Boolean) {
         Thread({
             while (true) {
@@ -149,10 +140,6 @@ class RedScreen {
         return true
     }
 
-    /**
-     * The daemon has no Context and so no WindowManager. wm is a shell tool and
-     * this process is the shell.
-     */
     private fun panelSize(): Rect {
         val printed = read("wm", "size") ?: return Rect(0, 0, FALLBACK_WIDTH, FALLBACK_HEIGHT)
         val match = Regex("(\\d{3,5})x(\\d{3,5})").find(printed)
@@ -160,12 +147,7 @@ class RedScreen {
         return Rect(0, 0, match.groupValues[1].toInt(), match.groupValues[2].toInt())
     }
 
-    /**
-     * Overdrive lights the panel from PowerManager, then releases a vendor
-     * Off lock via mService.TurnBacklightOnWithLock(IBinder, String). The
-     * stub we used first is not that object, which is why the layer sat on
-     * a dark panel until ACC came back.
-     */
+    // Wake the panel, then release the vendor Off lock through PowerManager's service.
     private fun wakePanel() {
         wokeAtMs = System.currentTimeMillis()
         offLockHeld = false
@@ -349,11 +331,7 @@ class RedScreen {
         null
     }
 
-    /**
-     * BYD composites only its own layer with ACC off, and that layer sits at
-     * 2^30, so anything below it is dropped. Verified in Overdrive's
-     * ScreenDeterrent, which reaches the panel the same way.
-     */
+    // Match Overdrive's ScreenDeterrent layer order; BYD's parked compositor rejects lower layers.
     private fun place(held: Any) {
         transact { transaction, controlClass, transactionClass ->
             try {
@@ -374,11 +352,7 @@ class RedScreen {
         }
     }
 
-    /**
-     * With ACC off the vendor compositor keeps the last frame on the panel, so
-     * hiding the layer leaves the red field up until a touch forces a redraw.
-     * Overdrive's releaseSurface reparents it off the display first.
-     */
+    // Detach before releasing; the parked compositor can otherwise retain the last red frame.
     private fun releaseLayer(held: Any) {
         transact { transaction, controlClass, transactionClass ->
             transactionClass.getMethod("hide", controlClass).invoke(transaction, held)

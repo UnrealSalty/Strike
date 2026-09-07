@@ -19,8 +19,6 @@
     --warn: #e5a33d;
     --bad: #e5544b;
 
-    /* Why a clip exists. Kept clear of the status colours above so a green
-       clip never reads as a running daemon. */
     --kind-drive: #4c8dff;
     --kind-parked: #a98bff;
     --kind-manual: #46c8d8;

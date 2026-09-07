@@ -17,11 +17,7 @@ private const val WRITING = ".tmp"
 private const val BROKEN = ".broken"
 private const val SWEEP_AGE_MS = 5 * 60_000L
 
-/**
- * The only thing that writes a clip file. A clip is named at the moment it
- * starts and carries `.tmp` until the muxer closes cleanly, which is why
- * [ClipStore] never lists one that is still being written.
- */
+// Keep .tmp until the muxer closes successfully; stores only list finalized clips.
 class ClipWriter(private val dir: File) {
 
     private var muxer: MediaMuxer? = null
@@ -64,10 +60,7 @@ class ClipWriter(private val dir: File) {
         }
     }
 
-    /**
-     * ACC off unmounts the card. isDirectory then lies. Overdrive remounts
-     * first and treats exists(), not isDirectory(), as the gate.
-     */
+    // Remount before checking the FUSE path; isDirectory can be stale after ACC off.
     private fun writableDir(mayUseInternal: Boolean): File? {
         if (storageUuid(dir.path) != null) remountUntil(dir)
         if (dir.exists() || ensureDir(dir)) return dir
@@ -161,7 +154,6 @@ private fun worldAccess(dir: File) {
     dir.setExecutable(true, false)
 }
 
-/** The app's encoder already described itself; csd-0 is what the muxer needs. */
 private fun aacFormat(audio: AudioConfig): MediaFormat {
     val format = MediaFormat.createAudioFormat(
         MediaFormat.MIMETYPE_AUDIO_AAC, audio.sampleRate, audio.channelCount
@@ -176,7 +168,7 @@ internal fun clipName(mode: RecordingMode, atMs: Long): String {
     return "${mode.name.lowercase(Locale.US)}_$stamp.mp4"
 }
 
-/** A clip left half written by a power cut is not footage anyone can watch. */
+// An unfinished MP4 may lack the index required for playback.
 fun sweepUnfinished(dir: File, nowMs: Long) {
     val files = dir.listFiles() ?: return
     var swept = 0

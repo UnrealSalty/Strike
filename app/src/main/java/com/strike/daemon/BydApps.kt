@@ -3,10 +3,7 @@ package com.strike.daemon
 import android.content.Context
 import android.content.pm.PackageManager
 
-/**
- * The car's own apps. Reading their state is a normal API call; changing it is
- * `pm disable-user`, which only the shell can run.
- */
+// Package state changes require shell UID access.
 class BydApps(context: Context, private val shell: Shell) {
 
     private val packages = context.packageManager

@@ -6,7 +6,6 @@ private const val ACROSS = 16
 private const val DOWN = 12
 private const val BLOCKS = ACROSS * DOWN
 
-/** Below this a block is the sensor's own noise, not something that moved. */
 private const val LUMA_STEP = 12
 
 class Verdict(
@@ -17,10 +16,7 @@ class Verdict(
 ) {
     fun movedIn(quadrant: Int): Boolean = quadrants[quadrant]
 
-    /**
-     * A parked car fills the camera that moved. Sharing the camera is not
-     * enough: the box itself has to be where the blocks changed.
-     */
+    // Require changed blocks inside the detected box, not merely in the same camera view.
     fun movedInBox(
         x: Int,
         y: Int,
@@ -50,11 +46,7 @@ class Verdict(
     }
 }
 
-/**
- * The cheap first pass. Mean brightness per block, compared with the last
- * frame, scored per quadrant of the mosaic so a subject filling one camera
- * counts as close rather than being averaged away across all four.
- */
+// Score block brightness changes per camera quadrant.
 class MotionDetector {
 
     private var previous: IntArray? = null
@@ -94,10 +86,7 @@ class MotionDetector {
         return Verdict(score >= movedShare, score, quadrants, movedBlocks)
     }
 
-    /**
-     * The cameras run their own auto-exposure while parked, and a gain step
-     * lifts every block at once. Only what differs from that lift is a subject.
-     */
+    // Subtract the common brightness shift to reject camera auto-exposure changes.
     private fun exposureShift(deltas: IntArray): Int {
         val sorted = deltas.copyOf()
         sorted.sort()

@@ -33,8 +33,7 @@ internal fun watchdogScript(
         "  if [ -f \"\$SENTINEL\" ] || [ \"\$(cat \"\$PID_FILE\" 2>/dev/null)\" != \"\$\$\" ]; then",
         "    exit 0",
         "  fi",
-        // A daemon started by an earlier watchdog is still the camera's owner.
-        // Launching against it just burns a process every cycle.
+        // Reuse a daemon left running by an earlier watchdog.
         "  OWNER=\$(cat \"\$LOCK_FILE\" 2>/dev/null)",
         "  if [ -n \"\$OWNER\" ] && [ -d \"/proc/\$OWNER\" ]; then",
         "    sleep 10",
@@ -104,7 +103,7 @@ private fun truncateLines(indent: String): Array<String> = arrayOf(
     "${indent}fi"
 )
 
-/** echo per line, because the shell here has no heredoc worth trusting. */
+// Write lines individually for the head unit's shell.
 internal fun writeScriptLine(lines: List<String>): String {
     val command = StringBuilder("rm -f $CAM_SCRIPT_PATH 2>/dev/null; ")
     for ((index, line) in lines.withIndex()) {

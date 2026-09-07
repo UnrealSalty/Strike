@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicReference
 private const val TAG = "Sentry"
 private const val POLL_MS = 200L
 
-/** Twice a second is enough to catch someone walking up and cheap to read back. */
 internal const val SAMPLE_MS = 500L
 
 /** Bounds one clip's timeline at the 2 minute clip cap, twice a second. */
@@ -20,17 +19,11 @@ private const val MARK_CAP = 240
 /** Quiet looks after arm, so parked cars are scenery before the first event. */
 private const val SEED_MS = 4_000L
 
-/** What the daemon writes beside an event clip once it has a name. */
 class Flag(val seen: String, val score: Float, val hero: ByteArray?)
 
-/** When one sighting happened, so the player can band the clip's timeline. */
 class Mark(val atMs: Long, val seen: String)
 
-/**
- * Smart mode, running in the daemon because that is where the frames are.
- * Block motion first, then YOLO on the frame that moved, and only a confirmed
- * person or vehicle writes a clip.
- */
+// Use block motion to gate YOLO; confirmed sightings extend the event window.
 class Sentry(apkPath: String?, private val screen: RedScreen) {
 
     private val sink = FrameSink(SAMPLE_MS)
@@ -61,7 +54,6 @@ class Sentry(apkPath: String?, private val screen: RedScreen) {
     var events = 0
         private set
 
-    /** Pushed by the app each poll. Preview does not read this; an event does. */
     @Volatile
     var screenOn = Config.getBool(SurveillanceSettings.SCREEN, false)
 
@@ -90,10 +82,7 @@ class Sentry(apkPath: String?, private val screen: RedScreen) {
         DaemonLog.d(TAG, "armed")
     }
 
-    /**
-     * The HAL stalled and the strip was reopened. Keep the trigger window
-     * and the red layer; only the pixels come from the new bus.
-     */
+    // Reopening capture must preserve the active event window and deterrent.
     @Synchronized
     fun rebind(next: FrameBus) {
         if (!armed || bus === next) return
@@ -117,13 +106,9 @@ class Sentry(apkPath: String?, private val screen: RedScreen) {
         DaemonLog.d(TAG, "stood down")
     }
 
-    /** Taken once, by the supervisor, as soon as the event clip has a name. */
     fun takeFlag(): Flag? = flag.getAndSet(null)
 
-    /**
-     * Drained every supervisor pass so the queue stays short, into a list the
-     * supervisor holds until the clip it belongs to has a name.
-     */
+    // The supervisor holds pending timeline marks until their clip has a filename.
     fun takeMarks(into: MutableList<Mark>) {
         while (true) {
             val mark = marks.poll() ?: break
@@ -132,7 +117,7 @@ class Sentry(apkPath: String?, private val screen: RedScreen) {
     }
 
     private fun watch() {
-        // Loading the model costs a second, and it must not delay arming.
+        // Load inference off the supervisor thread.
         try {
             if (!yolo.open()) {
                 DaemonLog.w(TAG, "no detector on this build, so movement alone will write a clip")

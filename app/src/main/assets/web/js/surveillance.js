@@ -16,7 +16,6 @@
             watch: 'Continuous',
             event: 'Movement'
         },
-        // A Smart clip is named by what YOLO saw; the sidecar can be missing.
         tag: function (row) {
             return row.seen || row.kind;
         },

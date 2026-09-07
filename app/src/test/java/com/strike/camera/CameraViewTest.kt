@@ -81,7 +81,6 @@ class CameraViewTest {
 
         assertEquals(8, coords.size)
         assertEquals(setOf(0.50f, 0.75f), coords.filterIndexed { i, _ -> i % 2 == 0 }.toSet())
-        // Bottom two corners of the quad read row 1, the top two read row 0.
         assertEquals(listOf(1f, 1f, 0f, 0f), coords.filterIndexed { i, _ -> i % 2 == 1 })
     }
 

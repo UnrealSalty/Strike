@@ -6,10 +6,7 @@ window.Strike = window.Strike || {};
     var KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'del', '0', 'ok'];
     var LABELS = { del: 'Del', ok: 'OK' };
 
-    /**
-     * Digits and nothing else. A text field would raise the head unit's
-     * keyboard over the screen and accept letters a PIN cannot hold.
-     */
+    // Use digit buttons to avoid opening the head unit's software keyboard.
     Strike.keypad = function (host, min, max, onSubmit) {
         var entered = '';
         var busy = false;

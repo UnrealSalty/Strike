@@ -32,11 +32,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /**
-     * The daemon writes clips as uid 2000 onto the card, but listing, playing
-     * and deleting them happens in the app, which cannot read the card at all
-     * until this is granted. Cabin audio is captured here for the same reason.
-     */
+    // Storage access and microphone capture run under the app UID.
     private fun askForPermissions() {
         val missing = NEEDED.filter {
             checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED

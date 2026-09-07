@@ -15,10 +15,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * The dashboard reads every value from here. A field it omits is a subsystem
- * that is not reporting, and the page shows an em dash rather than a number.
- */
 class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsApi, private val pin: Pin) {
 
     private val storage = Storage(context, shell)

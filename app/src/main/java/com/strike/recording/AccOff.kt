@@ -12,15 +12,7 @@ import com.strike.web.WebUi
 
 private const val TAG = "AccOff"
 
-/**
- * The car announces the key going out, which reaches Strike sooner than the
- * next telemetry poll. Closing the drive clip early is the difference between
- * a playable file and one with no index, because power follows shortly after.
- *
- * With surveillance on this is a handover, not a shutdown: the daemon keeps
- * the camera and switches to the parked library. targetSdk 25 is what lets
- * that process stay alive.
- */
+// Forward ACC off before the next poll so the daemon can finalize or hand over capture.
 class AccOff : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {

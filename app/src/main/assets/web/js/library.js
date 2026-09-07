@@ -10,7 +10,6 @@
     var SHRINK = 'M4 9h5V4M20 9h-5V4M20 15h-5v5M4 15h5v5';
     var FILM = 'M3 5.5A1.5 1.5 0 014.5 4h15A1.5 1.5 0 0121 5.5v13a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 18.5z';
 
-    /** Keys 0 to 4, in the order the mosaic is read. */
     var ANGLES = ['all', 'front', 'right', 'rear', 'left'];
     var UNMOUNTED = {
         internal: 'Internal storage is not available',
@@ -18,7 +17,6 @@
         usb: 'No USB storage'
     };
 
-    /** The words the settings picker uses. One spelling per volume. */
     var WHERE = {
         internal: 'Internal',
         sd: 'SD card',
@@ -83,11 +81,6 @@
         return host;
     }
 
-    /**
-     * Recordings and Surveillance are the same library over two stores: a
-     * filtered paged list of clips and one player. The plan's `page` field is
-     * the only thing that differs beyond copy and endpoints.
-     */
     Strike.library = function (plan) {
         var rows = [];
         var page = 0;
@@ -128,10 +121,6 @@
             return Strike.core.el('span', 'tag tag--' + key, plan.tags[key] || key);
         }
 
-        /**
-         * The first chip takes the detection when there is one, so the kind
-         * needs its own or an event never says it was a Smart clip.
-         */
         function chips(host, row) {
             host.appendChild(chip(tagOf(row)));
             var where = WHERE[place];
@@ -167,10 +156,7 @@
             return button;
         }
 
-        /**
-         * The list is rebuilt on every keystroke, so a preview is fetched once
-         * and the newest set of nodes for that clip is the one that gets filled.
-         */
+        // Reuse thumbnail requests across list rebuilds and update only the current nodes.
         function preview(id, nodes) {
             if (shots[id]) {
                 fill(shots[id], nodes);
@@ -190,8 +176,7 @@
                 }
                 var waiting = asking[id];
                 delete asking[id];
-                // A clip the car cut off has no readable header. Resolve anyway, or
-                // the placeholder pulses for the life of the page.
+                // Resolve failed thumbnails so truncated clips do not leave a permanent loading state.
                 shots[id] = xhr.status === 200
                     ? {
                         url: URL.createObjectURL(xhr.response),
@@ -465,10 +450,6 @@
             playing = null;
         }
 
-        /**
-         * Overdrive paints each event as a left/width percent of durationMs.
-         * Same maths, same layer. No events means the bar is still the seeker.
-         */
         function stamp() {
             if (!playing) {
                 return;
@@ -606,7 +587,6 @@
                 scrubbing = false;
             });
 
-            // Tapping the angle already showing goes back to all four.
             document.getElementById('angles').onclick = function (event) {
                 var button = Strike.core.buttonIn(event, this);
                 if (!button) {
@@ -617,7 +597,6 @@
             };
         }
 
-        // Footage does not come back, so the first press only arms the button.
         function remove() {
             if (!armed) {
                 armed = true;
@@ -632,8 +611,6 @@
                 URL.revokeObjectURL(shots[id].url);
                 delete shots[id];
             }
-            // The row goes now; the refresh that follows puts it back if the
-            // card refused the delete.
             drop(id);
             Strike.core.del(plan.rows + '/' + encodeURIComponent(id), function () {
                 load();
@@ -682,7 +659,6 @@
 
             document.onkeydown = function (event) {
                 if (event.keyCode === 27) {
-                    // Fullscreen first, the way a browser does it.
                     if (playing !== null && full) {
                         expand(false);
                         return;

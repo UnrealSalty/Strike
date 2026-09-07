@@ -2,11 +2,7 @@ package com.strike.recording
 
 import android.media.MediaFormat
 
-/**
- * Overdrive's ladder: H.265 costs half again less than H.264 for the same
- * picture, so the H.264 rung is 1.5 times the H.265 one. The settings note in
- * the UI promises these numbers.
- */
+// Bitrate presets match Overdrive; H.264 uses 1.5 times the H.265 bitrate.
 private val H265_BPS = mapOf(
     "economy" to 1_000_000,
     "standard" to 2_000_000,

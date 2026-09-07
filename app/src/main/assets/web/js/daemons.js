@@ -8,7 +8,6 @@
         connect: { path: '/api/daemons/shell', label: 'Connect' }
     };
 
-    // The list repaints every poll, so which rows are open lives out here.
     var open = {};
 
     function two(number) {
@@ -28,7 +27,6 @@
         return days > 0 ? days + 'd ' + text : text;
     }
 
-    // Uptime arrives once per poll and counts on between polls.
     function counting(node, prefix, uptimeMs) {
         node.setAttribute('data-uptime-ms', uptimeMs);
         node.setAttribute('data-at', Date.now());
@@ -173,7 +171,6 @@
         host.appendChild(Strike.core.el('p', 'note', 'Cannot reach Strike.'));
     }
 
-    // Newest is last, so the frame follows the tail until the owner scrolls up.
     function following(host) {
         return host.scrollHeight - host.scrollTop - host.clientHeight < 8;
     }

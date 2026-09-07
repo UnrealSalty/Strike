@@ -14,14 +14,10 @@ private const val HOST = "127.0.0.1"
 private const val CONNECT_MS = 1_500
 private const val IDLE_MS = 1_000
 
-/** A keyframe at 1.5 Mbps is far smaller; anything larger is a desynced stream. */
+// Bound packet size before allocating memory.
 private const val PACKET_MAX_BYTES = 1 shl 20
 
-/**
- * Reads encoded frames from the daemon and hands them to the viewers without
- * looking inside them. The header the daemon wrote goes out as the WebSocket
- * payload, so the muxer in the browser is the only thing that parses video.
- */
+// Forward daemon packets unchanged; the browser parses and muxes the video.
 class LivePackets(private val viewers: LiveStream) {
 
     @Volatile
@@ -65,8 +61,6 @@ class LivePackets(private val viewers: LiveStream) {
             } catch (e: SocketTimeoutException) {
                 continue
             }
-            // A frame this big is a keyframe on a rich scene, not a broken
-            // stream, so it is dropped rather than taken as the end of one.
             if (length <= 0) {
                 throw IOException("live packet claimed $length bytes")
             }
@@ -79,8 +73,6 @@ class LivePackets(private val viewers: LiveStream) {
             input.readFully(packet)
             viewers.send(packet, 0, length)
             forwarded++
-            // Pairs with the daemon's own count: if it encoded and this did not
-            // forward, the break is between the processes and not in the camera.
             if (forwarded == 1L) {
                 val kind = if (packet.isNotEmpty() && packet[0].toInt() and PACKET_FLAG_CONFIG != 0) {
                     "config"

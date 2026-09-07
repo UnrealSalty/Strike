@@ -30,10 +30,7 @@ private const val ACTIVITY_MS = 10_000L
 private const val VOTE_MS = 5 * 60_000L
 private const val WAKE_MS = 8 * 60_000L
 
-/**
- * ACC off drops the MCU/ISP rail and lets the AP sleep. Overdrive holds both
- * from AccSentry; Strike holds them here so this daemon keeps getting frames.
- */
+// Hold the MCU/ISP rails and AP awake for parked capture, matching Overdrive's AccSentry.
 object ParkedRails {
 
     @Volatile

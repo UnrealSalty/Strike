@@ -15,7 +15,7 @@ private const val RETRY_MS = 30_000L
 
 private val GEARS = arrayOf("P", "R", "N", "D", "M", "S")
 
-/** Read-only BYD signals for the Atto 2. No vehicle commands in Strike. */
+// Read-only BYD vehicle signals.
 class VehicleTelemetry(
     private val context: Context,
     private val warn: (String) -> Unit = { Logs.w(TAG, it) }
@@ -25,7 +25,6 @@ class VehicleTelemetry(
     private val devices = HashMap<String, Any>()
     private val triedAtMs = HashMap<String, Long>()
 
-    /** Null when the car's SDK is not on this device at all. */
     fun snapshot(): VehicleSnapshot? {
         val statistic = device(STATISTIC)
         val bodywork = device(BODYWORK)
@@ -50,10 +49,8 @@ class VehicleTelemetry(
         )
     }
 
-    /** Null while unknown, so a caller waits rather than assuming the car is off. */
     fun accOn(): Boolean? = accOnOf(read(device(BODYWORK), "getPowerLevel")?.toInt())
 
-    /** Poll only the signals needed to hand the camera between driving and parking. */
     fun parkingSnapshot(): VehicleSnapshot = VehicleSnapshot(
         soc = null,
         rangeKm = null,
@@ -111,8 +108,7 @@ internal fun batteryKwhOf(directKwh: Double?, tenthsKwh: Int?, soc: Int?): Doubl
     return if (plausibleKwh(derived, soc)) derived else null
 }
 
-// Some firmwares answer with the percentage in the energy field, so the reading
-// has to imply a pack the size of the one in this car, which is about 45 kWh.
+// Reject energy readings whose implied pack capacity is outside the supported range.
 internal fun plausibleKwh(kwh: Double?, soc: Int?): Boolean {
     if (kwh == null || kwh <= 1.0 || kwh >= 90.0) return false
     if (soc == null || soc <= 5) return true
@@ -123,7 +119,7 @@ internal fun plausibleKwh(kwh: Double?, soc: Int?): Boolean {
 internal fun gearOf(mode: Int?): String? =
     if (mode != null && mode in 1..GEARS.size) GEARS[mode - 1] else null
 
-// 4 is the HAL bluffing and 255 is it admitting it does not know.
+// Power levels 4 and 255 are not usable ACC readings.
 internal fun accOnOf(powerLevel: Int?): Boolean? =
     if (powerLevel != null && powerLevel in 0..3) powerLevel >= 2 else null
 
@@ -131,7 +127,7 @@ internal fun accOnOf(powerLevel: Int?): Boolean? =
 internal fun polledAccOnOf(powerLevel: Int?): Boolean? =
     if (powerLevel == 1) null else accOnOf(powerLevel)
 
-/** 1 unlocked, 2 locked. 0 is the HAL saying it does not know. */
+// Lock state: 1 unlocked, 2 locked, 0 unavailable.
 internal fun lockOf(state: Int?): Boolean? = when (state) {
     1 -> false
     2 -> true

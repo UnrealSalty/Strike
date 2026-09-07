@@ -57,21 +57,15 @@ private const val RETRY_AFTER_MS = 10_000L
 private const val FIRST_FRAME_MS = 25_000L
 private const val STALL_MS = 6_000L
 
-/** The parked mode selected for the current vehicle state. */
 private enum class SentryMode { OFF, SMART, CONTINUOUS }
 
-/** Where a session writes, under what name, at what settings. */
 private data class Target(
     val dir: File,
     val mode: RecordingMode,
     val options: RecordingOptions
 )
 
-/**
- * Strike's camera work, running under app_process as shell uid 2000 with
- * bmmcamera.jar on the classpath. The app uid cannot open this camera at all,
- * so everything that touches frames lives here and the app only asks.
- */
+// Camera capture runs in app_process under shell UID 2000.
 object CameraDaemon {
 
     private val lock = SingletonLock()
@@ -128,26 +122,19 @@ object CameraDaemon {
     fun main(args: Array<String>) {
         DaemonLog.watchCrashes()
         DaemonLog.d(TAG, "starting as uid ${Process.myUid()}, pid ${Process.myPid()}")
-        // A clean exit tells the watchdog to start another one, which against a
-        // running daemon is an endless restart loop. This code stops it, and it
-        // must not be 137, which the watchdog reads as a crash and clears the
-        // lock the running daemon still holds.
+        // A duplicate daemon must stop its watchdog without clearing the active daemon's lock.
         if (!lock.take()) exitProcess(EXIT_ALREADY_RUNNING)
         // The camera HAL posts its callbacks to the main looper, as in Overdrive's daemon.
         Looper.prepareMainLooper()
         DaemonFonts.install()
         loadCameraLibraries()
         CameraTexture.load(args.firstOrNull())
-        // The model is an asset, and app_process has no asset manager, so the
-        // detector reads it back out of the apk.
         sentry = Sentry(args.getOrNull(1), screen)
         vehicle = DaemonContext.get()?.let { context ->
             VehicleTelemetry(context) { DaemonLog.w("ACC", it) }
         }
         wanted = shouldRecord(Config.getString(RecordingSettings.MODE, RecordingSettings.fallback(RecordingSettings.MODE)), null)
-        // An mp4 has no index until the muxer closes, so a clip that is still
-        // open when the process ends is not footage. This catches a term; a
-        // power cut or a kill -9 does not run it and loses the clip.
+        // SIGTERM can finalize an open clip; SIGKILL and power loss cannot.
         Runtime.getRuntime().addShutdownHook(Thread({ finish() }, "last-clip"))
         val commands = CommandServer(::answer)
         server = commands
@@ -233,11 +220,6 @@ object CameraDaemon {
         return payload
     }
 
-    /**
-     * One thread decides everything: whether to be recording, whether the
-     * settings under the running session still match, and whether the volume
-     * needs freeing. The camera has one owner and this is it.
-     */
     private fun supervise() {
         while (alive) {
             updateVehicle()
@@ -358,10 +340,7 @@ object CameraDaemon {
     private fun nothingWatching(): Boolean =
         recorder == null && !streamer.isStreaming && sentry?.isArmed != true
 
-    /**
-     * Smart mode holds the camera with the encoder quiet, so the detector is
-     * what keeps the strip open between events.
-     */
+    // Smart mode keeps capture open between events while the recording encoder is idle.
     private fun superviseSentry() {
         val watching = sentry ?: return
         if (sentryMode != SentryMode.SMART) {
@@ -381,10 +360,7 @@ object CameraDaemon {
         }
     }
 
-    /**
-     * The sighting lands before the encoder has described itself, so the clip
-     * has no name yet. The label waits for one rather than being dropped.
-     */
+    // Hold the sighting until encoder startup gives the clip a filename.
     private fun superviseFlag() {
         val watching = sentry ?: return
         watching.takeFlag()?.let { flagged = it }
@@ -403,7 +379,6 @@ object CameraDaemon {
         marked.clear()
     }
 
-    /** Frames are cropped per consumer, so watching and recording coexist. */
     private fun superviseLive() {
         val watching = liveWanted && relay.hasReader
         if (!watching) {
@@ -421,10 +396,6 @@ object CameraDaemon {
         }
     }
 
-    /**
-     * The camera is opened once and held while anything is watching it, since
-     * two sessions is the failure that breaks recording on this hardware.
-     */
     private fun cameraUp(): FrameBus? {
         if (!alive) return null
         bus?.let { return it }
@@ -459,10 +430,7 @@ object CameraDaemon {
         DaemonLog.d(TAG, "camera released, nothing is watching")
     }
 
-    /**
-     * A quiet HAL while parked is the rail dropping, not the owner leaving.
-     * Reopen. Do not stand sentry down.
-     */
+    // Recover stalled parked capture without disarming surveillance.
     private fun superviseFrames() {
         val watched = bus ?: return
         val quiet = watched.quietForMs
@@ -481,10 +449,6 @@ object CameraDaemon {
         sentry?.rebind(strip)
     }
 
-    /**
-     * Driving wins: the drive library is what the owner watches. Parked, the
-     * tape rolls in Continuous and only a confirmed event writes in Smart.
-     */
     private fun targetNow(): Target? {
         if (wanted) {
             val dir = clipsDir()
@@ -518,10 +482,7 @@ object CameraDaemon {
         DaemonLog.e(TAG, "the app has not said which volume to $what on")
     }
 
-    /**
-     * ACC off unmounts the card. Overdrive force-mounts it before an event
-     * clip, then waits for the FUSE path to exist.
-     */
+    // ACC off can unmount storage; wait for the remounted FUSE path before writing.
     private fun bringUp(dir: File?) {
         val target = dir ?: return
         val uuid = storageUuid(target.path) ?: return
@@ -549,7 +510,6 @@ object CameraDaemon {
         recorder = fresh
     }
 
-    /** Nobody is in the car when it is parked, so surveillance keeps no sound. */
     private fun audioFor(wantedTarget: Target): AudioIngest? =
         if (wantedTarget.mode == RecordingMode.DRIVE) audio else null
 
@@ -597,13 +557,7 @@ object CameraDaemon {
         if (dropped > 0) DaemonLog.d(TAG, "dropped $dropped oldest $what to stay under $budgetMb MB")
     }
 
-    /**
-     * What Strike will actually open, which on firmware that names nothing is
-     * the raw strip rather than an empty list.
-     *
-     * Every status poll arrives on its own thread, so this asks the firmware
-     * once behind a lock. Probing the camera per poll wedges the HAL.
-     */
+    // Cache camera discovery across status requests; repeated HAL probes can wedge capture.
     @Synchronized
     private fun inventoryNow(): List<CameraChoice> {
         var known = inventory
@@ -638,7 +592,6 @@ object CameraDaemon {
 
     private fun eventsDir(): File? = dir(SurveillanceSettings.EVENTS_DIR)
 
-    /** The app probed this path with a real file before publishing it. */
     private fun dir(key: String): File? {
         val path = Config.getString(key, "")
         if (path.isEmpty()) return null

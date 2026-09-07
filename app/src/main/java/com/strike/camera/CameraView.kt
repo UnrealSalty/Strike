@@ -1,9 +1,6 @@
 package com.strike.camera
 
-/**
- * The car has one camera. It emits the four fisheyes side by side in a single
- * frame, so an angle is a crop of that strip rather than a different camera.
- */
+// The supported input is a horizontal strip of four camera views.
 enum class CameraView(val id: String) {
     ALL("all"),
     FRONT("front"),
@@ -16,15 +13,10 @@ enum class CameraView(val id: String) {
     }
 }
 
-/** The slice count across the strip, which fixes every offset below. */
 private const val SLICES = 4
 private const val SLICE_WIDTH = 1f / SLICES
 
-/**
- * Where each angle sits in the strip. Read off Overdrive's PanoramicSlice,
- * which maps front to the last quarter and rear to the first; the order is a
- * property of the wiring loom, not something to derive.
- */
+// Camera order matches Overdrive's PanoramicSlice mapping.
 private val SLICE_X = mapOf(
     CameraView.REAR to 0.00f,
     CameraView.LEFT to 0.25f,
@@ -32,7 +24,6 @@ private val SLICE_X = mapOf(
     CameraView.FRONT to 0.75f
 )
 
-/** Overdrive paints front top left, right top right, rear bottom left, left bottom right. */
 private val MOSAIC_XY = mapOf(
     CameraView.FRONT to Pair(0.0f, 0.0f),
     CameraView.RIGHT to Pair(0.5f, 0.0f),
@@ -40,10 +31,7 @@ private val MOSAIC_XY = mapOf(
     CameraView.LEFT to Pair(0.5f, 0.5f)
 )
 
-/**
- * One draw: which part of the strip to read, and where in the output to put
- * it. Both rectangles are fractions, with the origin at the top left.
- */
+// Source and destination coordinates are fractions, with the origin at the top left.
 class Tile(
     val sourceX: Float,
     val sourceWidth: Float,
@@ -63,10 +51,6 @@ fun tilesOf(view: CameraView): List<Tile> {
     }
 }
 
-/**
- * A slice is as tall as the strip and a quarter as wide, so one angle encodes
- * at the slice's own size and the mosaic at twice it in both directions.
- */
 class Frame(val width: Int, val height: Int)
 
 fun frameOf(view: CameraView, stripWidth: Int, stripHeight: Int): Frame {
@@ -78,16 +62,11 @@ fun frameOf(view: CameraView, stripWidth: Int, stripHeight: Int): Frame {
     }
 }
 
-/** Overdrive's largest live preset. The mosaic is four times this on its own. */
 private const val LIVE_MAX_WIDTH = 1280
 private const val LIVE_MAX_HEIGHT = 960
 private const val MACROBLOCK = 16
 
-/**
- * The clip keeps every pixel the camera gave; a viewer does not need them and
- * the chip will not encode the mosaic twice at once. The GPU does the scaling
- * as part of the crop it is already doing.
- */
+// Scale Live separately to leave encoder capacity for full-resolution clips.
 fun liveFrameOf(view: CameraView, stripWidth: Int, stripHeight: Int): Frame =
     fitted(frameOf(view, stripWidth, stripHeight), LIVE_MAX_WIDTH, LIVE_MAX_HEIGHT)
 

@@ -12,7 +12,6 @@ import com.strike.server.LOCK_PAGE
 private const val TAG = "WebUi"
 private const val HOST = "127.0.0.1"
 
-/** Configures the single WebView that hosts every Strike screen. */
 object WebUi {
 
     private var web: WebView? = null
@@ -28,10 +27,8 @@ object WebUi {
         settings.cacheMode = WebSettings.LOAD_NO_CACHE
         view.overScrollMode = WebView.OVER_SCROLL_NEVER
         view.defaultFocusHighlightEnabled = false
-        // Without a client the WebView hands every URL to the Activity Manager,
-        // which sends in-app links to the browser instead of loading them here.
+        // Keep navigation inside the WebView rather than opening the external browser.
         view.webViewClient = StrikeWebViewClient
-        // The server decides: a locked session gets the keypad instead.
         view.loadUrl(page("/"))
     }
 
@@ -52,11 +49,7 @@ private object StrikeWebViewClient : WebViewClient() {
         if (url.contains("lock.html")) view.clearHistory()
     }
 
-    /**
-     * Decoding the live camera can exhaust the renderer. Claiming the death
-     * here is what keeps it from taking the recorder down with the screen;
-     * returning false would kill the process.
-     */
+    // Handle renderer death so it does not terminate the host app.
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
         Logs.w(TAG, "the screen crashed and was reloaded, recording was not affected")
         view.loadUrl("http://$HOST:${HttpServer.PORT}/")

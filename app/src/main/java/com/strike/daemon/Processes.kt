@@ -2,11 +2,7 @@ package com.strike.daemon
 
 private const val CACHE_MS = 10_000L
 
-/**
- * Liveness the way the head unit can answer it: a grep over the process table
- * through the shell. Cached, because the daemons page polls and every miss is
- * an adb round trip.
- */
+// Cache shell process probes across dashboard polls.
 class Processes(private val shell: Shell) {
 
     private val lock = Any()

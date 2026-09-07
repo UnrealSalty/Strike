@@ -54,7 +54,6 @@
         xhr.send('pin=' + encodeURIComponent(digits));
     }
 
-    // Reached with the session already open when the owner types the address.
     Strike.core.get('/api/status', function () {
         location.replace('/');
     }, function () {

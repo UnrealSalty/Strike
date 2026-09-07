@@ -21,10 +21,7 @@ void main() {
 }
 """
 
-/**
- * samplerExternalOES, because the camera's frames stay in a gralloc buffer the
- * GPU reads directly; a normal sampler2D cannot see them.
- */
+// Camera gralloc buffers require samplerExternalOES.
 private const val FRAGMENT = """
 #extension GL_OES_EGL_image_external : require
 precision mediump float;
@@ -35,7 +32,6 @@ void main() {
 }
 """
 
-/** A full-screen quad, redrawn once per tile with different coordinates. */
 private val QUAD = floatArrayOf(
     -1f, -1f,
     1f, -1f,
@@ -158,10 +154,7 @@ private fun buffer(values: FloatArray): FloatBuffer =
         .put(values)
         .also { it.position(0) }
 
-/**
- * The quad's corners are bottom left, bottom right, top left, top right, and
- * the strip's rows run the other way, so v is flipped against the crop.
- */
+// Quad corners are bottom-left, bottom-right, top-left, top-right; invert the strip's V axis.
 internal fun sourceCoords(tile: Tile): FloatArray {
     val left = tile.sourceX
     val right = tile.sourceX + tile.sourceWidth

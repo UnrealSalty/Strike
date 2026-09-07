@@ -13,10 +13,7 @@ private const val TAG = "Command"
 private const val BACKLOG = 4
 private const val RESTART_MS = 2_000L
 
-/**
- * One JSON object per line in, one out. The app polls this while the car is
- * awake and gets nothing while it sleeps, which is the honest answer.
- */
+// Wire format: one JSON object per line in each direction.
 class CommandServer(private val answer: (JSONObject) -> JSONObject) {
 
     @Volatile

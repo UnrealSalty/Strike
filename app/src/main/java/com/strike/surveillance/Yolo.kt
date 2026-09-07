@@ -34,14 +34,8 @@ class Sighting(
     val height: Int
 )
 
-/**
- * yolo26n, the end-to-end export Overdrive already runs on this head unit:
- * input [1,640,640,3] float, one output of [1,D,6] rows already resolved by
- * NMS inside the graph, in 640-pixel units.
- *
- * CPU only. Overdrive measured the GPU delegate starving the H.265 encoder on
- * this SoC, which showed up as freeze and skip in the clips.
- */
+// Input: [1,640,640,3] float; output: [1,D,6] with NMS inside the model.
+// CPU inference avoids competing with video encoding on the GPU.
 class Yolo(private val apkPath: String?) {
 
     @Volatile
@@ -83,10 +77,6 @@ class Yolo(private val apkPath: String?) {
         return true
     }
 
-    /**
-     * A head this code cannot read must say so rather than parse noise: a
-     * misread box reads downstream as nothing seen, on every real event.
-     */
     private fun describes(fresh: Interpreter): Boolean {
         val outputTensor = fresh.getOutputTensor(0)
         val shape = outputTensor.shape()
@@ -157,10 +147,6 @@ class Yolo(private val apkPath: String?) {
         }
     }
 
-    /**
-     * One quadrant is the reference frame, not the whole mosaic: a person
-     * standing at the front camera fills a quarter of the picture at most.
-     */
     private fun sightings(
         boxes: FloatBuffer,
         mosaic: Mosaic,
@@ -197,13 +183,7 @@ class Yolo(private val apkPath: String?) {
         return sightings
     }
 
-    /**
-     * Ultralytics end-to-end exports have shipped both 0..1 and input-pixel
-     * corners. Decided for the whole tensor, from rows that pass confidence,
-     * because a sub-2px pixel box would read as a normalised one and become a
-     * phantom the size of the frame. Verified in Overdrive, whose detector
-     * probes the same way and measures pixels from this asset.
-     */
+    // Determine normalized versus pixel coordinates across the tensor, not per box.
     private fun unitsOf(boxes: FloatBuffer): Float {
         for (row in 0 until rows) {
             val at = row * ROW
@@ -222,10 +202,7 @@ class Yolo(private val apkPath: String?) {
     private fun clamp(value: Float, limit: Int): Int =
         Math.max(0, Math.min(limit, Math.round(value)))
 
-    /**
-     * The daemon has no Context and so no asset manager, but the apk is on its
-     * classpath and world readable, so the model comes out of the zip.
-     */
+    // app_process reads the model from the APK because it has no AssetManager.
     private fun readModel(): ByteBuffer? {
         val path = apkPath
         if (path == null) {

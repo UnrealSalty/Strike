@@ -17,7 +17,6 @@ private const val TAG = "Pin"
 private const val SALT_BYTES = 32
 private const val HASH_BYTES = 32
 
-/** The lockout is what stops a script. This many rounds just hides the PIN. */
 private const val ROUNDS = 10_000
 
 const val PIN_MIN = 4
@@ -31,11 +30,7 @@ class Pin(
     private val resetFlag: File = File("/data/local/tmp/.strike_pin_reset")
 ) {
 
-    /**
-     * Every read and write goes through here. Without it two guesses arriving
-     * on different HTTP workers both read the same attempt count and one of
-     * the two failures is lost, which is how a script walks past the lockout.
-     */
+    // Serialize attempt counting so concurrent requests cannot bypass lockout.
     private val lock = Any()
 
     init {
@@ -150,10 +145,7 @@ class Pin(
         }
     }
 
-    /**
-     * Written beside and renamed. A cut of power mid-write would otherwise
-     * leave half a file, which reads back as no PIN at all.
-     */
+    // Replace the PIN file atomically to avoid partial writes.
     private fun write(held: JSONObject) {
         val parent = store.parentFile ?: return
         if (!parent.isDirectory && !parent.mkdirs()) {

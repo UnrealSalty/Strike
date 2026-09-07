@@ -74,7 +74,6 @@ class DaemonsApi(context: Context, private val shell: Shell) {
 
     fun daemons(): Response = Response(200, JSON, payload().toString().toByteArray())
 
-    /** The dashboard tile wants the count and its colour, nothing else. */
     fun count(): JSONObject {
         val payload = payload()
         val count = JSONObject()
@@ -84,8 +83,7 @@ class DaemonsApi(context: Context, private val shell: Shell) {
         return count
     }
 
-    // Building the cards costs shell round trips, and two pages ask for them
-    // at different intervals.
+    // Share shell-backed card reads across dashboard requests.
     private fun payload(): JSONObject = synchronized(cardsLock) {
         val now = System.currentTimeMillis()
         val held = cards
@@ -121,10 +119,6 @@ class DaemonsApi(context: Context, private val shell: Shell) {
         return Response(200, JSON, payload.toString().toByteArray())
     }
 
-    /**
-     * Recording runs in another process, so the app's own ring buffer would
-     * never explain why it stopped. The daemon's log is merged in.
-     */
     fun logs(): Response {
         val merged = ArrayList<LogLine>(Logs.recent())
         val tail = shell.read("tail -n $LOG_TAIL_LINES $CAM_LOG_PATH")
@@ -159,10 +153,7 @@ class DaemonsApi(context: Context, private val shell: Shell) {
         return Response(200, JSON, "{}".toByteArray())
     }
 
-    /**
-     * The switch turns the daemon process on and off. Whether it is recording
-     * at any moment is the mode setting and the car being on, not this.
-     */
+    // Process state and recording mode are separate controls.
     fun setRecorder(body: String): Response {
         val wanted = formValue(body, "enabled") ?: return Response(400, TEXT, "No state given".toByteArray())
         if (wanted == "true") {
@@ -236,10 +227,7 @@ class DaemonsApi(context: Context, private val shell: Shell) {
         return card
     }
 
-    /**
-     * Detection lives in the camera daemon rather than a process of its own,
-     * so this card reports what that daemon is doing while the car is parked.
-     */
+    // Surveillance runs inside CameraDaemon; it has no separate process.
     private fun surveillanceCard(): JSONObject {
         val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)
         val status = recorder.status()
@@ -329,7 +317,6 @@ class DaemonsApi(context: Context, private val shell: Shell) {
         return state
     }
 
-    /** The live page offers angles only for cameras the firmware reports. */
     fun cameras(): Response {
         val status = recorder.status()
         val payload = JSONObject()
@@ -343,7 +330,6 @@ class DaemonsApi(context: Context, private val shell: Shell) {
         return Response(200, JSON, payload.toString().toByteArray())
     }
 
-    /** What the firmware admits to owning, which decides how many angles exist. */
     private fun camerasOf(status: JSONObject?): String {
         val list = status?.optJSONArray("cameras") ?: return DASH
         if (list.length() == 0) return status.optString("camerasReason", "None")
@@ -378,14 +364,12 @@ class DaemonsApi(context: Context, private val shell: Shell) {
     }
 }
 
-/** All running is green, none is red, anything in between is amber. */
 internal fun health(running: Int, total: Int): String = when {
     total > 0 && running == total -> "ok"
     running == 0 -> "bad"
     else -> "warn"
 }
 
-/** Exact to the second, because the owner asked for how long, not roughly how long. */
 internal fun formatUptime(elapsedMs: Long): String {
     val totalSeconds = elapsedMs / 1_000L
     val days = totalSeconds / 86_400L

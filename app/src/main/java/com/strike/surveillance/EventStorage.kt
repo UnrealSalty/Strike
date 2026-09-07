@@ -19,7 +19,6 @@ import java.io.File
 private const val TAG = "Events"
 private const val CLIPS_DIR = "Strike/clips"
 
-/** Decides which volume events live on and how much room they may take. */
 class EventStorage(context: Context, shell: Shell) {
 
     private val volumes = Volumes(context, shell)
@@ -33,7 +32,7 @@ class EventStorage(context: Context, shell: Shell) {
 
     fun eventsOn(volume: Volume): EventStore = EventStore(eventsDir(volume))
 
-    /** Where the daemon was told to write, which is empty until that folder exists. */
+    // Prefer the path already published to the daemon.
     fun store(): EventStore {
         val published = Config.getString(SurveillanceSettings.EVENTS_DIR, "")
         publishedStore(published)?.let { return it }
@@ -49,7 +48,7 @@ class EventStorage(context: Context, shell: Shell) {
         SurveillanceSettings.BUDGET_MB, SurveillanceSettings.BUDGET_FALLBACK_MB
     )
 
-    /** The daemon has no Context to find volumes with, so the app tells it where to write. */
+    // Publish the app-resolved volume path for the daemon.
     fun publish(shell: Shell) {
         forgetMounted()
         val root = volumes.rootFor(location()) ?: return
@@ -73,9 +72,6 @@ private fun publishedStore(path: String): EventStore? {
 
 internal fun eventsDir(volume: Volume): File = File(publicRoot(volume.dir.path), CLIPS_DIR)
 
-/**
- * Two features can point at one card, and neither slider may promise room the
- * other already claimed. On different volumes there is nothing to share.
- */
+// Recording and surveillance budgets share capacity when they use the same volume.
 fun reservedOn(location: String, otherLocation: String, otherBudgetMb: Int): Int =
     if (location == otherLocation) otherBudgetMb else 0

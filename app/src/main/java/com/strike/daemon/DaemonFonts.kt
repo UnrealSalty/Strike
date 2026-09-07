@@ -6,10 +6,7 @@ import java.io.File
 
 private const val TAG = "Fonts"
 
-/**
- * app_process never seeds Skia's default face. measureText / drawText then
- * abort the daemon: src == nullptr && gDefaultTypeface == nullptr.
- */
+// app_process may lack Skia's default typeface; text rendering can abort without one.
 object DaemonFonts {
 
     private val files = arrayOf(

@@ -41,14 +41,7 @@ class Triggers(context: Context) {
         }
     }
 
-    /**
-     * Held from the moment recording is wanted rather than once it is running:
-     * a muxer cannot add a track after it starts, so audio that arrives after
-     * the daemon opened the clip misses it entirely.
-     *
-     * The car must say it is awake. A car that will not say is treated as
-     * parked here, because nobody is in it to record.
-     */
+    // Start cabin audio before muxer startup, only when the car reports ACC on.
     private fun superviseAudio(shouldRecord: Boolean, snapshot: VehicleSnapshot?) {
         val wanted = shouldRecord && snapshot?.accOn == true &&
             Config.getBool(RecordingSettings.AUDIO, false)
@@ -68,11 +61,7 @@ class Triggers(context: Context) {
 
 }
 
-/**
- * Continuous means continuous: the head unit only runs when the car is awake,
- * so a car that reports nothing still gets recorded rather than losing the
- * drive. Driving mode needs the gear, and waits when the car will not say.
- */
+// Continuous recording tolerates unknown gear; driving mode waits for a known driving gear.
 internal fun shouldRecord(mode: String, snapshot: VehicleSnapshot?): Boolean = when (mode) {
     "continuous" -> snapshot == null || snapshot.accOn != false
     "driving" -> snapshot != null && snapshot.accOn != false &&
@@ -85,10 +74,7 @@ internal fun driveWanted(mode: String, snapshot: VehicleSnapshot?, wasWanted: Bo
     if (mode != "continuous" || snapshot?.accOn != null ||
         (snapshot?.gear != null && snapshot.gear != PARKED)) shouldRecord(mode, snapshot) else wasWanted
 
-/**
- * Off while the car is in use. Null means the car will not say — AccOff already
- * armed, and sending off here would drop the parked rails.
- */
+// Unknown ACC must preserve the parked session.
 internal fun sentryMode(
     enabled: Boolean,
     mode: String,

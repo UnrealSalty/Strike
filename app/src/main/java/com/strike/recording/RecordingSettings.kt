@@ -43,14 +43,10 @@ object RecordingSettings {
         return false
     }
 
-    /**
-     * What the clips could grow to: what is free, plus what they already hold,
-     * less anything the other feature has already claimed on the same volume.
-     */
+    // Reclaimable clip space excludes headroom and the other feature's reservation.
     fun budgetCeilingMb(freeMb: Int, totalMb: Int, usedMb: Int, reservedMb: Int = 0): Int =
         maxOf(reachableMb(freeMb, totalMb, usedMb) - reservedMb, BUDGET_FLOOR_MB)
 
-    /** A volume too full for the smallest budget must not be selectable. */
     fun hasRoom(freeMb: Int, totalMb: Int, usedMb: Int, reservedMb: Int = 0): Boolean =
         reachableMb(freeMb, totalMb, usedMb) - reservedMb >= BUDGET_FLOOR_MB
 

@@ -26,7 +26,6 @@ PFN_TARGET_TEXTURE targetTexture;
 bool looked;
 bool present;
 
-// eglGetProcAddress needs no context, but every caller below has one anyway.
 bool entryPoints() {
     if (looked) {
         return present;
@@ -48,11 +47,8 @@ bool entryPoints() {
 
 }  // namespace
 
-/**
- * Binds one camera buffer to an external texture. The texture takes its own
- * reference to the buffer, so the image wrapper is destroyed before returning
- * and the caller keeps the Image open only until the next frame is drawn.
- */
+// The texture retains the EGL image's buffer reference after destroyImage.
+// The caller keeps the source Image alive until the next buffer is bound.
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_strike_camera_CameraTexture_bind(JNIEnv *env, jclass, jobject buffer, jint texture) {
     if (buffer == nullptr || !entryPoints()) {

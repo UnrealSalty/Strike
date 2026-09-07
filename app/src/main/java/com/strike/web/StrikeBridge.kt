@@ -2,10 +2,7 @@ package com.strike.web
 
 import android.webkit.JavascriptInterface
 
-/**
- * The only surface the web UI may call natively. Everything else goes over
- * HTTP so the in-car WebView and a phone browser behave identically.
- */
+// Keep device-only calls here; shared app and browser features use HTTP.
 class StrikeBridge {
 
     @JavascriptInterface

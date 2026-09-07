@@ -13,9 +13,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
-    <!-- DiCarServer denies every BYD getter to a caller that has not asked for
-         its permission, which reads as a car that reports nothing. Read-only:
-         Strike declares no BYDAUTO_*_SET. -->
+    <!-- DiCarServer requires declared BYD permissions even for getters. -->
     <uses-permission android:name="android.permission.BYD" />
     <uses-permission android:name="com.byd.car.server.PROVIDER" />
     <uses-permission android:name="android.permission.BYDAUTO_STATISTIC_COMMON" />

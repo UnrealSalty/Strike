@@ -12,21 +12,13 @@ private const val TAG = "FrameSink"
 private const val NAME = "detector"
 private const val POOL = 2
 
-/** Small enough to read back cheaply, and it fits inside YOLO's 640 square. */
 const val SINK_WIDTH = 640
 const val SINK_HEIGHT = 480
 
 /** All four angles, top row first, four bytes a pixel. */
 class Mosaic(val width: Int, val height: Int, val rgba: ByteArray, val atMs: Long)
 
-/**
- * The only CPU view of the camera. Every other consumer hands FrameBus an
- * encoder surface, so a detector that needs pixels has to bring its own
- * ImageReader and read them back off the GPU.
- *
- * The bus blocks on a full queue, so every frame is drained whether or not it
- * is wanted. Only one in [everyMs] is copied out.
- */
+// Drain every frame to avoid blocking FrameBus; copy pixels only at the sampling interval.
 class FrameSink(private val everyMs: Long) {
 
     private val frames = Any()
@@ -65,7 +57,6 @@ class FrameSink(private val everyMs: Long) {
         }
     }
 
-    /** The newest frame that was copied out, or null when none is fresh. */
     fun take(): Mosaic? = synchronized(frames) {
         val held = latest
         latest = null
@@ -109,10 +100,7 @@ class FrameSink(private val everyMs: Long) {
         DaemonLog.e(TAG, "could not read a camera frame: ${failure.message}")
     }
 
-    /**
-     * RGBA rather than PRIVATE: this is the one reader whose buffers the CPU
-     * has to be able to map.
-     */
+    // RGBA buffers permit CPU readback; PRIVATE buffers do not.
     private fun newReader(): ImageReader =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ImageReader.newInstance(

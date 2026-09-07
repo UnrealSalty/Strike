@@ -109,11 +109,6 @@ Strike.core = {
         return (bytes / 1073741824).toFixed(2) + ' GB';
     },
 
-    /**
-     * The last answer is kept for the tab's lifetime, so coming back to a page
-     * paints the values it had instead of dropping to skeletons for a round
-     * trip. One poll later it is live again.
-     */
     poll: function (path, everyMs, onOk, onFail) {
         var key = 'strike:' + path;
 
@@ -163,10 +158,7 @@ Strike.core = {
     }
 };
 
-/**
- * One dropdown implementation. The native select cannot be styled on this
- * WebView, which is why the day filter is buttons in a popover instead.
- */
+// Native selects cannot be styled consistently on the head unit's WebView.
 Strike.pick = function (id, onChange) {
     var root = document.getElementById(id);
     var button = root.getElementsByTagName('button')[0];
@@ -223,8 +215,6 @@ Strike.pick = function (id, onChange) {
         close: function () {
             open(false);
         },
-        // Options are rebuilt whenever the clip list changes, so the current
-        // choice has to survive or fall back to the first entry.
         fill: function (options) {
             menu.innerHTML = '';
             for (var i = 0; i < options.length; i++) {
@@ -303,9 +293,7 @@ Strike.pick = function (id, onChange) {
         }, 260);
     }, true);
 
-    // Chrome 58 keeps a yellow focus rect on the last tap until something
-    // else takes focus. CSS cannot drop it; blur after the click can. Inputs
-    // stay focused so the search field still accepts keys.
+    // Blur tapped controls to clear Chrome 58's persistent focus outline; keep inputs focused.
     document.addEventListener('click', function (event) {
         var node = event.target;
         while (node && node !== document.body) {
@@ -323,8 +311,7 @@ Strike.pick = function (id, onChange) {
         }
     }, true);
 
-    // An anchor replaces the document within a frame or two, which cuts the
-    // ripple off before it draws, so the navigation waits for it.
+    // Let the press feedback draw before navigation replaces the document.
     document.addEventListener('click', function (event) {
         var link = anyOf(event.target, HOLDS);
         if (!link || link.tagName !== 'A') {

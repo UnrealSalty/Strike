@@ -87,8 +87,7 @@ class HttpServer(private val port: Int, private val router: Router) {
         } catch (e: IOException) {
             // The WebView drops connections on navigation; logging here floods.
         } finally {
-            // A viewer's socket now belongs to its own thread. Closing it here
-            // would pull it out from under that thread as it starts reading.
+            // The Live thread owns this socket after upgrade.
             if (!streaming) {
                 try {
                     client.close()
@@ -99,11 +98,7 @@ class HttpServer(private val port: Int, private val router: Router) {
         }
     }
 
-    /**
-     * A viewer holds its connection for minutes, so it gets its own thread
-     * rather than one of the eight the API shares. The socket outlives this
-     * request and is closed by the viewer's thread, not the caller's finally.
-     */
+    // Long-lived viewers use separate threads so API workers remain available.
     private fun upgrade(client: Socket, socketKey: String?, view: String?): Boolean {
         val accept = acceptKey(socketKey) ?: return false
         client.soTimeout = 0
@@ -115,7 +110,6 @@ class HttpServer(private val port: Int, private val router: Router) {
             try {
                 router.stream(WebSocket(client.getInputStream(), output), view)
             } catch (e: IOException) {
-                // Uncaught here would end the whole app, recorder and all.
                 Logs.d(TAG, "the live viewer's connection ended: ${e.message}")
             } finally {
                 try {
@@ -146,7 +140,6 @@ class HttpServer(private val port: Int, private val router: Router) {
         if (method == null || path == null) {
             return Response(400, TEXT, "Bad request".toByteArray())
         }
-        // A worker that dies on an unhandled failure leaves the page waiting forever.
         return try {
             route(method, path, body, range, token)
         } catch (e: RuntimeException) {
@@ -242,10 +235,7 @@ internal fun headerBlock(response: Response): String {
     return headers.append("Cache-Control: no-store\r\n").append("Connection: close\r\n\r\n").toString()
 }
 
-/**
- * Null means serve the whole file: no range asked for, or one this server does
- * not answer piecewise. Multipart ranges are not worth it for one video tag.
- */
+// Null selects a full response; multipart ranges are not supported.
 internal fun rangeOf(header: String?, totalBytes: Long): LongRange? {
     if (header == null || totalBytes <= 0) return null
     val spec = header.substringAfter("bytes=", "").trim()

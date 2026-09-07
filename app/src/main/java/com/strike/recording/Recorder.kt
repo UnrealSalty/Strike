@@ -17,20 +17,13 @@ private const val TAG = "Recorder"
 private const val CONSUMER = "recorder"
 private const val QUEUED_SAMPLES = 240
 private const val TAKE_TIMEOUT_MS = 500L
-/** The HAL takes 5 to 8s to the first frame, and the encoder describes its
- * output only once a frame has been through it. Overdrive calls a slot dead
- * at 25s and this must not be tighter, or a slow camera looks like a broken one. */
+// Allow HAL startup before declaring the encoder stalled; the first frame can take seconds.
 private const val FORMAT_WAIT_MS = 25_000L
 private const val FINALISE_WAIT_MS = 6_000L
 
-/**
- * The microphone lives in the app and announces itself over a socket, so the
- * first clip of a session gives it a moment rather than being the only silent
- * one. Later clips inherit the track from the session.
- */
+// Wait briefly for the app's AAC format before starting the first muxer.
 private const val AUDIO_WAIT_MS = 1_000L
 
-/** Compared as a whole, so a settings change ends the session it no longer describes. */
 data class RecordingOptions(
     val clipLengthMs: Long,
     val quality: String,
@@ -39,11 +32,7 @@ data class RecordingOptions(
     val audio: Boolean
 )
 
-/**
- * Camera, encoder and clip files for one recording session. The writer thread
- * owns the muxer, so a clip boundary happens between two samples instead of by
- * restarting the encoder, which is what leaves no gap between clips.
- */
+// The writer thread owns muxing and rotates clips between encoded samples.
 class Recorder(
     private val dir: File,
     private val mode: RecordingMode,
@@ -79,7 +68,6 @@ class Recorder(
 
     val isRecording: Boolean get() = running
 
-    /** Every angle at once, so a clip holds what the whole car saw. */
     fun start(options: RecordingOptions, bus: FrameBus): Boolean {
         if (running) return true
         sweepUnfinished(dir, System.currentTimeMillis())
@@ -157,11 +145,7 @@ class Recorder(
         }
     }
 
-    /**
-     * A muxer refuses a track once it is started, so a clip either has audio
-     * from its first sample or not at all. Turning the switch on mid-drive is
-     * picked up by the clip after this one.
-     */
+    // Tracks cannot be added after muxer start; audio changes apply at a clip boundary.
     private fun openClip(format: MediaFormat): ClipWriter? {
         val writer = ClipWriter(dir)
         if (!writer.open(mode, format, audio?.config)) {
@@ -185,7 +169,6 @@ class Recorder(
     private fun drainAudio(writer: ClipWriter) {
         val queue = audio ?: return
         if (!writer.hasAudio) {
-            // No track on this clip, so held frames would only go stale.
             queue.clear()
             return
         }
@@ -195,10 +178,7 @@ class Recorder(
         }
     }
 
-    /**
-     * A splice sample must not be dropped: if it is, the writer never opens
-     * the next clip and the file grows for the rest of the drive.
-     */
+    // Preserve splice samples: losing one can prevent the next clip from opening.
     private fun enqueue(sample: Sample) {
         if (!running) return
         if (sample.startsClip) {
@@ -226,8 +206,7 @@ class Recorder(
 
     private fun elapsed(writer: ClipWriter): Long = System.currentTimeMillis() - writer.startedAtMs
 
-    // Closing a muxer writes the index. The writer must not wait on that, or
-    // the sample queue fills and later splices never arrive.
+    // Finalize muxers off the writer thread so closing a clip cannot block sample delivery.
     private fun finish(writer: ClipWriter) {
         if (!toClose.offer(writer)) {
             if (writer.close()) onClipFinished()

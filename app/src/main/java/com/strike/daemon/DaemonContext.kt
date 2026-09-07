@@ -4,10 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Process
 
-/**
- * app_process has no Application. Overdrive's deterrent and rail writes both
- * need a shell package context at uid 2000; getSystemContext alone is not it.
- */
+// app_process needs a shell package context for BYD SDK calls.
 object DaemonContext {
 
     fun get(): Context? {
@@ -27,10 +24,7 @@ object DaemonContext {
         return opened
     }
 
-    /**
-     * BYD getInstance checks ContextImpl's package fields, not just the wrapper.
-     * Overdrive writes these on uid 2000 or the rail votes silently miss.
-     */
+    // BYD checks ContextImpl's package fields as well as the wrapper.
     private fun asShell(context: Context) {
         if (Process.myUid() != 2000) return
         var target: Context? = context

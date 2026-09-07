@@ -6,21 +6,16 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 
-/** The mosaic is 4:3, so the box is too and nothing is letterboxed. */
 private const val WIDE = 320
 private const val HIGH = 240
 private const val QUALITY = 75
 
-/** A second in, past the exposure settling that makes the first frames grey. */
+// Skip the first second while camera exposure settles.
 private const val AT_US = 1_000_000L
 
 class Thumb(val jpeg: ByteArray, val durationMs: Long)
 
-/**
- * Previews for the recordings list. Decoding a frame costs far more than
- * reading the header, so the picture is kept on disk and the duration is read
- * afresh each time.
- */
+// Cache decoded thumbnails on disk; read duration from the clip.
 class ClipThumbs(private val dir: File) {
 
     fun of(clip: File, id: String): Thumb? {

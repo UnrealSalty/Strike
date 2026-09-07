@@ -12,36 +12,23 @@ private const val BMM_CAMERA_INFO = "android.hardware.BmmCameraInfo"
 /** The firmware calls the surface slot a mode going in and a channel coming out. */
 private const val PREVIEW_CHANNEL = 0
 
-/**
- * The panoramic strip first: it carries all four angles in one frame, which is
- * the only way to offer a view other than the road ahead. Overdrive's cascade,
- * with its plain front camera as the fallback for cars without the 360 system.
- */
 private val TAGS = arrayOf("pano_h", "pano_l", "byd_apa", "apa", "front")
 
 /** Overdrive's tag list, for firmware with no getValidCameraTag. */
 private val KNOWN_TAGS =
     listOf("front", "rear", "rvs", "rf", "dms", "face", "pano_h", "pano_l", "byd_apa", "apa")
 
-/** Where the DiLink 5 camera lives, which is a different stack entirely. */
+// AIS is detected for diagnostics; capture through this API is not implemented.
 private val AIS_LIBS =
     arrayOf("/vendor/lib64/libais_client.so", "/system/lib64/libais_client.so")
 
-/**
- * bmmcamera.jar is a thin wrapper over libbmmcamera.so, and app_process does
- * not pull JNI in on its own. Overdrive's daemon loads the same five, in this
- * order, before it touches a camera.
- */
+// app_process must load the BYD camera JNI libraries before calling bmmcamera.jar.
 private val NATIVE_LIBS = arrayOf("cutils", "utils", "binder", "gui", "bmmcamera")
 
 /** Empty means the factory never mapped the cameras, and then no tag resolves. */
 private const val CAM_SORT_PROP = "vehicle.config.cam_sort"
 
-/**
- * Camera 0 carries the four fisheyes side by side and needs no panoramic wake,
- * so it answers on boards where BmmCameraInfo names nothing. Overdrive treats
- * it as the escape hatch and reads it at this size on the Seal and Atto strip.
- */
+// Fallback for the tested Atto 2 firmware when no camera tags resolve.
 val RAW_STRIP = CameraChoice(id = 0, tag = "strip", width = 5120, height = 960)
 
 fun loadCameraLibraries() {
@@ -54,21 +41,12 @@ fun loadCameraLibraries() {
     }
 }
 
-/**
- * Nothing here is public Android. The classes live in bmmcamera.jar on the
- * boot image and the methods are hidden, so every call is reflection and every
- * failure is a fact about this firmware rather than a bug.
- */
+// Hidden BYD camera APIs from bmmcamera.jar.
 class CameraSource {
 
     private var camera: Any? = null
     private var previewing = false
 
-    /**
-     * The HAL writes straight into the encoder's input surface. Overdrive puts
-     * GL in between because it crops a 5120 wide mosaic; one camera needs no
-     * compositor.
-     */
     fun open(choice: CameraChoice, frameRateFps: Int, target: Surface): Boolean {
         val avm = classOrNull(AVM_CAMERA) ?: return fail("the car's camera library is not on this firmware")
         return try {
@@ -125,14 +103,8 @@ class CameraSource {
 
 class CameraChoice(val id: Int, val tag: String, val width: Int, val height: Int)
 
-/** Empty is an answer, so it comes with the reason the firmware gave. */
 class CameraInventory(val cameras: List<CameraChoice>, val reason: String)
 
-/**
- * Which camera stack this firmware has. DiLink 3 and 4 answer through
- * bmmcamera.jar; DiLink 5 has neither class and reaches the cameras through
- * Qualcomm's AIS client library instead, which Strike cannot drive yet.
- */
 fun cameraStack(): String {
     val info = classOrNull(BMM_CAMERA_INFO) != null
     val avm = classOrNull(AVM_CAMERA) != null
@@ -142,21 +114,12 @@ fun cameraStack(): String {
         "ais=${if (ais.isEmpty()) "none" else ais.joinToString()}"
 }
 
-/**
- * Which of the cameras already discovered to record from. Takes the list
- * rather than probing, because asking the firmware again on the path that
- * opens the camera is what wedges the HAL.
- */
+// Reuse discovery results: probing again during camera startup can wedge the HAL.
 fun roadCamera(found: List<CameraChoice>): CameraChoice =
     TAGS.firstNotNullOfOrNull { tag -> found.firstOrNull { it.tag == tag } }
         ?: found.firstOrNull()
         ?: RAW_STRIP
 
-/**
- * Every camera this firmware admits to, in the order it names them. Which
- * angles exist is a property of the car's trim, so it is discovered rather
- * than assumed: a panoramic strip carries four views, a plain front camera one.
- */
 fun cameras(): CameraInventory {
     val bmm = classOrNull(BMM_CAMERA_INFO)
         ?: return CameraInventory(emptyList(), "this firmware has no camera library Strike can drive")
@@ -185,8 +148,7 @@ fun cameras(): CameraInventory {
     return CameraInventory(found, reason)
 }
 
-// getValidCameraTag is the firmware's own list. Older builds lack it, so the
-// names Strike already knows about are tried one by one instead.
+// Older firmware lacks getValidCameraTag.
 private fun validTags(bmm: Class<*>): List<String> {
     val answered = try {
         bmm.getDeclaredMethod("getValidCameraTag").also { it.isAccessible = true }.invoke(null)

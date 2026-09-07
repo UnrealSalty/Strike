@@ -23,10 +23,8 @@ private const val TAG = "FrameBus"
 private const val FRAME_WAIT_MS = 500L
 private const val SILENCE_MS = 10_000L
 
-/** Overdrive's pool size for the strip; six 5120x960 buffers of gralloc. */
 private const val POOL = 6
 
-/** The camera writes one strip; each consumer wants a different crop of it. */
 /** [frame] is the size of [surface], which is what the crop is drawn into. */
 class Consumer(
     val name: String,
@@ -35,14 +33,8 @@ class Consumer(
     val frame: Frame
 )
 
-/**
- * The one camera owner. The HAL writes into a texture, and every frame is
- * redrawn into each consumer's encoder surface, so recording and the live
- * stream come off a single capture instead of two camera sessions.
- *
- * Everything here runs on the bus thread. The camera HAL and the HTTP threads
- * only ever add or remove a consumer.
- */
+// Owns capture and all EGL work on the bus thread.
+// Other threads enqueue consumer changes; they must not destroy EGL resources.
 class FrameBus(val stripWidth: Int, val stripHeight: Int) {
 
     private val consumers = CopyOnWriteArrayList<Consumer>()
@@ -77,16 +69,11 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
     private val arrived = Object()
     private var pending = false
 
-    /** What the camera writes into. Null until the bus has started. */
     @Volatile var input: Surface? = null
         private set
 
     val frameCount: Long get() = frames
 
-    /**
-     * How long the strip has been quiet. Counts from the open while no frame
-     * has landed yet, since the HAL takes seconds to produce the first one.
-     */
     val quietForMs: Long
         get() {
             val since = if (frameAtMs == 0L) openedAtMs else frameAtMs
@@ -103,7 +90,6 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
                 DaemonLog.e(TAG, "the graphics stack refused the camera: ${t.javaClass.simpleName}: ${t.message}")
                 false
             }
-            // The starter waits on this, so it is signalled even when open threw.
             synchronized(ready) {
                 failed = !opened
                 ready.notifyAll()
@@ -124,11 +110,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         thread = null
     }
 
-    /**
-     * A name that comes back brings a new encoder surface with it, so whatever
-     * was drawn into under that name has to go. Only the bus thread may
-     * destroy it, hence the queue.
-     */
+    // Only the bus thread may release a replaced consumer's EGL surface.
     fun add(consumer: Consumer) {
         consumers.removeAll { it.name == consumer.name }
         retired.add(consumer.name)
@@ -141,7 +123,6 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
     }
 
     private fun open(): Boolean {
-        // Reported by CameraTexture once; every retry here would repeat it.
         if (!CameraTexture.isLoaded) return false
         display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         val version = IntArray(2)
@@ -157,7 +138,6 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
             DaemonLog.e(TAG, "no graphics context: ${EGL14.eglGetError()}")
             return false
         }
-        // A context needs some surface to be current on before it will compile anything.
         pump = EGL14.eglCreatePbufferSurface(
             display, config, intArrayOf(EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE), 0
         )
@@ -182,10 +162,6 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         return true
     }
 
-    /**
-     * Gralloc buffers straight from the HAL, not a SurfaceTexture. Overdrive
-     * measured the texture path throttled by SurfaceFlinger and moved to this.
-     */
     private fun newReader(): ImageReader =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ImageReader.newInstance(
@@ -262,10 +238,6 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         }
     }
 
-    /**
-     * Takes the newest frame and points the texture at it. The frame that was
-     * being sampled is only released once its replacement is bound.
-     */
     private fun bind(): Boolean {
         val fresh = reader?.acquireLatestImage() ?: return false
         val buffer = fresh.hardwareBuffer
@@ -292,11 +264,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         held = null
     }
 
-    /**
-     * The car's HAL does not always stamp its frames, and a repeated or zero
-     * timestamp makes the muxer write a clip with no duration. Overdrive reads
-     * the clock instead of the frame for the same reason.
-     */
+    // Some HAL frames have zero or repeated timestamps; use the capture clock for muxing.
     private fun stamp(): Long {
         val now = System.nanoTime()
         stampedAtNs = if (now <= stampedAtNs) stampedAtNs + 1_000L else now
@@ -331,10 +299,6 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         }
     }
 
-    /**
-     * Counts frames going in. The encoder's own count says what came out, and
-     * only the pair tells a starved consumer from a chip that will not encode.
-     */
     private fun drew(name: String) {
         val count = (draws[name] ?: 0L) + 1L
         draws[name] = count

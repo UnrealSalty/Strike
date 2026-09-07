@@ -2,11 +2,7 @@ package com.strike.daemon
 
 import com.strike.core.LogLine
 
-/**
- * The watchdog redirects the daemon's stdout into cam.log, so writing a line
- * is a println. The app parses those lines back out, which is why both ends of
- * the format live in this one file.
- */
+// The watchdog writes stdout to cam.log; the app parses the same format.
 object DaemonLog {
 
     fun watchCrashes() {
@@ -31,10 +27,7 @@ object DaemonLog {
     }
 }
 
-/**
- * Lines the daemon did not write itself, a crash trace or a shell error, keep
- * the timestamp of the line above so they stay in place when merged.
- */
+// Non-daemon lines inherit the preceding timestamp for merged log ordering.
 internal fun parseDaemonLog(text: String): List<LogLine> {
     val lines = ArrayList<LogLine>()
     var atMs = 0L

@@ -22,14 +22,9 @@ private const val CONNECT_TIMEOUT_MS = 3_000
 private const val SOCKET_TIMEOUT_MS = 45_000
 private const val HANDSHAKE_MS = 2_500L
 
-/** Long enough that a denied prompt is not retried on every poll. */
 private const val REFUSED_TTL_MS = 5_000L
 
-/**
- * An ADB shell to this same device, which runs as UID 2000. Until the owner
- * accepts the debugging prompt the handshake never completes, so the attempt
- * runs off-thread and a timeout is read as "not authorised".
- */
+// Local ADB provides shell UID 2000 after the owner authorizes its key.
 class Shell(private val context: Context) {
 
     private val lock = Any()
@@ -80,11 +75,7 @@ class Shell(private val context: Context) {
         connect() != null
     }
 
-    /**
-     * The owner accepts the debugging prompt while Strike is already running,
-     * so a refusal is only remembered briefly. Latching it is what used to
-     * make the app need a restart before it could see the shell.
-     */
+    // Retry refusals after a short delay so accepting the ADB prompt takes effect.
     private fun connect(): Dadb? {
         dadb?.let { return it }
         if (authorised == false && System.currentTimeMillis() - refusedAtMs < REFUSED_TTL_MS) {

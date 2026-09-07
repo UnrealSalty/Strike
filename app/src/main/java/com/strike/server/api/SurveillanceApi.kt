@@ -33,10 +33,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
     private val thumbs = ClipThumbs(File(context.cacheDir, "heroes"))
     private val daemon = DaemonClient()
 
-    /**
-     * No publish here. It busts the volume cache and shells out to sm and df,
-     * which is a second of latency on a read. Triggers publishes every pass.
-     */
+    // Storage publication belongs to Triggers; read requests must not remount or reprobe volumes.
     fun events(): Response {
         val rows = JSONArray()
         for (event in events.store().list()) {
@@ -77,11 +74,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         return Response(206, MP4, slice = FileSlice(file, wanted.first, length, totalBytes))
     }
 
-    /**
-     * A Smart event already has its picture, boxed, written beside the clip by
-     * the daemon. A Continuous clip has none, so a frame is decoded the same
-     * way the recordings list does it.
-     */
+    // Smart clips use the detection still; other clips use a decoded thumbnail.
     fun hero(id: String): Response {
         val store = events.store()
         val boxed = store.hero(id)
@@ -139,7 +132,6 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         return Response(200, JSON, "{}".toByteArray())
     }
 
-    /** Only useful with the car on, which is the one time a window is visible. */
     fun preview(): Response {
         val message = Config.getString(
             SurveillanceSettings.MESSAGE, SurveillanceSettings.MESSAGE_FALLBACK

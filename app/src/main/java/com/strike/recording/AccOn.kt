@@ -4,10 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
-/**
- * The red layer is still up from a parked event when the key comes back.
- * Waiting for the next Triggers poll leaves it on the boot screen.
- */
+// Forward ACC on immediately so a parked deterrent does not remain over the boot screen.
 class AccOn : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {

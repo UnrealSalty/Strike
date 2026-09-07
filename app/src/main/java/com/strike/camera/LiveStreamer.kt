@@ -11,20 +11,12 @@ import com.strike.recording.Sample
 
 private const val TAG = "Live"
 
-/** Overdrive's High preset, the one its own UI defaults to. */
 const val LIVE_FRAME_RATE_FPS = 12
 const val LIVE_BITRATE_BPS = 1_500_000
 
 private const val CONSUMER = "live"
 
-/**
- * The live camera as H.264 for a browser. Baseline, because Media Source
- * Extensions on the head unit's Chrome 58 is the decoder and it is the profile
- * Overdrive settled on for the same reason.
- *
- * One angle at a time, cropped out of the strip by the bus, so a viewer never
- * competes with the recorder for the camera.
- */
+// H.264 Baseline keeps Live compatible with the head unit's MSE decoder.
 class LiveStreamer(private val relay: PacketRelay) {
 
     private var bus: FrameBus? = null
@@ -74,17 +66,11 @@ class LiveStreamer(private val relay: PacketRelay) {
         encoder = null
     }
 
-    /**
-     * A browser cannot decode a frame before it has the parameter sets, and a
-     * viewer who joins mid-stream never sees the encoder's first buffer. They
-     * are re-sent ahead of every keyframe so any join point is decodable.
-     */
+    // Repeat SPS/PPS before keyframes so viewers can join an existing stream.
     private fun relay(sample: Sample) {
         val header = encoder?.format
         val keyFrame = sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
         frames++
-        // Says whether the chip encoded anything at all, which a silent stage
-        // otherwise leaves indistinguishable from a browser that cannot decode.
         if (frames == 1L) DaemonLog.d(TAG, "first live frame, ${sample.bytes.size} bytes")
         if (frames % 240 == 0L) DaemonLog.d(TAG, "$frames live frames encoded")
         if (keyFrame || !sentConfig) {
@@ -99,14 +85,10 @@ class LiveStreamer(private val relay: PacketRelay) {
     }
 }
 
-/** SPS and PPS as the encoder describes them, Annex-B, ready to prepend. */
 internal fun parameterSets(format: MediaFormat?): ByteArray? =
     annexB(csd(format, "csd-0"), csd(format, "csd-1"))
 
-/**
- * Qualcomm writes SPS in csd-0 and PPS in csd-1. Sending only the first
- * leaves the browser's muxer without PPS, so it never opens a decoder.
- */
+// Qualcomm supplies SPS in csd-0 and PPS in csd-1; browsers need both.
 internal fun annexB(sps: ByteArray?, pps: ByteArray?): ByteArray? {
     if (sps == null || sps.isEmpty()) return null
     val head = withStart(sps)

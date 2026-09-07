@@ -6,10 +6,7 @@ private const val KEPT = 200
 
 class LogLine(val atMs: Long, val level: String, val tag: String, val message: String)
 
-/**
- * Keeps the last lines in memory as well as sending them to logcat, because
- * the owner reads them from the daemons page and has no Android Studio.
- */
+// Keep a bounded in-memory log for the Daemons page alongside logcat.
 object Logs {
 
     private val kept = ArrayDeque<LogLine>()

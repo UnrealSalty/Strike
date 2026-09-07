@@ -65,10 +65,6 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         return Response(206, MP4, slice = FileSlice(file, wanted.first, length, totalBytes))
     }
 
-    /**
-     * The clip length is only known once the header is read, and the list wants
-     * it on the same request as the picture rather than one of its own.
-     */
     fun thumb(id: String): Response {
         val volume = storage.selected() ?: return notFound()
         val file = storage.clipsOn(volume).file(id) ?: return notFound()

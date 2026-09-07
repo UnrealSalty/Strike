@@ -15,7 +15,6 @@ private val EVENT_NAME = Regex("(event|watch)_(\\d{8})_(\\d{6})\\.mp4")
 const val PERSON = "person"
 const val VEHICLE = "vehicle"
 
-/** A Smart clip that YOLO confirmed, or a stretch of the Continuous tape. */
 enum class EventKind { EVENT, WATCH }
 
 class Event(
@@ -30,13 +29,9 @@ class Event(
     val bands: List<Band>
 ) : Kept(id, bytes)
 
-/** One stretch of a clip where something was seen, drawn on the player's bar. */
 class Band(val startMs: Long, val endMs: Long, val seen: String)
 
-/**
- * Sightings land every [SAMPLE_MS] for as long as someone is there, so a run
- * of them is one visit and becomes one band rather than a row of ticks.
- */
+// Merge adjacent sightings into one timeline band.
 internal fun bandsOf(marks: List<Mark>): List<Band> {
     val bands = ArrayList<Band>()
     for (mark in marks.sortedBy { it.atMs }) {
@@ -50,13 +45,7 @@ internal fun bandsOf(marks: List<Mark>): List<Band> {
     return bands
 }
 
-/**
- * The parked library. Separate from [com.strike.recording.ClipStore] so the
- * recordings page never lists an event and the two budgets stay apart.
- *
- * A Smart clip carries two sidecars under the same stem: the JSON saying what
- * was seen, and the hero JPEG with the box drawn on it.
- */
+// Event metadata and detection stills share the clip's filename stem.
 class EventStore(private val root: File) : Reapable {
 
     override fun list(): List<Event> {
@@ -101,11 +90,7 @@ class EventStore(private val root: File) : Reapable {
         return true
     }
 
-    /**
-     * Written by the daemon the moment YOLO confirms, so the clip is already
-     * tagged while it is still being recorded. World readable because the app
-     * uid has to list what uid 2000 wrote.
-     */
+    // Sidecars written by shell UID 2000 must remain readable by the app.
     fun flag(clip: String, seen: String, score: Float, hero: ByteArray?) {
         if (EVENT_NAME.matchEntire(clip) == null) return
         val facts = sidecar(clip) ?: JSONObject()
@@ -115,10 +100,7 @@ class EventStore(private val root: File) : Reapable {
         if (hero != null) write(File(root, stem(clip) + ".jpg"), hero)
     }
 
-    /**
-     * Appended while the clip is still recording, so the timeline survives the
-     * car cutting power mid-event.
-     */
+    // Persist sightings during recording so the timeline survives a process exit.
     fun mark(clip: String, clipStartedAtMs: Long, marks: List<Mark>) {
         if (EVENT_NAME.matchEntire(clip) == null || marks.isEmpty()) return
         val facts = sidecar(clip) ?: JSONObject()

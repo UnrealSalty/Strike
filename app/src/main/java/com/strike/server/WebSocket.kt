@@ -19,12 +19,6 @@ private const val LENGTH_16_BIT = 126
 private const val LENGTH_64_BIT = 127
 private const val SHORT_MAX = 125
 
-/**
- * Enough of RFC 6455 to push H.264 at a browser: the handshake, binary frames
- * out, and control frames in. Chrome 58 in the head unit has no WebCodecs, so
- * MSE is fed from here and the frames have to be well formed or it stalls
- * silently rather than erroring.
- */
 class WebSocket(private val input: InputStream, private val output: OutputStream) {
 
     @Volatile
@@ -46,10 +40,7 @@ class WebSocket(private val input: InputStream, private val output: OutputStream
         }
     }
 
-    /**
-     * Reads until the client goes away. A browser sends nothing but control
-     * frames on a one-way stream, so this exists to notice the close.
-     */
+    // Read control frames to detect when a viewer disconnects.
     fun awaitClose() {
         try {
             while (!closed) {
@@ -130,7 +121,6 @@ internal fun unmask(body: ByteArray, mask: ByteArray) {
     for (i in body.indices) body[i] = (body[i].toInt() xor mask[i % 4].toInt()).toByte()
 }
 
-/** Null when the request is not a WebSocket upgrade this server will take. */
 internal fun acceptKey(clientKey: String?): String? {
     if (clientKey == null || clientKey.isEmpty()) return null
     val digest = MessageDigest.getInstance("SHA-1").digest((clientKey + ACCEPT_SALT).toByteArray())

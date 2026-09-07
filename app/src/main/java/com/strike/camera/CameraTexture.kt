@@ -7,13 +7,7 @@ import java.io.File
 private const val TAG = "Texture"
 private const val LIB = "strike"
 
-/**
- * The camera hands out gralloc buffers and GL samples them as external
- * textures, but the EGL calls between the two are not in the Java SDK. This is
- * the only native code in Strike and it does nothing else.
- *
- * Both calls need a current EGL context on the calling thread.
- */
+// Both JNI calls require a current EGL context on the calling thread.
 object CameraTexture {
 
     @JvmStatic
@@ -28,10 +22,7 @@ object CameraTexture {
 
     private var tried = false
 
-    /**
-     * The daemon is app_process and gets the library directory on its command
-     * line, because java.library.path has already failed on one firmware.
-     */
+    // app_process receives the extracted library path explicitly.
     @Synchronized
     fun load(dir: String?): Boolean {
         if (tried) return isLoaded

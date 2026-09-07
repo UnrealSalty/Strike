@@ -9,15 +9,10 @@ import java.io.File
 
 private const val TAG = "BydSdk"
 
-/** The OEM app whose apk carries the bydauto classes on DiLink 5. */
 private const val OEM_PACKAGE = "com.byd.data.collect"
 private const val OEM_APK = "/system/app/BydDataCollect/BydDataCollect.apk"
 
-/**
- * On DiLink 3 and 4 the bydauto classes sit on the boot classpath. On DiLink 5
- * they ship inside the OEM data collector apk instead, so nothing resolves them
- * until that apk is on a classloader. Verified in Overdrive's Dilink5SdkInjector.
- */
+// DiLink 5 stores BYD SDK classes in BydDataCollect.apk instead of the boot classpath.
 object BydSdk {
 
     private var loader: ClassLoader? = null
@@ -64,11 +59,7 @@ object BydSdk {
     }
 }
 
-/**
- * The BYD permissions are the OEM's own, so an app that is not platform signed
- * is refused by the SDK's internal check even after declaring them. The check
- * asks the Context it was handed, which is this one.
- */
+// BYD's client-side SDK permission checks use the supplied Context.
 class BydPermissions(base: Context) : ContextWrapper(base) {
 
     override fun getApplicationContext(): Context = this

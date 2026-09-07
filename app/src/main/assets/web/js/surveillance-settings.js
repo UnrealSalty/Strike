@@ -7,7 +7,6 @@
     var PREVIEW = '/api/surveillance/preview';
     var PREVIEW_NOTE = 'The car has to be on for a preview. Parked, the daemon draws it over a dark screen.';
 
-    /** Overdrive's wording for the same five steps. */
     var NEAR = {
         1: 'Touching the car',
         2: 'Within about a metre',
@@ -35,10 +34,6 @@
         document.getElementById('proximity').textContent = NEAR[value];
     }
 
-    /**
-     * Continuous has nothing to detect, so proximity and the whole screen
-     * message have nothing to act on either.
-     */
     function paintMode(mode) {
         var smart = mode === 'smart';
         document.getElementById('proximityRow').hidden = !smart;
@@ -67,7 +62,6 @@
         Strike.core.get(SETTINGS, paint, function () {});
     }
 
-    // A rejected save must not leave the control showing a value the server did not take.
     function save(key, value) {
         var body = 'key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value);
         Strike.core.post(SETTINGS, body, load, load);

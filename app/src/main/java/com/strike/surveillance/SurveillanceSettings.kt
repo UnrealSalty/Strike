@@ -3,7 +3,7 @@ package com.strike.surveillance
 import com.strike.recording.Choice
 import com.strike.recording.RecordingSettings
 
-/** On lock, if the car will not say, arm anyway. Same wait Overdrive uses. */
+// If lock state stays unavailable, arm after this delay once parking is confirmed.
 const val LOCK_FALLBACK_MS = 60_000L
 
 /** Cap on one event clip. The event itself ends when the movement does. */
@@ -55,10 +55,7 @@ object SurveillanceSettings {
     }
 }
 
-/**
- * Overdrive's 1-to-5 slider, read as how much of one camera's quarter of the
- * mosaic a subject has to fill. 1 is touching the car, 5 is anything in view.
- */
+// Minimum changed area within one camera quadrant, from closest (1) to widest (5).
 fun movedShareFor(proximity: Int): Float = when (proximity) {
     1 -> 0.24f
     2 -> 0.12f
@@ -67,7 +64,7 @@ fun movedShareFor(proximity: Int): Float = when (proximity) {
     else -> 0.06f
 }
 
-/** The same distance, as the height a person's box has to reach. */
+// Minimum detection-box height relative to one camera quadrant.
 fun boxShareFor(proximity: Int): Float = when (proximity) {
     1 -> 0.55f
     2 -> 0.35f

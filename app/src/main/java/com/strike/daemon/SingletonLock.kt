@@ -8,11 +8,7 @@ import java.nio.channels.FileLock
 
 private const val TAG = "Lock"
 
-/**
- * Two daemons would fight over the camera, and the watchdog can race its own
- * restart. A SIGKILL leaves the file behind with a pid that no longer exists,
- * which is the stale case worth recovering from.
- */
+// Recover stale PID locks after SIGKILL without admitting a second camera owner.
 class SingletonLock {
 
     private var file: RandomAccessFile? = null

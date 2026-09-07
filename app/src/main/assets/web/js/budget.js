@@ -10,7 +10,6 @@
         return (mb / 1024).toFixed(1) + ' GB';
     }
 
-    // An unmounted or full volume has no numbers to show and cannot be chosen.
     function volumeOf(payload, location) {
         for (var i = 0; i < payload.volumes.length; i++) {
             var volume = payload.volumes[i];
@@ -21,11 +20,6 @@
         return null;
     }
 
-    /**
-     * The storage block of both settings modals: where to write and how much of
-     * the volume to claim. Recordings and Surveillance keep separate keys and
-     * separate budgets over the same markup.
-     */
     Strike.budget = function (plan) {
         var slider = document.querySelector('.slider[data-key="' + plan.budget + '"]');
 
@@ -71,8 +65,7 @@
             paintShared(volume);
         }
 
-        // Both features can point at one card, and then the limit each can
-        // claim is what the other has not already reserved.
+        // Budgets on the same volume must account for each other's reservation.
         function paintShared(volume) {
             var note = document.getElementById('shared');
             if (!volume || !volume.reservedMb) {

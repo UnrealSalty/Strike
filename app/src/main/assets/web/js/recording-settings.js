@@ -44,7 +44,6 @@
         Strike.core.get(SETTINGS, paint, function () {});
     }
 
-    // A rejected save must not leave the control showing a value the server did not take.
     function save(key, value) {
         var body = 'key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value);
         Strike.core.post(SETTINGS, body, load, load);

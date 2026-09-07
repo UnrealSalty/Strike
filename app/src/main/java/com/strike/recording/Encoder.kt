@@ -19,11 +19,7 @@ private const val MUTE_MS = 5_000L
 
 class Sample(val bytes: ByteArray, val timeUs: Long, val flags: Int, val startsClip: Boolean)
 
-/**
- * Surface input, so frames go from the camera HAL into the encoder without
- * passing through this process. Encoded buffers leave on the drain thread and
- * the caller writes them; nothing here touches a file.
- */
+// Surface input stays on the GPU; the drain thread returns encoded samples.
 class Encoder(
     private val width: Int,
     private val height: Int,
@@ -92,18 +88,12 @@ class Encoder(
         }
     }
 
-    /**
-     * How many of this component may be alive together. The recorder and the
-     * live stream each want one, so a chip that allows a single instance
-     * decides the design rather than being a detail.
-     */
     private fun instances(codec: MediaCodec): String = try {
         codec.codecInfo.getCapabilitiesForType(mimeType).maxSupportedInstances.toString()
     } catch (e: IllegalArgumentException) {
         "unknown"
     }
 
-    /** The camera strip is wider than this chip encodes, and configure would only say so as a crash. */
     private fun encodable(codec: MediaCodec): Boolean {
         val video = try {
             codec.codecInfo.getCapabilitiesForType(mimeType).videoCapabilities
@@ -119,7 +109,6 @@ class Encoder(
         return false
     }
 
-    /** The next keyframe becomes the first sample of the next clip. */
     fun splitAtNextKeyFrame() {
         if (rotateAskedAtMs != 0L) return
         rotateAskedAtMs = System.currentTimeMillis()
@@ -222,11 +211,7 @@ private val AVC_LEVELS = listOf(
     36864 to MediaCodecInfo.CodecProfileLevel.AVCLevel51
 )
 
-/**
- * A level too low for the frame is still written into the stream's parameter
- * set. A player reading the file ignores it, but a browser decoding the same
- * bytes live refuses them, so it cannot be a fixed value.
- */
+// Choose the H.264 level for the frame size; browsers can reject an underspecified SPS.
 internal fun avcLevelFor(width: Int, height: Int): Int {
     val macroblocks = ((width + 15) / 16) * ((height + 15) / 16)
     for ((limit, level) in AVC_LEVELS) {
@@ -235,11 +220,7 @@ internal fun avcLevelFor(width: Int, height: Int): Int {
     return MediaCodecInfo.CodecProfileLevel.AVCLevel52
 }
 
-/**
- * A clip must begin on a keyframe to play from its first frame. Waiting for
- * one has to end somewhere, or a stream that stops producing them would give
- * one endless clip.
- */
+// Rotate on a keyframe, with a bounded wait if the encoder stops producing them.
 internal fun splitsNow(keyFrame: Boolean, askedAtMs: Long, nowMs: Long): Boolean {
     if (askedAtMs == 0L) return false
     return keyFrame || nowMs - askedAtMs >= SPLICE_DEADLINE_MS

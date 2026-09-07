@@ -10,7 +10,6 @@ import java.io.IOException
 private const val TAG = "Storage"
 private const val CLIPS_DIR = "Strike/clips"
 
-/** Decides which volume clips live on and how much room they may take. */
 class Storage(context: Context, shell: Shell) {
 
     private val volumes = Volumes(context, shell)
@@ -29,7 +28,7 @@ class Storage(context: Context, shell: Shell) {
     fun budgetMb(): Int =
         Config.getInt(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB)
 
-    /** The daemon has no Context to find volumes with, so the app tells it where to write. */
+    // The app resolves the volume and publishes its path for the daemon.
     fun publish(shell: Shell) {
         forgetMounted()
         val root = volumes.rootFor(location()) ?: return
@@ -44,11 +43,7 @@ class Storage(context: Context, shell: Shell) {
     }
 }
 
-/**
- * Clips sit at the top of the volume, not under Android/data, because the
- * daemon writes them as uid 2000 and cannot create files in the app's own
- * folder. Overdrive keeps its own recordings there for the same reason.
- */
+// Shell UID 2000 cannot write the app's Android/data directory.
 internal fun clipsDir(volume: Volume): File = File(publicRoot(volume.dir.path), CLIPS_DIR)
 
 internal fun publicRoot(path: String): String {
@@ -56,16 +51,8 @@ internal fun publicRoot(path: String): String {
     return if (marker > 0) path.substring(0, marker) else path
 }
 
-/**
- * The app uid can mkdir on /storage/<uuid>. The daemon (uid 2000) cannot,
- * which is why events never appeared while an already-created clips folder
- * kept taking files. Shell mkdir is only a backup; chmod does not stick on
- * FUSE, so a real write from this process is the probe.
- *
- * A card that will not take a probe still keeps this path. The daemon
- * remounts before it writes. Switching config to internal is what left
- * parked clips on the phone storage after the owner picked the card.
- */
+// Probe writes from the app UID; chmod is ineffective on FUSE.
+// Preserve the selected removable path while the daemon waits for a remount.
 internal fun publishWriteDir(shell: Shell, wanted: File, key: String) {
     val ready = prepareDir(wanted, shell)
     val path = keepWritePath(ready, wanted.absolutePath) ?: run {

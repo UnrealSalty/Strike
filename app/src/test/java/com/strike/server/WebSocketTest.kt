@@ -29,7 +29,6 @@ class WebSocketTest {
         )
     }
 
-    /** A length in the wrong width is the failure that makes MSE stall silently. */
     @Test
     fun binaryHeadersGrowWithThePayloadAtTheStandardsBoundaries() {
         assertArrayEquals(byteArrayOf(0x82.toByte(), 0), header(0x2, 0))

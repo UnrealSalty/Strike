@@ -1,5 +1,4 @@
-/* Round-trips fmp4.sizeOf against an independent SPS writer, then checks a
- * real encoder's parameter set. Run: node tools/spscheck.js */
+// Run with: node tools/spscheck.js
 
 global.window = global;
 require('../app/src/main/assets/web/js/fmp4.js');
@@ -31,7 +30,6 @@ Writer.prototype.se = function (value) {
     this.ue(value <= 0 ? -2 * value : 2 * value - 1);
 };
 
-/** Start-code-stripped SPS NAL, with emulation prevention applied. */
 Writer.prototype.nal = function (profile, level) {
     var raw = [0x67, profile, 0x00, level];
     var byteAt = 0;

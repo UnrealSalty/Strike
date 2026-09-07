@@ -8,8 +8,7 @@ button {
     appearance: none;
 }
 
-/* Chrome 58 draws a yellow focus rect after a tap. :focus-visible is a
-   second rule so an old engine that does not know it cannot drop :focus. */
+/* Keep :focus-visible separate: Chrome 58 rejects selectors it does not recognize. */
 *:focus {
     outline: none;
 }
@@ -106,8 +105,6 @@ main {
     margin-top: var(--gap);
 }
 
-/* Overdrive's dashboard split: 1.08 to 0.92 under a full-width vehicle card. */
-/* Each card ends at its own content; neither column stretches to the other. */
 .columns {
     display: flex;
     align-items: flex-start;
@@ -347,8 +344,6 @@ main {
     min-width: 0;
 }
 
-/* Each angle gets an equal share of the row, which is a far bigger target
-   than five buttons hugging their labels. */
 .seg--fill {
     flex: 1;
     width: 100%;
@@ -505,7 +500,6 @@ main {
     border-radius: var(--radius);
 }
 
-/* Wide enough for the keypad and nothing more. */
 .modal__panel--narrow {
     width: 420px;
 }
@@ -520,15 +514,11 @@ main {
     border-bottom: 1px solid var(--line);
 }
 
-/* Two lines of copy in 64px of pad-less chrome sits on the rim. The player
-   is the only head that has a subtitle, so only it grows. */
 .modal__panel--player > .modal__head {
     min-height: 0;
     padding: 18px var(--pad) 14px;
 }
 
-/* The card is the screen. The picture stays 4:3 inside the leftover
-   height, so a landscape head unit cannot grow a scrollbar. */
 .modal__panel--player {
     width: 100%;
     max-width: 100%;
@@ -561,7 +551,7 @@ main {
     margin-top: 4px;
 }
 
-/* Every state of it, or arming Delete grows the row and shifts the video. */
+/* Keep Delete's width fixed across confirmation states to avoid moving the player. */
 .modal__sub > .btn {
     margin-left: 20px;
     min-height: 0;
@@ -734,7 +724,6 @@ main {
     display: none;
 }
 
-/* Taller than a plain row so a 50px control is not flush with the dividers. */
 .row--control {
     min-height: 64px;
 }
@@ -772,7 +761,6 @@ main {
     color: var(--accent-text);
 }
 
-/* Press feedback lives in one place so every control answers the same way. */
 .btn,
 .seg__btn,
 .choice__row,
@@ -954,9 +942,6 @@ main {
     word-break: break-word;
 }
 
-/* The log holds hundreds of lines, so the frame scrolls rather than the page. */
-/* Holds its box, so an expanded daemon scrolls the page instead of squeezing
-   the log down to a couple of lines. */
 .log {
     flex: none;
     max-height: 320px;
@@ -998,7 +983,6 @@ main {
     justify-content: flex-start;
 }
 
-/* Holds the preview's box before it lands, so the row never reflows. */
 .clip__shot {
     position: relative;
     flex: none;
@@ -1016,7 +1000,6 @@ main {
     object-fit: cover;
 }
 
-/* A clip with no readable frame still keeps the box the preview would fill. */
 .clip__shot > svg {
     position: absolute;
     left: 50px;
@@ -1065,8 +1048,6 @@ main {
     font-size: 14px;
 }
 
-/* Why the clip exists, readable at a glance down the list. The colour is the
-   whole point, so it sits on the text and the border rather than a fill. */
 .tag {
     flex: none;
     padding: 1px 7px;
@@ -1207,9 +1188,6 @@ main {
     font-size: 13px;
 }
 
-/* The column the picture and its controls share, so the rows never run wider
-   than the clip they belong to. Named for the player, not the stage:
-   live.html already owns .stage and sharing it squeezed the live view. */
 .player {
     width: 100%;
     max-width: calc(133.333vh - 328px);
@@ -1217,8 +1195,7 @@ main {
 
 .player__frame {
     position: relative;
-    /* padding-bottom, not aspect-ratio: this WebView predates it. The ratio
-       must stay 4:3 or the corner origins below crop the wrong pixels. */
+    /* Chrome 58 needs a padding ratio; camera crops require a 4:3 viewport. */
     height: 0;
     padding-bottom: 75%;
     border-radius: var(--radius);
@@ -1237,7 +1214,6 @@ main {
     transition: transform var(--motion) var(--ease);
 }
 
-/* Covers the platform play glyph until a frame is on screen. */
 .player__frame::after {
     content: "";
     position: absolute;
@@ -1269,8 +1245,7 @@ main {
     margin-top: 8px;
 }
 
-/* The four cameras are baked into one clip as a 2x2 mosaic. Doubling the
-   scale about a corner is the whole of angle selection; nothing re-encodes. */
+/* Crop a corner of the recorded 2x2 mosaic by doubling its scale. */
 .player__frame[data-angle="front"] > .player__video {
     -webkit-transform-origin: 0 0;
     transform-origin: 0 0;
@@ -1299,7 +1274,6 @@ main {
     transform: scale(2);
 }
 
-/* The picture, not the dialog. Head and angles stay in the modal. */
 .modal--full {
     padding: 0;
     background: #000;
@@ -1360,7 +1334,6 @@ main {
     margin: 0 auto;
 }
 
-/* The one thing reached for while driving, so it carries the action colour. */
 .transport__btn--play {
     border-radius: var(--radius);
     background: var(--accent);
@@ -1375,7 +1348,6 @@ main {
     white-space: nowrap;
 }
 
-/* The bar is 6px but the hit area is a full touch target. */
 .scrub {
     position: relative;
     flex: 1;
@@ -1402,8 +1374,7 @@ main {
     background: var(--accent);
 }
 
-/* Event bands sit on the fill, same as Overdrive's timeline-marker. Empty
-   until a clip carries events. pointer-events stay off so seek is the bar. */
+/* Timeline bands must not intercept seek gestures. */
 .scrub__marks {
     position: absolute;
     left: 0;
@@ -1428,7 +1399,6 @@ main {
     opacity: 1;
 }
 
-/* Not --accent-text: the bands sit on the fill, which is --accent. */
 .scrub__mark--vehicle {
     background: var(--warn);
     opacity: 1;
@@ -1455,7 +1425,7 @@ main {
     overflow: hidden;
 }
 
-/* Weight is the same in both states; bolding the selected one reflows the row. */
+/* Keep font weight constant so selection does not reflow the row. */
 .seg__btn {
     min-height: var(--touch);
     padding: 0 18px;
@@ -1547,7 +1517,6 @@ main {
     width: 176px;
 }
 
-/* A text setting in a row, not a page-wide field. */
 .row .input {
     width: 320px;
     max-width: 55%;
@@ -1577,8 +1546,6 @@ main {
     -webkit-appearance: none;
 }
 
-/* The stage takes the height the page has rather than a guessed fraction, so
-   there is no dead band under it. */
 .live {
     display: flex;
     align-items: stretch;
@@ -1596,10 +1563,6 @@ main {
     margin-top: var(--gap);
 }
 
-/* The silhouette is 112x230 and the front and rear labels hang outside it, so
-   the margins reserve the room they need. Overdrive's geometry. */
-/* Overdrive's silhouette at 112x230, scaled so the rail's two cards fit the
-   head unit's 540px without a second scroll area. */
 .car {
     position: relative;
     width: 88px;
@@ -1816,8 +1779,7 @@ main {
     transform: scale(2);
 }
 
-/* A class with display beats the browser's own [hidden] rule, and a video
-   element with no pictures draws the platform's play placeholder. */
+/* Explicit display rules override the browser's default [hidden] style. */
 .stage__video[hidden] {
     display: none;
 }
@@ -1848,7 +1810,6 @@ main {
     color: var(--text-dim);
 }
 
-/* Over video, so the controls need their own backing to stay readable. */
 .stage__top {
     position: absolute;
     top: 0;
@@ -1861,8 +1822,6 @@ main {
     padding: 12px;
 }
 
-/* The badge is hidden until the first frame, so the picker holds the right
-   edge itself rather than relying on the gap between them. */
 .stage__top > .pick {
     margin-left: auto;
 }
@@ -1982,14 +1941,12 @@ main {
     cursor: pointer;
 }
 
-/* A word, not a second boxed twin of Close. */
 .btn--quiet {
     border-color: transparent;
     background: transparent;
     color: var(--text-dim);
 }
 
-/* Only once the press has armed it. A fill before that would be decoration. */
 .btn--danger {
     border-color: transparent;
     background: transparent;
@@ -2137,8 +2094,6 @@ main {
         flex-wrap: wrap;
     }
 
-    /* Three per row, so anything past the third starts a new row and needs
-       the separators the single-row rules put on the wrong edges. */
     .seg[data-key] > .seg__btn {
         flex: 1 0 auto;
         width: 33.33%;

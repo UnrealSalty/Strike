@@ -18,8 +18,6 @@ android {
 
         ndk { abiFilters += "arm64-v8a" }
 
-        // The camera's gralloc buffers reach GL through EGL entry points the
-        // Java SDK does not expose, so that one bind is native and nothing else.
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=none" } }
     }
 
@@ -51,13 +49,11 @@ android {
     // android.util.Log throws from the mockable android.jar without this.
     testOptions { unitTests.isReturnDefaultValues = true }
 
-    // dadb drags in nine jars that each ship these.
     packaging { resources.excludes += setOf("META-INF/LICENSE.md", "META-INF/LICENSE-notice.md") }
 
     packaging {
         resources.excludes += setOf("META-INF/*.kotlin_module", "kotlin/**")
-        // The daemon is app_process, not an app, so it can only load a library
-        // from a real directory. Left packed, libstrike.so never reaches disk.
+        // app_process loads native libraries from extracted files.
         jniLibs { useLegacyPackaging = true }
     }
 }
@@ -65,13 +61,9 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
-    // Shell UID 2000 is the only way to run pm disable-user, and there is no API for it.
     implementation(libs.dadb)
-    // Person and vehicle boxes on device. tensorflow-lite-support is not here:
-    // FrameSink already hands over a frame that fits the model's square, so
-    // nothing needs its resize.
     implementation(libs.tensorflow.lite)
     testImplementation(libs.junit)
-    // The mockable android.jar stubs org.json to return nothing, which makes every JSON test pass vacuously.
+    // Use real org.json in unit tests; android.jar only provides stubs.
     testImplementation(libs.json)
 }

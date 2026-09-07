@@ -7,10 +7,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 private const val TAG = "LiveStream"
 private const val LEAVE_MS = 400L
 
-/**
- * Every browser watching the live camera. The encoder in the daemon is paid
- * for in battery and heat, so it only runs while this is not empty.
- */
+// Start the live encoder for the first viewer and stop it when the last viewer leaves.
 class LiveStream(private val daemon: DaemonClient) {
 
     private val viewers = CopyOnWriteArrayList<WebSocket>()
@@ -23,11 +20,7 @@ class LiveStream(private val daemon: DaemonClient) {
     val isWatched: Boolean
         get() = viewers.isNotEmpty()
 
-    /**
-     * Blocks the request thread for as long as the viewer stays connected.
-     * The mosaic is one stream; the page crops an angle so a tap does not
-     * tear the encoder down.
-     */
+    // Stream one mosaic; browsers crop angles without restarting the encoder.
     fun serve(socket: WebSocket, view: String) {
         val mine: Int
         synchronized(gate) {

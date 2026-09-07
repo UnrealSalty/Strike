@@ -14,11 +14,7 @@ private const val HOST = "127.0.0.1"
 private const val CONNECT_MS = 1_500
 private const val READ_MS = 2_500
 
-/**
- * A socket per command, so a daemon that is not there costs a polling HTTP
- * thread a refused connection rather than a stale session to recover. Null
- * means the daemon is not answering, which the pages show as stopped.
- */
+// Use a fresh socket per command; null means the daemon did not answer.
 class DaemonClient {
 
     fun status(): JSONObject? = send("status")

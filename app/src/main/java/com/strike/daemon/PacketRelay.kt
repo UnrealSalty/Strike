@@ -14,14 +14,8 @@ const val PACKET_HEADER_BYTES = 9
 const val PACKET_FLAG_KEYFRAME = 1
 const val PACKET_FLAG_CONFIG = 2
 
-/**
- * Encoded frames from the daemon to the app, which relays them to browsers
- * untouched. The header travels all the way to the JavaScript muxer so the app
- * never has to parse video it does not own.
- *
- * One reader at a time: the app is the only consumer, and a frame dropped
- * because it is slow is better than a queue that grows without limit.
- */
+// One app reader relays encoded packets unchanged to browsers.
+// Drop frames rather than let a slow reader grow an unbounded queue.
 class PacketRelay {
 
     @Volatile

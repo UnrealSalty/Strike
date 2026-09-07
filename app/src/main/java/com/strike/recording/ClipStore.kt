@@ -51,10 +51,7 @@ class Clip(
     val time: String
 ) : Kept(id, bytes)
 
-/**
- * The name carries the kind and the wall clock the car recorded at, so date and
- * time are read straight off it rather than reformatted in another zone.
- */
+// Filename timestamps are local recording time; do not convert them to another zone.
 internal fun readClip(name: String, bytes: Long): Clip? {
     val match = CLIP_NAME.matchEntire(name) ?: return null
     val stamp = readStamp(match.groupValues[2], match.groupValues[3]) ?: return null

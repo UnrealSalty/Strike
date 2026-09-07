@@ -12,12 +12,7 @@ import java.io.IOException
 private const val REVALIDATE_MS = 1_000L
 private const val TAG = "Config"
 
-/**
- * The settings both processes read. SharedPreferences lives in the app's
- * private directory, which uid 2000 cannot open, so this is a world-readable
- * file where the daemon can reach it. /data/local/tmp is not writable by the
- * app uid either, so writes go out through the shell.
- */
+// Shared settings live in a shell-owned, app-readable file; writes require ADB.
 object Config {
 
     private val lock = Any()
@@ -65,10 +60,7 @@ object Config {
     }
 }
 
-/**
- * Base64 so no setting value can be read as shell syntax, and rename so a
- * reader in the other process never sees half a file.
- */
+// Base64 protects shell arguments; atomic rename prevents partial reads.
 internal fun writeLine(base64: String): String =
     "mkdir -p $STRIKE_DIR && chmod 755 $STRIKE_DIR && " +
         "echo $base64 | base64 -d > $CONFIG_PATH.tmp && chmod 644 $CONFIG_PATH.tmp && " +

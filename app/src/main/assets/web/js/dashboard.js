@@ -24,7 +24,6 @@
         return vehicle && typeof vehicle[key] === 'number' ? vehicle[key] : null;
     }
 
-    // Overdrive's own thresholds: amber under half, red at a fifth.
     function socState(soc) {
         if (soc > 50) {
             return null;

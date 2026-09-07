@@ -14,10 +14,7 @@ private const val STROKE = 3f
 private const val LABEL_SIZE = 22f
 private const val LABEL_PAD = 6f
 
-/**
- * The still that carries the box, kept beside the clip. The live stream and
- * the clip itself stay clean, which is how Overdrive does it too.
- */
+// Draw detection boxes only on the sidecar JPEG; leave recorded frames unchanged.
 internal fun heroJpeg(mosaic: Mosaic, sighting: Sighting): ByteArray {
     val frame = Bitmap.createBitmap(mosaic.width, mosaic.height, Bitmap.Config.ARGB_8888)
     frame.copyPixelsFromBuffer(ByteBuffer.wrap(mosaic.rgba))

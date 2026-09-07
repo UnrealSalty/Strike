@@ -7,11 +7,7 @@ import java.io.StringWriter
 private const val TAG = "Crash"
 private const val FILE_NAME = "last-crash.txt"
 
-/**
- * An uncaught exception on any thread ends the process, which takes the log
- * the owner reads with it. The trace is written to disk so the next launch can
- * say what happened, on a head unit with no way to read logcat.
- */
+// Persist uncaught exceptions so the next app launch can display the failure.
 object Crashes {
 
     fun watch(dir: File) {
@@ -37,7 +33,6 @@ object Crashes {
         Logs.e(TAG, "Strike stopped on thread $thread: ${headline(text)}")
     }
 
-    /** The exception and the first frame in Strike, which is the useful pair. */
     private fun headline(text: String): String {
         val lines = text.lines().drop(1).map { it.trim() }
         val cause = lines.firstOrNull().orEmpty()

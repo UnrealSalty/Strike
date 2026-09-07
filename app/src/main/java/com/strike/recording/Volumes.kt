@@ -21,7 +21,6 @@ private const val SCSI_MAJOR = "8"
 
 private const val REVALIDATE_MS = 5_000L
 
-// Three api classes each hold a Storage, and they all describe the one device.
 private val cacheLock = Any()
 private var readAtMs = 0L
 private var held: Map<String, Volume> = emptyMap()
@@ -33,20 +32,10 @@ class Volume(
     val totalMb: Int
 )
 
-/**
- * A removable volume is mounted outside the app's storage view, so
- * getExternalFilesDirs and StatFs never see it. Overdrive asks the volume
- * manager and measures through the shell, which is also the uid that writes
- * the clips, so a volume it cannot write is a volume Strike cannot offer.
- */
+// Removable storage may be absent from the app's view; query mounts and capacity through shell.
 class Volumes(private val context: Context, private val shell: Shell) {
 
-    /**
-     * Asking the volume manager costs several shell round trips, and every
-     * page that shows storage asks on every poll, so the answer is held for a
-     * few seconds. A card appearing late is nothing; a settings page that
-     * takes seconds to answer a tap is what this avoids.
-     */
+    // Share volume probes across API requests to avoid repeated ADB round trips.
     fun mounted(): Map<String, Volume> = synchronized(cacheLock) {
         val now = System.currentTimeMillis()
         if (now - readAtMs < REVALIDATE_MS) return held
@@ -116,10 +105,7 @@ internal class Mount(val location: String, val path: String)
 
 internal class Room(val freeMb: Int, val totalMb: Int)
 
-/**
- * Rows read `public:179,65 mounted 3439-3138`. ACC off often prints
- * `unmounted` or a null uuid; `sm mount` still wants `public:8,1`.
- */
+// sm mount takes the public volume ID, even when its UUID is unavailable.
 internal fun volumeIdFor(listing: String, uuid: String): String? {
     for (line in listing.lineSequence()) {
         val fields = line.trim().split(Regex("\\s+"))
@@ -185,11 +171,7 @@ internal fun remount(dir: File) {
     for (id in mountIds(listing, uuid)) exec("sm", "mount", id)
 }
 
-/**
- * The FUSE view lands a few seconds after `sm mount` returns. A leftover
- * /storage/<uuid> node can exist while the tree is not writable, so this
- * waits until [dir] itself can be created, which is Overdrive's gate.
- */
+// FUSE may lag behind sm mount; wait until the recording directory can be created.
 internal fun remountUntil(dir: File): Boolean {
     remount(dir)
     repeat(20) {

@@ -10,7 +10,6 @@
         media: '/clips/',
         one: 'clip',
         many: 'clips',
-        // Parked has no chip. The name still reads if an old clip is sitting there.
         tags: { drive: 'Drive', manual: 'Manual', parked: 'Parked' },
         elsewhere: 'Choose another place to record to in settings.',
         nothing: function (anyClips, payload) {
