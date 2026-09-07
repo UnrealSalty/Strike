@@ -1,0 +1,188 @@
+package com.strike.recording
+
+import android.media.MediaCodec
+import android.media.MediaFormat
+import android.media.MediaMuxer
+import com.strike.daemon.AudioConfig
+import com.strike.daemon.DaemonLog
+import java.io.File
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private const val TAG = "Clip"
+private const val WRITING = ".tmp"
+private const val BROKEN = ".broken"
+private const val SWEEP_AGE_MS = 5 * 60_000L
+
+/**
+ * The only thing that writes a clip file. A clip is named at the moment it
+ * starts and carries `.tmp` until the muxer closes cleanly, which is why
+ * [ClipStore] never lists one that is still being written.
+ */
+class ClipWriter(private val dir: File) {
+
+    private var muxer: MediaMuxer? = null
+    private var track = -1
+    private var audioTrack = -1
+    private var writing: File? = null
+    private var out = dir
+
+    val hasAudio: Boolean get() = audioTrack >= 0
+
+    var name: String? = null
+        private set
+
+    var startedAtMs = 0L
+        private set
+
+    fun open(mode: RecordingMode, format: MediaFormat, audio: AudioConfig? = null): Boolean {
+        val dest = writableDir(mode == RecordingMode.DRIVE || mode == RecordingMode.MANUAL)
+            ?: return false
+        out = dest
+        val clip = clipName(mode, System.currentTimeMillis())
+        val file = File(dest, clip + WRITING)
+        var fresh: MediaMuxer? = null
+        return try {
+            fresh = MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            track = fresh.addTrack(format)
+            audioTrack = if (audio == null) -1 else fresh.addTrack(aacFormat(audio))
+            fresh.start()
+            muxer = fresh
+            writing = file
+            name = clip
+            startedAtMs = System.currentTimeMillis()
+            true
+        } catch (e: Exception) {
+            DaemonLog.e(TAG, "cannot start a clip on this volume: ${e.message}")
+            if (fresh != null) release(fresh, clip)
+            track = -1
+            audioTrack = -1
+            false
+        }
+    }
+
+    /**
+     * ACC off unmounts the card. isDirectory then lies. Overdrive remounts
+     * first and treats exists(), not isDirectory(), as the gate.
+     */
+    private fun writableDir(mayUseInternal: Boolean): File? {
+        if (storageUuid(dir.path) != null) remountUntil(dir)
+        if (dir.exists() || ensureDir(dir)) return dir
+        if (mayUseInternal) {
+            val internal = File("/storage/emulated/0/Strike/clips")
+            if (internal != dir && (internal.exists() || ensureDir(internal))) {
+                DaemonLog.w(TAG, "cannot write $dir, writing to $internal")
+                return internal
+            }
+        }
+        DaemonLog.e(TAG, "cannot create $dir")
+        return null
+    }
+
+    fun write(sample: Sample) = writeTo(track, sample)
+
+    fun writeAudio(sample: Sample) {
+        if (audioTrack < 0) return
+        writeTo(audioTrack, sample)
+    }
+
+    private fun writeTo(which: Int, sample: Sample) {
+        val open = muxer ?: return
+        val info = MediaCodec.BufferInfo()
+        info.set(0, sample.bytes.size, sample.timeUs, sample.flags)
+        open.writeSampleData(which, ByteBuffer.wrap(sample.bytes), info)
+    }
+
+    // Only a successful stop writes the index required to list a playable clip.
+    fun close(): Boolean {
+        val open = muxer ?: return false
+        val file = writing
+        muxer = null
+        writing = null
+        val clip = name
+        name = null
+        track = -1
+        audioTrack = -1
+        val stopped = try {
+            open.stop()
+            true
+        } catch (e: RuntimeException) {
+            DaemonLog.e(TAG, "clip $clip did not close cleanly, keeping it aside")
+            false
+        } finally {
+            release(open, clip)
+        }
+        if (file == null || clip == null) return false
+        if (!stopped) {
+            file.renameTo(File(out, clip + BROKEN))
+            return false
+        }
+        val finished = File(out, clip)
+        if (!file.renameTo(finished)) {
+            DaemonLog.e(TAG, "cannot rename $clip into place")
+            return false
+        }
+        finished.setReadable(true, false)
+        return true
+    }
+
+    private fun release(muxer: MediaMuxer, clip: String?) {
+        try {
+            muxer.release()
+        } catch (e: RuntimeException) {
+            DaemonLog.e(TAG, "cannot release clip $clip: ${e.message}")
+        }
+    }
+
+}
+
+internal fun ensureDir(dir: File): Boolean {
+    if (dir.exists()) return true
+    if (dir.mkdirs() && dir.exists()) {
+        worldAccess(dir)
+        return true
+    }
+    return try {
+        ProcessBuilder("mkdir", "-p", dir.absolutePath).start().waitFor()
+        if (!dir.exists()) return false
+        worldAccess(dir)
+        true
+    } catch (e: IOException) {
+        false
+    }
+}
+
+private fun worldAccess(dir: File) {
+    dir.setReadable(true, false)
+    dir.setWritable(true, false)
+    dir.setExecutable(true, false)
+}
+
+/** The app's encoder already described itself; csd-0 is what the muxer needs. */
+private fun aacFormat(audio: AudioConfig): MediaFormat {
+    val format = MediaFormat.createAudioFormat(
+        MediaFormat.MIMETYPE_AUDIO_AAC, audio.sampleRate, audio.channelCount
+    )
+    format.setInteger(MediaFormat.KEY_BIT_RATE, audio.bitrateBps)
+    format.setByteBuffer("csd-0", ByteBuffer.wrap(audio.csd))
+    return format
+}
+
+internal fun clipName(mode: RecordingMode, atMs: Long): String {
+    val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(atMs))
+    return "${mode.name.lowercase(Locale.US)}_$stamp.mp4"
+}
+
+/** A clip left half written by a power cut is not footage anyone can watch. */
+fun sweepUnfinished(dir: File, nowMs: Long) {
+    val files = dir.listFiles() ?: return
+    var swept = 0
+    for (file in files) {
+        val leftover = file.name.endsWith(WRITING) || file.name.endsWith(BROKEN)
+        if (leftover && nowMs - file.lastModified() > SWEEP_AGE_MS && file.delete()) swept++
+    }
+    if (swept > 0) DaemonLog.w(TAG, "$swept clip(s) were cut off mid-write and could not be played")
+}

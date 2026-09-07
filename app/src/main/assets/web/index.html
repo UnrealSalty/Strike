@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Strike</title>
+    <style>html,body,button,a,input{background:#0b0b0d;color:#f2f2f5;border:0}button{-webkit-appearance:none;appearance:none}</style>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/strike.css">
+</head>
+<body>
+
+    <header class="topbar">
+        <span class="topbar__brand">Strike</span>
+        <nav class="nav">
+            <a class="nav__link" href="index.html" aria-current="page">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard
+            </a>
+            <a class="nav__link" href="live.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 11l6-4v10l-6-4z"/></svg>Live
+            </a>
+            <a class="nav__link" href="recordings.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16"/></svg>Recordings
+            </a>
+            <a class="nav__link" href="surveillance.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>Surveillance
+            </a>
+            <a class="nav__link" href="daemons.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Daemons
+            </a>
+        </nav>
+    </header>
+
+    <main class="page">
+
+        <section class="card">
+            <div class="card__title">
+                <h2 class="card__name">Vehicle status</h2>
+                <p class="card__sub" id="vehicleState">&mdash;</p>
+            </div>
+            <div class="boxes">
+                <div class="box">
+                    <span class="box__label">Battery</span>
+                    <span class="box__value"><span id="soc"><span class="sk sk--value"></span></span></span>
+                </div>
+                <div class="box">
+                    <span class="box__label">Estimated range</span>
+                    <span class="box__value"><span id="range"><span class="sk sk--value"></span></span></span>
+                </div>
+                <div class="box">
+                    <span class="box__label">Energy left</span>
+                    <span class="box__value"><span id="kwh"><span class="sk sk--value"></span></span></span>
+                </div>
+            </div>
+            <span class="meter card__meter"><span class="meter__fill" id="socFill"></span></span>
+        </section>
+
+        <div class="columns">
+            <section class="card columns__wide">
+                <h2 class="card__name">Quick actions</h2>
+                <div class="actions">
+                    <a class="action" href="live.html">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 11l6-4v10l-6-4z"/></svg>
+                        <span class="action__text">
+                            <span class="action__name">Live</span>
+                            <span class="action__sub">All cameras</span>
+                        </span>
+                    </a>
+                    <a class="action" href="daemons.html">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+                        <span class="action__text">
+                            <span class="action__name">Daemons</span>
+                            <span class="action__sub"><span class="dot" id="daemonDot"></span><span id="daemonCount">&mdash;</span></span>
+                        </span>
+                    </a>
+                    <a class="action" href="recordings.html">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16"/></svg>
+                        <span class="action__text">
+                            <span class="action__name">Recordings</span>
+                            <span class="action__sub" id="clipCount">&mdash;</span>
+                        </span>
+                    </a>
+                    <a class="action" href="surveillance.html">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <span class="action__text">
+                            <span class="action__name">Surveillance</span>
+                        </span>
+                    </a>
+                    <button class="action" id="securityOpen" type="button">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+                        <span class="action__text">
+                            <span class="action__name">Security</span>
+                            <span class="action__sub" id="pinState">&mdash;</span>
+                        </span>
+                    </button>
+                </div>
+            </section>
+            <div class="columns__narrow">
+                <section class="card">
+                    <h2 class="card__name">Today's recordings</h2>
+                    <p class="card__figure" id="clipsToday">&mdash;</p>
+                    <span class="meter card__meter"><span class="meter__fill" id="usedFill"></span></span>
+                    <p class="card__sub" id="usedSub">&mdash;</p>
+                </section>
+                <section class="card">
+                    <h2 class="card__name">Recent activity</h2>
+                    <a class="row row--link" id="lastEventLink" href="surveillance.html" data-empty="true">
+                        <span class="row__label">Latest surveillance clip</span>
+                        <span class="row__value" id="lastEvent">&mdash;</span>
+                    </a>
+                </section>
+            </div>
+        </div>
+
+    </main>
+
+    <div class="modal" id="security" hidden>
+        <div class="modal__panel modal__panel--narrow">
+            <div class="modal__head">
+                <span class="modal__title" id="securityTitle">Set PIN</span>
+                <span class="modal__tools">
+                    <button class="btn btn--danger" id="pinClear" type="button" hidden>Turn off</button>
+                    <button class="btn" id="securityClose" type="button">Close</button>
+                </span>
+            </div>
+            <div class="modal__body">
+                <div class="entry">
+                    <p class="entry__sub" id="securitySub">Enter a new PIN.</p>
+                    <div id="securityPad"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/core.js"></script>
+    <script src="js/shell.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/keypad.js"></script>
+    <script src="js/security.js"></script>
+</body>
+</html>

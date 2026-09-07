@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Live &middot; Strike</title>
+    <style>html,body,button,a,input{background:#0b0b0d;color:#f2f2f5;border:0}button{-webkit-appearance:none;appearance:none}</style>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/strike.css">
+</head>
+<body>
+
+    <header class="topbar">
+        <span class="topbar__brand">Strike</span>
+        <nav class="nav">
+            <a class="nav__link" href="index.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard
+            </a>
+            <a class="nav__link" href="live.html" aria-current="page">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 11l6-4v10l-6-4z"/></svg>Live
+            </a>
+            <a class="nav__link" href="recordings.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16"/></svg>Recordings
+            </a>
+            <a class="nav__link" href="surveillance.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>Surveillance
+            </a>
+            <a class="nav__link" href="daemons.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Daemons
+            </a>
+        </nav>
+    </header>
+
+    <main class="live">
+
+        <div class="stage" id="stage">
+            <div class="stage__shot" id="shot" data-angle="all">
+                <video class="stage__video" id="video" autoplay muted playsinline webkit-playsinline></video>
+            </div>
+            <div class="stage__veil"></div>
+            <div class="stage__idle" id="idle"></div>
+            <div class="stage__top">
+                <span class="badge" id="badge" hidden><span class="dot" id="badgeDot"></span><span id="badgeText">Live</span></span>
+            </div>
+            <span class="stage__label" id="viewName" hidden></span>
+        </div>
+
+        <div class="rail">
+
+            <div class="card">
+                <span class="card__name">Cameras</span>
+                <div class="car" id="spots">
+                    <img class="car__image" src="img/car.webp" alt="" aria-hidden="true">
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card__name">Vehicle</span>
+                <p class="card__figure" id="soc" data-empty="true">&mdash;</p>
+                <div class="card__meter"><span class="meter"><span class="meter__fill" id="socFill"></span></span></div>
+                <p class="card__sub"><span id="range">&mdash;</span> &middot; <span id="kwh">&mdash;</span></p>
+            </div>
+        </div>
+
+    </main>
+
+    <script src="js/core.js"></script>
+    <script src="js/shell.js"></script>
+    <script src="js/fmp4.js"></script>
+    <script src="js/live.js"></script>
+</body>
+</html>

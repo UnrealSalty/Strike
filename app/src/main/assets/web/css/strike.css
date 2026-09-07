@@ -1,0 +1,2167 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+button {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Chrome 58 draws a yellow focus rect after a tap. :focus-visible is a
+   second rule so an old engine that does not know it cannot drop :focus. */
+*:focus {
+    outline: none;
+}
+
+*:focus-visible {
+    outline: none;
+}
+
+html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    height: 64px;
+    padding: 0 var(--pad);
+    border-bottom: 1px solid var(--line);
+}
+
+.topbar > * + * {
+    margin-left: var(--gap);
+}
+
+.topbar__brand {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent-text);
+}
+
+.nav {
+    display: flex;
+    margin-left: auto;
+}
+
+.nav__link {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch);
+    padding: 0 12px;
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    text-decoration: none;
+}
+
+.nav__link + .nav__link {
+    margin-left: 4px;
+}
+
+.nav__link > svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+}
+
+.nav__link[aria-current="page"] {
+    background: var(--surface-2);
+    color: var(--accent-text);
+}
+
+main {
+    flex: 1;
+    min-height: 0;
+    padding: var(--pad);
+    overflow: auto;
+}
+
+.grid {
+    display: grid;
+    grid-gap: var(--gap);
+}
+
+.grid + .grid {
+    margin-top: var(--gap);
+}
+
+.page {
+    display: flex;
+    flex-direction: column;
+}
+
+.page > .card + .columns {
+    margin-top: var(--gap);
+}
+
+/* Overdrive's dashboard split: 1.08 to 0.92 under a full-width vehicle card. */
+/* Each card ends at its own content; neither column stretches to the other. */
+.columns {
+    display: flex;
+    align-items: flex-start;
+    flex: none;
+}
+
+.columns__wide {
+    flex: 1.08;
+    min-width: 0;
+}
+
+.columns__narrow {
+    display: flex;
+    flex-direction: column;
+    flex: 0.92;
+    min-width: 0;
+    margin-left: var(--gap);
+}
+
+.columns__narrow > .card + .card {
+    margin-top: var(--gap);
+}
+
+.card__title {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 14px;
+}
+
+.card__title > .card__name {
+    margin: 0 12px 0 0;
+}
+
+.card__name {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.card__sub {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card__figure {
+    margin: 0;
+    height: 32px;
+    line-height: 32px;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.card__meter {
+    margin-top: 12px;
+}
+
+.card__meter + .card__sub {
+    margin-top: 8px;
+}
+
+.boxes {
+    display: flex;
+}
+
+.box {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    min-height: 84px;
+    padding: 12px var(--pad);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.box + .box {
+    margin-left: var(--gap);
+}
+
+.box__label {
+    color: var(--text-dim);
+    font-size: 12px;
+}
+
+.box__value {
+    display: block;
+    margin-top: auto;
+    height: 32px;
+    line-height: 32px;
+    font-size: 24px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    margin: -6px;
+}
+
+.action {
+    display: flex;
+    align-items: center;
+    flex: 1 0 40%;
+    min-width: 0;
+    min-height: 72px;
+    margin: 6px;
+    padding: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.action > svg {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    margin-right: 12px;
+    color: var(--accent-text);
+}
+
+.action__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.action__name {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.action__sub {
+    display: flex;
+    align-items: center;
+    margin-top: 2px;
+    color: var(--text-dim);
+    font-size: 12px;
+}
+
+.action__sub > .dot {
+    margin-right: 8px;
+}
+
+[data-empty="true"] {
+    color: var(--text-dim);
+}
+
+.empty {
+    flex: none;
+    padding: 52px 24px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    text-align: center;
+}
+
+.empty > svg {
+    width: 38px;
+    height: 38px;
+    color: var(--text-dim);
+}
+
+.empty__head {
+    margin: 14px 0 0;
+    font-size: 17px;
+}
+
+.empty__note {
+    margin: 6px 0 0;
+    color: var(--text-dim);
+    font-size: 14px;
+}
+
+.clips {
+    flex: 1 0 auto;
+}
+
+.clips--wait {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wait {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.wait__copy {
+    margin: var(--gap) 0 0;
+    font-size: 17px;
+}
+
+.spin {
+    width: 36px;
+    height: 36px;
+    border: 2px solid var(--line);
+    border-top-color: var(--text);
+    border-radius: 50%;
+    -webkit-animation: spin 0.8s linear infinite;
+    animation: spin 0.8s linear infinite;
+}
+
+@-webkit-keyframes spin {
+    to { -webkit-transform: rotate(360deg); }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    flex: none;
+    margin-bottom: var(--gap);
+}
+
+.toolbar > * + * {
+    margin-left: var(--gap);
+}
+
+.toolbar__grow {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Each angle gets an equal share of the row, which is a far bigger target
+   than five buttons hugging their labels. */
+.seg--fill {
+    flex: 1;
+    width: 100%;
+}
+
+.seg--fill > .seg__btn {
+    flex: 1;
+    padding: 0;
+}
+
+.transport + .seg {
+    margin-top: var(--gap);
+}
+
+.count {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.input {
+    width: 100%;
+    min-height: var(--touch);
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 15px;
+}
+
+.input[disabled] {
+    color: var(--text-dim);
+    opacity: 0.5;
+}
+
+.input::-webkit-input-placeholder {
+    color: var(--text-dim);
+}
+
+.pick {
+    position: relative;
+    flex: none;
+}
+
+.pick__btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 148px;
+    min-height: var(--touch);
+    padding: 0 12px 0 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pick__btn > svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-left: 10px;
+    color: var(--text-dim);
+    transition: transform var(--quick) var(--ease);
+}
+
+.pick__btn[aria-expanded="true"] > svg {
+    transform: rotate(180deg);
+}
+
+.pick__menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 100%;
+    max-height: 288px;
+    padding: 4px;
+    background: var(--elevated);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow-y: auto;
+    z-index: 20;
+    animation: pick-in var(--quick) var(--ease);
+}
+
+.pick__menu[hidden] {
+    display: none;
+}
+
+.pick__item {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.pick__item[aria-pressed="true"] {
+    background: var(--surface-2);
+    color: var(--accent-text);
+}
+
+@keyframes pick-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--pad);
+    overflow: hidden;
+    background: var(--scrim);
+    z-index: 10;
+}
+
+.modal[hidden] {
+    display: none;
+}
+
+.modal__panel {
+    display: flex;
+    flex-direction: column;
+    width: 860px;
+    max-width: 100%;
+    max-height: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+/* Wide enough for the keypad and nothing more. */
+.modal__panel--narrow {
+    width: 420px;
+}
+
+.modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: none;
+    min-height: 64px;
+    padding: 0 var(--pad);
+    border-bottom: 1px solid var(--line);
+}
+
+/* Two lines of copy in 64px of pad-less chrome sits on the rim. The player
+   is the only head that has a subtitle, so only it grows. */
+.modal__panel--player > .modal__head {
+    min-height: 0;
+    padding: 18px var(--pad) 14px;
+}
+
+/* The card is the screen. The picture stays 4:3 inside the leftover
+   height, so a landscape head unit cannot grow a scrollbar. */
+.modal__panel--player {
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+.modal__panel--player > .modal__body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--pad) var(--pad);
+    overflow: hidden;
+}
+
+.modal__titles {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.modal__title {
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.modal__sub {
+    display: flex;
+    align-items: center;
+    margin-top: 4px;
+}
+
+/* Every state of it, or arming Delete grows the row and shifts the video. */
+.modal__sub > .btn {
+    margin-left: 20px;
+    min-height: 0;
+    padding: 0;
+}
+
+.modal__body {
+    flex: 1;
+    min-height: 0;
+    padding: var(--pad);
+    overflow: auto;
+}
+
+.head {
+    margin: 0 0 8px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.head--day {
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.head__when {
+    display: block;
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.head__date {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.list + .head,
+.note + .head,
+.usage + .head,
+.daemons + .head {
+    margin-top: var(--gap);
+}
+
+.note {
+    margin: 8px 0 0;
+    color: var(--text-dim);
+    font-size: 13px;
+}
+
+.modal__tools {
+    display: flex;
+    align-items: center;
+}
+
+.modal__tools > .btn + .btn {
+    margin-left: var(--gap);
+}
+
+.entry {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.entry__sub {
+    min-height: 24px;
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 15px;
+    text-align: center;
+}
+
+.lock {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--pad);
+}
+
+.lock__brand {
+    margin: 0;
+    color: var(--accent-text);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.lock__title {
+    margin: var(--gap) 0 0;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.lock__sub {
+    min-height: 24px;
+    margin: 8px 0 0;
+    color: var(--text-dim);
+    font-size: 15px;
+    text-align: center;
+}
+
+.dots {
+    display: flex;
+    justify-content: center;
+    margin: var(--pad) 0;
+}
+
+.dots__dot {
+    width: var(--gap);
+    height: var(--gap);
+    margin: 0 var(--key-space);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--surface-2);
+}
+
+.dots__dot[data-on="true"] {
+    border-color: var(--text);
+    background: var(--text);
+}
+
+.pad {
+    display: flex;
+    flex-wrap: wrap;
+    width: calc(3 * var(--key) + 6 * var(--key-space));
+}
+
+.pad__key {
+    width: var(--key);
+    height: var(--key);
+    margin: var(--key-space);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 24px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.list {
+    flex: none;
+    padding: 0 var(--pad);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 56px;
+}
+
+.row + .row {
+    border-top: 1px solid var(--line);
+}
+
+/* display:flex above beats the hidden attribute on its own. */
+.row[hidden] {
+    display: none;
+}
+
+/* Taller than a plain row so a 50px control is not flush with the dividers. */
+.row--control {
+    min-height: 64px;
+}
+
+.row__label {
+    display: flex;
+    align-items: center;
+    font-size: 15px;
+}
+
+.row__label > .dot {
+    margin-right: 10px;
+}
+
+.row__value {
+    color: var(--text-dim);
+    font-size: 15px;
+    white-space: nowrap;
+}
+
+.row--link {
+    background: transparent;
+    color: inherit;
+    text-decoration: none;
+    border-radius: var(--radius);
+}
+
+.row--link > .row__value {
+    margin-left: var(--gap);
+    text-align: right;
+    white-space: normal;
+}
+
+.row--link[data-empty="false"] > .row__value {
+    color: var(--accent-text);
+}
+
+/* Press feedback lives in one place so every control answers the same way. */
+.btn,
+.seg__btn,
+.choice__row,
+.pick__btn,
+.pick__item,
+.row--clip,
+.row--link,
+.daemon__open,
+.nav__link,
+.action,
+.switch,
+.pad__key {
+    position: relative;
+    overflow: hidden;
+    transition: background-color var(--quick) linear, color var(--quick) linear;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn:active,
+.pick__btn:active {
+    transform: scale(0.97);
+}
+
+.btn[disabled]:active,
+.switch[disabled]:active {
+    transform: none;
+}
+
+.ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.18;
+    transform: scale(0);
+    pointer-events: none;
+    animation: ripple var(--motion) ease-out forwards;
+}
+
+@keyframes ripple {
+    to {
+        transform: scale(1);
+        opacity: 0;
+    }
+}
+
+.hero {
+    flex: none;
+    margin-bottom: var(--gap);
+}
+
+.hero__title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.hero__sub {
+    margin: 4px 0 0;
+    color: var(--text-dim);
+    font-size: 14px;
+}
+
+.hero__sub--status {
+    display: flex;
+    align-items: center;
+}
+
+.hero__sub--status > .dot {
+    margin-right: 8px;
+}
+
+.daemons {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.daemon + .daemon {
+    border-top: 1px solid var(--line);
+}
+
+.daemon__row {
+    display: flex;
+    align-items: stretch;
+    background: var(--surface);
+}
+
+.daemon__bar {
+    flex: none;
+    width: 4px;
+    background: var(--text-dim);
+}
+
+.daemon[data-state="running"] > .daemon__row > .daemon__bar { background: var(--ok); }
+.daemon[data-state="starting"] > .daemon__row > .daemon__bar { background: var(--warn); }
+.daemon[data-state="broken"] > .daemon__row > .daemon__bar { background: var(--bad); }
+
+.daemon__open {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    min-height: 76px;
+    padding: 0 12px 0 var(--pad);
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.daemon__text {
+    flex: 1;
+    min-width: 0;
+}
+
+.daemon__name {
+    display: block;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.daemon__status {
+    display: block;
+    margin-top: 3px;
+    color: var(--text-dim);
+    font-size: 14px;
+}
+
+.daemon__chev {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-left: 12px;
+    color: var(--text-dim);
+    transition: transform var(--quick) var(--ease);
+}
+
+.daemon__open[aria-expanded="true"] > .daemon__chev {
+    transform: rotate(180deg);
+}
+
+.daemon__actions {
+    display: flex;
+    align-items: center;
+    flex: none;
+    padding-right: var(--pad);
+}
+
+.daemon__detail {
+    padding: 12px var(--pad) 14px 20px;
+    background: var(--surface-2);
+    border-top: 1px solid var(--line);
+}
+
+.daemon__detail[hidden] {
+    display: none;
+}
+
+.fact {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    min-height: 30px;
+}
+
+.fact__label {
+    flex: none;
+    margin-right: var(--gap);
+    color: var(--text-dim);
+    font-size: 13px;
+}
+
+.fact__value {
+    font-size: 13px;
+    text-align: right;
+    word-break: break-word;
+}
+
+/* The log holds hundreds of lines, so the frame scrolls rather than the page. */
+/* Holds its box, so an expanded daemon scrolls the page instead of squeezing
+   the log down to a couple of lines. */
+.log {
+    flex: none;
+    max-height: 320px;
+    padding: var(--pad);
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    -webkit-overflow-scrolling: touch;
+}
+
+.log::-webkit-scrollbar { width: 8px; }
+.log::-webkit-scrollbar-track { background: transparent; }
+.log::-webkit-scrollbar-thumb { background: var(--line); border-radius: var(--radius); }
+
+.log__line {
+    margin: 0;
+    color: var(--text-dim);
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.log__line[data-level="warn"] { color: var(--warn); }
+.log__line[data-level="error"] { color: var(--bad); }
+
+.row--clip {
+    width: 100%;
+    min-height: 112px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    justify-content: flex-start;
+}
+
+/* Holds the preview's box before it lands, so the row never reflows. */
+.clip__shot {
+    position: relative;
+    flex: none;
+    width: 128px;
+    height: 96px;
+    margin-right: var(--pad);
+    background: var(--surface-2);
+    overflow: hidden;
+}
+
+.clip__img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* A clip with no readable frame still keeps the box the preview would fill. */
+.clip__shot > svg {
+    position: absolute;
+    left: 50px;
+    top: 34px;
+    width: 28px;
+    height: 28px;
+    color: var(--text-dim);
+}
+
+.clip__len {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(11, 11, 13, 0.78);
+    color: var(--text);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.clip__len[hidden] {
+    display: none;
+}
+
+.clip__facts {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.clip__time {
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.clip__line {
+    display: flex;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.clip__meta {
+    margin-left: 8px;
+    color: var(--text-dim);
+    font-size: 14px;
+}
+
+/* Why the clip exists, readable at a glance down the list. The colour is the
+   whole point, so it sits on the text and the border rather than a fill. */
+.tag {
+    flex: none;
+    padding: 1px 7px;
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+}
+
+.tag + .tag {
+    margin-left: 6px;
+}
+
+.tag--drive {
+    color: var(--kind-drive);
+}
+
+.tag--parked {
+    color: var(--kind-parked);
+}
+
+.tag--manual {
+    color: var(--kind-manual);
+}
+
+.tag--person {
+    color: var(--kind-person);
+}
+
+.tag--vehicle {
+    color: var(--kind-vehicle);
+}
+
+.tag--watch {
+    color: var(--kind-parked);
+}
+
+.tag--event {
+    color: var(--text-dim);
+}
+
+.tag--internal,
+.tag--sd,
+.tag--usb {
+    color: var(--text-dim);
+}
+
+.choice {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.choice__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 56px;
+    padding: 0 var(--pad);
+    border: 0;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.choice__row + .choice__row {
+    border-top: 1px solid var(--line);
+}
+
+.choice + .list {
+    margin-top: var(--gap);
+}
+
+.choice__row[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.choice__row[disabled] {
+    color: var(--text-dim);
+    cursor: default;
+}
+
+.choice__name {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.choice__size {
+    color: var(--text-dim);
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.choice__row[aria-pressed="true"] > .choice__size {
+    color: var(--on-accent);
+}
+
+.choice__row[disabled] > .choice__size {
+    color: var(--line);
+}
+
+.usage {
+    margin-top: var(--gap);
+}
+
+.meter {
+    display: block;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    overflow: hidden;
+}
+
+.meter__fill {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: var(--accent);
+    transition: width var(--motion) var(--ease);
+}
+
+.meter__fill[data-state="warn"] {
+    background: var(--warn);
+}
+
+.meter__fill[data-state="bad"] {
+    background: var(--bad);
+}
+
+.usage__text {
+    margin: 6px 0 0;
+    color: var(--text-dim);
+    font-size: 13px;
+}
+
+/* The column the picture and its controls share, so the rows never run wider
+   than the clip they belong to. Named for the player, not the stage:
+   live.html already owns .stage and sharing it squeezed the live view. */
+.player {
+    width: 100%;
+    max-width: calc(133.333vh - 328px);
+}
+
+.player__frame {
+    position: relative;
+    /* padding-bottom, not aspect-ratio: this WebView predates it. The ratio
+       must stay 4:3 or the corner origins below crop the wrong pixels. */
+    height: 0;
+    padding-bottom: 75%;
+    border-radius: var(--radius);
+    background: #000;
+    overflow: hidden;
+}
+
+.player__video {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    -webkit-transition: -webkit-transform var(--motion) var(--ease);
+    transition: transform var(--motion) var(--ease);
+}
+
+/* Covers the platform play glyph until a frame is on screen. */
+.player__frame::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: #000;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.player__frame.is-on::after {
+    display: none;
+}
+
+/* The platform draws its own play glyph on a video with no controls. */
+.player__video::-webkit-media-controls,
+.player__video::-webkit-media-controls-start-playback-button,
+.player__video::-webkit-media-controls-overlay-play-button,
+.stage__video::-webkit-media-controls,
+.stage__video::-webkit-media-controls-start-playback-button,
+.stage__video::-webkit-media-controls-overlay-play-button {
+    display: none !important;
+    -webkit-appearance: none;
+}
+
+.player__bar > .transport + .seg {
+    margin-top: 8px;
+}
+
+/* The four cameras are baked into one clip as a 2x2 mosaic. Doubling the
+   scale about a corner is the whole of angle selection; nothing re-encodes. */
+.player__frame[data-angle="front"] > .player__video {
+    -webkit-transform-origin: 0 0;
+    transform-origin: 0 0;
+    -webkit-transform: scale(2);
+    transform: scale(2);
+}
+
+.player__frame[data-angle="right"] > .player__video {
+    -webkit-transform-origin: 100% 0;
+    transform-origin: 100% 0;
+    -webkit-transform: scale(2);
+    transform: scale(2);
+}
+
+.player__frame[data-angle="rear"] > .player__video {
+    -webkit-transform-origin: 0 100%;
+    transform-origin: 0 100%;
+    -webkit-transform: scale(2);
+    transform: scale(2);
+}
+
+.player__frame[data-angle="left"] > .player__video {
+    -webkit-transform-origin: 100% 100%;
+    transform-origin: 100% 100%;
+    -webkit-transform: scale(2);
+    transform: scale(2);
+}
+
+/* The picture, not the dialog. Head and angles stay in the modal. */
+.modal--full {
+    padding: 0;
+    background: #000;
+}
+
+.modal--full > .modal__panel {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    background: #000;
+}
+
+.modal--full .modal__head,
+.modal--full #angles {
+    display: none;
+}
+
+.modal--full .modal__panel--player > .modal__body {
+    padding: 0 0 var(--pad);
+}
+
+.modal--full .player {
+    width: calc(133.333vh - 102px);
+    max-width: 100%;
+}
+
+.modal--full .player__frame {
+    border-radius: 0;
+}
+
+.transport {
+    display: flex;
+    align-items: center;
+    margin-top: var(--gap);
+}
+
+.transport__btn {
+    flex: none;
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+}
+
+.transport__btn + .transport__btn {
+    margin-left: 8px;
+}
+
+.transport__btn > svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+    margin: 0 auto;
+}
+
+/* The one thing reached for while driving, so it carries the action colour. */
+.transport__btn--play {
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.transport__at {
+    margin: 0 14px;
+    color: var(--text-dim);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* The bar is 6px but the hit area is a full touch target. */
+.scrub {
+    position: relative;
+    flex: 1;
+    height: var(--touch);
+    cursor: pointer;
+}
+
+.scrub__track,
+.scrub__fill {
+    position: absolute;
+    top: 21px;
+    left: 0;
+    height: 6px;
+    border-radius: 3px;
+}
+
+.scrub__track {
+    right: 0;
+    background: var(--surface-2);
+}
+
+.scrub__fill {
+    width: 0;
+    background: var(--accent);
+}
+
+/* Event bands sit on the fill, same as Overdrive's timeline-marker. Empty
+   until a clip carries events. pointer-events stay off so seek is the bar. */
+.scrub__marks {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 18px;
+    height: 12px;
+    pointer-events: none;
+}
+
+.scrub__mark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    min-width: 2px;
+    border-radius: 2px;
+    background: var(--text-dim);
+    opacity: 0.55;
+}
+
+.scrub__mark--person {
+    background: var(--bad);
+    opacity: 1;
+}
+
+/* Not --accent-text: the bands sit on the fill, which is --accent. */
+.scrub__mark--vehicle {
+    background: var(--warn);
+    opacity: 1;
+}
+
+.scrub__knob {
+    position: absolute;
+    top: 16px;
+    left: 0;
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    border-radius: 50%;
+    background: var(--text);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.seg {
+    display: flex;
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+/* Weight is the same in both states; bolding the selected one reflows the row. */
+.seg__btn {
+    min-height: var(--touch);
+    padding: 0 18px;
+    border: 0;
+    background: var(--surface-2);
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.seg__btn + .seg__btn {
+    border-left: 1px solid var(--line);
+}
+
+.seg__btn[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.seg__btn[disabled] {
+    color: var(--line);
+    cursor: default;
+}
+
+.switch {
+    position: relative;
+    flex: none;
+    width: 72px;
+    height: var(--touch);
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    background: var(--bg);
+    cursor: pointer;
+}
+
+.switch__knob {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: left var(--quick) var(--ease), background-color var(--quick) linear;
+}
+
+.switch[aria-pressed="true"] {
+    border-color: transparent;
+    background: var(--accent);
+}
+
+.switch[aria-pressed="true"] > .switch__knob {
+    left: 28px;
+    background: var(--on-accent);
+}
+
+.switch[disabled] {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.control {
+    display: flex;
+    align-items: center;
+    flex: none;
+}
+
+.control__end {
+    margin: 0 10px;
+    color: var(--text-dim);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.control__value {
+    width: 76px;
+    margin-left: 12px;
+    color: var(--text-dim);
+    font-size: 15px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.control__value--wide {
+    width: 176px;
+}
+
+/* A text setting in a row, not a page-wide field. */
+.row .input {
+    width: 320px;
+    max-width: 55%;
+}
+
+.slider {
+    width: 260px;
+    height: var(--touch);
+    margin: 0;
+    background: transparent;
+    -webkit-appearance: none;
+}
+
+.slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface-2);
+}
+
+.slider::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+    margin-top: -11px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--accent);
+    -webkit-appearance: none;
+}
+
+/* The stage takes the height the page has rather than a guessed fraction, so
+   there is no dead band under it. */
+.live {
+    display: flex;
+    align-items: stretch;
+    height: 100%;
+}
+
+.rail {
+    flex: none;
+    width: 264px;
+    margin-left: var(--gap);
+    overflow-y: auto;
+}
+
+.rail > .card + .card {
+    margin-top: var(--gap);
+}
+
+/* The silhouette is 112x230 and the front and rear labels hang outside it, so
+   the margins reserve the room they need. Overdrive's geometry. */
+/* Overdrive's silhouette at 112x230, scaled so the rail's two cards fit the
+   head unit's 540px without a second scroll area. */
+.car {
+    position: relative;
+    width: 88px;
+    height: 180px;
+    margin: 18px auto 22px;
+}
+
+.car__image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0.72;
+}
+
+.car__spot {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    z-index: 10;
+}
+
+.car__spot--front {
+    top: -8px;
+    left: 50%;
+    margin-left: -20px;
+}
+
+.car__spot--rear {
+    bottom: -8px;
+    left: 50%;
+    margin-left: -20px;
+}
+
+.car__spot--left {
+    top: 50%;
+    left: -20px;
+    margin-top: -20px;
+}
+
+.car__spot--right {
+    top: 50%;
+    right: -20px;
+    margin-top: -20px;
+}
+
+.car__spot--all {
+    top: 50%;
+    left: 50%;
+    margin: -20px 0 0 -20px;
+}
+
+.car__ring {
+    display: block;
+    width: 26px;
+    height: 26px;
+    margin: 7px auto 0;
+    box-sizing: border-box;
+    border: 2px solid var(--text);
+    border-radius: 50%;
+    background: var(--surface);
+}
+
+.car__name {
+    position: absolute;
+    padding: 4px 6px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+
+.car__spot--front .car__name {
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.car__spot--rear .car__name {
+    top: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.car__spot--left .car__name {
+    top: 50%;
+    right: calc(100% + 4px);
+    transform: translateY(-50%);
+}
+
+.car__spot--right .car__name {
+    top: 50%;
+    left: calc(100% + 4px);
+    transform: translateY(-50%);
+}
+
+.car__spot--all .car__name {
+    top: calc(50% + 16px);
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.car__spot[aria-pressed="true"] .car__ring {
+    border-color: var(--accent-text);
+    background: var(--accent);
+}
+
+.car__spot[aria-pressed="true"] .car__name {
+    border-color: var(--accent-text);
+    color: var(--accent-text);
+}
+
+.car__spot[disabled] {
+    opacity: 0.32;
+}
+
+.stage {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 260px;
+    background: #000;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.stage__label {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    z-index: 3;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(12, 16, 22, 0.82);
+    font-size: 13px;
+}
+
+.stage__label[hidden] {
+    display: none;
+}
+
+.stage__veil {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: #000;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.stage.is-on > .stage__veil {
+    display: none;
+}
+
+.stage__shot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    overflow: hidden;
+    background: #000;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+}
+
+.stage__video {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background: #000;
+    -webkit-transition: -webkit-transform var(--motion) var(--ease);
+    transition: transform var(--motion) var(--ease);
+}
+
+.stage__shot[data-angle="front"] > .stage__video {
+    -webkit-transform-origin: 0 0;
+    transform-origin: 0 0;
+    -webkit-transform: scale(2);
+    transform: scale(2);
+}
+
+.stage__shot[data-angle="right"] > .stage__video {
+    -webkit-transform-origin: 100% 0;
+    transform-origin: 100% 0;
+    -webkit-transform: scale(2);
+    transform: scale(2);
+}
+
+.stage__shot[data-angle="rear"] > .stage__video {
+    -webkit-transform-origin: 0 100%;
+    transform-origin: 0 100%;
+    -webkit-transform: scale(2);
+    transform: scale(2);
+}
+
+.stage__shot[data-angle="left"] > .stage__video {
+    -webkit-transform-origin: 100% 100%;
+    transform-origin: 100% 100%;
+    -webkit-transform: scale(2);
+    transform: scale(2);
+}
+
+/* A class with display beats the browser's own [hidden] rule, and a video
+   element with no pictures draws the platform's play placeholder. */
+.stage__video[hidden] {
+    display: none;
+}
+
+.stage__idle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+    background: #000;
+    text-align: center;
+}
+
+.stage__idle[hidden] {
+    display: none;
+}
+
+.stage__idle > svg {
+    width: 38px;
+    height: 38px;
+    color: var(--text-dim);
+}
+
+/* Over video, so the controls need their own backing to stay readable. */
+.stage__top {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 3;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 12px;
+}
+
+/* The badge is hidden until the first frame, so the picker holds the right
+   edge itself rather than relying on the gap between them. */
+.stage__top > .pick {
+    margin-left: auto;
+}
+
+.pick--onstage .pick__btn {
+    min-width: 110px;
+    background: rgba(12, 16, 22, 0.82);
+}
+
+.pick--onstage .pick__menu {
+    right: 0;
+    left: auto;
+}
+
+.badge {
+    display: flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(12, 16, 22, 0.82);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.badge[hidden] {
+    display: none;
+}
+
+.badge > .dot {
+    margin-right: 8px;
+}
+
+.pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: var(--gap);
+}
+
+.pager > * + * {
+    margin-left: 8px;
+}
+
+.pager__num {
+    min-width: var(--touch);
+    padding: 0;
+}
+
+.pager__num[aria-current="page"] {
+    border-color: transparent;
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.pager__skip {
+    color: var(--text-dim);
+    font-size: 17px;
+}
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: var(--pad);
+}
+
+.card__head {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    color: var(--text-dim);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.card__head > .dot {
+    margin-right: 8px;
+}
+
+.metric {
+    height: var(--metric);
+    line-height: var(--metric);
+    font-size: 40px;
+    font-weight: 600;
+}
+
+.metric__unit {
+    margin-left: 6px;
+    color: var(--text-dim);
+    font-size: 16px;
+    font-weight: 400;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex: none;
+}
+
+.dot[data-state="ok"] { background: var(--ok); }
+.dot[data-state="warn"] { background: var(--warn); }
+.dot[data-state="bad"] { background: var(--bad); }
+
+.btn {
+    min-height: var(--touch);
+    padding: 0 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+/* A word, not a second boxed twin of Close. */
+.btn--quiet {
+    border-color: transparent;
+    background: transparent;
+    color: var(--text-dim);
+}
+
+/* Only once the press has armed it. A fill before that would be decoration. */
+.btn--danger {
+    border-color: transparent;
+    background: transparent;
+    color: var(--bad);
+    font-weight: 600;
+}
+
+.btn--primary {
+    border-color: transparent;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+}
+
+.btn:disabled {
+    color: var(--text-dim);
+    cursor: default;
+    opacity: 0.4;
+}
+
+.sk {
+    display: block;
+    border-radius: 4px;
+    background: var(--surface-2);
+    animation: sk 1.2s ease-in-out infinite;
+}
+
+.sk--value {
+    display: inline-block;
+    width: 96px;
+    height: 36px;
+    vertical-align: middle;
+}
+
+@keyframes sk {
+    0%, 100% { background: var(--surface-2); }
+    50% { background: var(--line); }
+}
+
+@media (max-width: 720px) {
+    .columns,
+    .boxes,
+    .live {
+        flex-direction: column;
+    }
+
+    .live {
+        height: auto;
+    }
+
+    .stage {
+        flex: none;
+        width: 100%;
+        height: 38vh;
+    }
+
+    .rail {
+        width: 100%;
+        margin: var(--gap) 0 0;
+        overflow-y: visible;
+    }
+
+    .columns__narrow {
+        margin: var(--gap) 0 0;
+    }
+
+    .box + .box {
+        margin: var(--gap) 0 0;
+    }
+
+    .box {
+        min-height: 0;
+    }
+
+    .action {
+        flex-basis: 100%;
+    }
+
+    .view {
+        flex: none;
+        height: 220px;
+    }
+
+    .topbar {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 8px var(--pad);
+    }
+
+    .nav {
+        flex-wrap: wrap;
+        width: 100%;
+        margin-left: 0;
+        margin-top: 4px;
+    }
+
+    .nav__link {
+        flex: 1 0 auto;
+        justify-content: center;
+        margin-top: 4px;
+        padding: 0 12px;
+    }
+
+    .toolbar--stack {
+        display: block;
+    }
+
+    .toolbar--stack > * + * {
+        margin-left: 0;
+        margin-top: var(--gap);
+    }
+
+    .toolbar--stack .pick {
+        display: block;
+    }
+
+    .toolbar--stack .pick__btn {
+        width: 100%;
+    }
+
+    .count {
+        margin-left: 0;
+    }
+
+    .row--control {
+        display: block;
+        padding: 12px 0;
+    }
+
+    .row--control > .row__label {
+        margin-bottom: 10px;
+    }
+
+    .seg {
+        width: 100%;
+    }
+
+    .seg__btn {
+        flex: 1;
+        min-width: 0;
+        padding: 0 6px;
+    }
+
+    .seg[data-key] {
+        flex-wrap: wrap;
+    }
+
+    /* Three per row, so anything past the third starts a new row and needs
+       the separators the single-row rules put on the wrong edges. */
+    .seg[data-key] > .seg__btn {
+        flex: 1 0 auto;
+        width: 33.33%;
+    }
+
+    .seg[data-key] > .seg__btn:nth-child(n+4) {
+        border-top: 1px solid var(--line);
+    }
+
+    .seg[data-key] > .seg__btn:nth-child(3n+1) {
+        border-left: 0;
+    }
+
+    .control {
+        display: flex;
+    }
+
+    .slider {
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sk { animation: none; }
+}

@@ -1,0 +1,44 @@
+:root {
+    --bg: #0b0b0d;
+    --surface: #16161a;
+    --surface-2: #1e1e24;
+    --line: #2a2a32;
+
+    --text: #f2f2f5;
+    --text-dim: #a0a0ab;
+
+    --accent: #0052fc;
+    --accent-text: #4c8dff;
+    --on-accent: #ffffff;
+
+    --elevated: #24242c;
+    --scrim: rgba(0, 0, 0, 0.7);
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+
+    --ok: #3ecf8e;
+    --warn: #e5a33d;
+    --bad: #e5544b;
+
+    /* Why a clip exists. Kept clear of the status colours above so a green
+       clip never reads as a running daemon. */
+    --kind-drive: #4c8dff;
+    --kind-parked: #a98bff;
+    --kind-manual: #46c8d8;
+    --kind-person: #f07ba8;
+    --kind-vehicle: #46c8d8;
+
+    --radius: 8px;
+    --gap: 12px;
+    --pad: 16px;
+    --touch: 48px;
+    --metric: 48px;
+    --key: 72px;
+    --key-space: 6px;
+
+    --quick: 110ms;
+    --motion: 180ms;
+    --ease: cubic-bezier(0.2, 0.8, 0.4, 1);
+
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Roboto Mono", monospace;
+}

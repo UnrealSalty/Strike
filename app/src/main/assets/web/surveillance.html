@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Surveillance &middot; Strike</title>
+    <style>html,body,button,a,input{background:#0b0b0d;color:#f2f2f5;border:0}button{-webkit-appearance:none;appearance:none}</style>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/strike.css">
+</head>
+<body>
+
+    <header class="topbar">
+        <span class="topbar__brand">Strike</span>
+        <nav class="nav">
+            <a class="nav__link" href="index.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard
+            </a>
+            <a class="nav__link" href="live.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 11l6-4v10l-6-4z"/></svg>Live
+            </a>
+            <a class="nav__link" href="recordings.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16"/></svg>Recordings
+            </a>
+            <a class="nav__link" href="surveillance.html" aria-current="page">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>Surveillance
+            </a>
+            <a class="nav__link" href="daemons.html">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Daemons
+            </a>
+        </nav>
+    </header>
+
+    <main class="page">
+
+        <div class="toolbar">
+            <span class="toolbar__grow">
+                <input class="input" id="search" type="text" placeholder="Search events" autocomplete="off">
+            </span>
+            <button class="btn" id="settingsOpen" type="button">Settings</button>
+        </div>
+
+        <div class="toolbar toolbar--stack">
+            <span class="seg" id="kind">
+                <button class="seg__btn" type="button" data-value="all" aria-pressed="true">All</button>
+                <button class="seg__btn" type="button" data-value="person">Person</button>
+                <button class="seg__btn" type="button" data-value="vehicle">Vehicle</button>
+            </span>
+            <span class="pick" id="day">
+                <button class="pick__btn" type="button" aria-expanded="false">
+                    <span>All days</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <div class="pick__menu" hidden></div>
+            </span>
+            <span class="count" id="count"></span>
+        </div>
+
+        <div class="clips clips--wait" id="clips">
+            <div class="wait">
+                <span class="spin" aria-hidden="true"></span>
+                <p class="wait__copy">Loading events</p>
+            </div>
+        </div>
+
+    </main>
+
+    <div class="modal" id="settings" hidden>
+        <div class="modal__panel">
+
+            <div class="modal__head">
+                <span class="modal__title">Surveillance settings</span>
+                <button class="btn" id="settingsClose" type="button">Close</button>
+            </div>
+
+            <div class="modal__body">
+
+                <h2 class="head">Surveillance</h2>
+                <div class="list">
+                    <div class="row">
+                        <span class="row__label">Watch the car when it is off</span>
+                        <button class="switch" type="button" data-key="surveillance.enabled" aria-pressed="false"><span class="switch__knob"></span></button>
+                    </div>
+                    <div class="row row--control">
+                        <span class="row__label">Mode</span>
+                        <span class="seg" data-key="surveillance.mode">
+                            <button class="seg__btn" type="button" data-value="smart">Smart</button>
+                            <button class="seg__btn" type="button" data-value="continuous">Continuous</button>
+                        </span>
+                    </div>
+                    <div class="row row--control">
+                        <span class="row__label">Starts</span>
+                        <span class="seg" data-key="surveillance.arm">
+                            <button class="seg__btn" type="button" data-value="off">On turn off</button>
+                            <button class="seg__btn" type="button" data-value="lock">On lock</button>
+                        </span>
+                    </div>
+                    <div class="row row--control" id="proximityRow">
+                        <span class="row__label">Proximity</span>
+                        <span class="control">
+                            <input class="slider" type="range" data-key="surveillance.proximity" min="1" max="5" step="1" value="3">
+                            <span class="control__value control__value--wide" id="proximity">&mdash;</span>
+                        </span>
+                    </div>
+                </div>
+
+                <h2 class="head" id="screenHead">Screen message</h2>
+                <div class="list" id="screenList">
+                    <div class="row">
+                        <span class="row__label">Show a red screen on an event</span>
+                        <button class="switch" type="button" data-key="surveillance.screen" aria-pressed="false"><span class="switch__knob"></span></button>
+                    </div>
+                    <div class="row row--control">
+                        <span class="row__label">Message</span>
+                        <input class="input" id="message" type="text" maxlength="60" autocomplete="off">
+                    </div>
+                    <div class="row row--control">
+                        <span class="row__label">Stays for</span>
+                        <span class="seg" data-key="surveillance.screenSeconds">
+                            <button class="seg__btn" type="button" data-value="5">5 s</button>
+                            <button class="seg__btn" type="button" data-value="10">10 s</button>
+                            <button class="seg__btn" type="button" data-value="20">20 s</button>
+                            <button class="seg__btn" type="button" data-value="30">30 s</button>
+                        </span>
+                    </div>
+                    <div class="row">
+                        <span class="row__label">Preview</span>
+                        <button class="btn" id="preview" type="button">Show it now</button>
+                    </div>
+                </div>
+                <p class="note" id="previewNote">Recording in progress sits under the message. The car has to be on for a preview.</p>
+
+                <h2 class="head">Storage</h2>
+                <div class="choice" id="location" data-key="surveillance.location">
+                    <button class="choice__row" type="button" data-value="internal" aria-pressed="false">
+                        <span class="choice__name">Internal</span>
+                        <span class="choice__size">&mdash;</span>
+                    </button>
+                    <button class="choice__row" type="button" data-value="sd" aria-pressed="false">
+                        <span class="choice__name">SD card</span>
+                        <span class="choice__size">&mdash;</span>
+                    </button>
+                    <button class="choice__row" type="button" data-value="usb" aria-pressed="false">
+                        <span class="choice__name">USB</span>
+                        <span class="choice__size">&mdash;</span>
+                    </button>
+                </div>
+                <div class="list">
+                    <div class="row row--control">
+                        <span class="row__label">Storage limit</span>
+                        <span class="control">
+                            <span class="control__end" id="budgetFloor">&mdash;</span>
+                            <input class="slider" type="range" data-key="surveillance.budgetMb" min="100" step="100" value="500">
+                            <span class="control__end" id="budgetCeiling">&mdash;</span>
+                            <span class="control__value" id="budget">&mdash;</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="usage">
+                    <span class="meter"><span class="meter__fill" id="usageFill"></span></span>
+                    <p class="usage__text"><span id="usageUsed">&mdash;</span> of <span id="usageLimit">&mdash;</span> used by events</p>
+                </div>
+                <p class="note" id="shared" hidden></p>
+
+            </div>
+
+        </div>
+    </div>
+
+    <div class="modal" id="player" hidden>
+        <div class="modal__panel modal__panel--player">
+
+            <div class="modal__head">
+                <span class="modal__titles">
+                    <span class="modal__title" id="playerTitle">&mdash;</span>
+                    <span class="modal__sub">
+                        <span id="playerMeta"></span>
+                        <button class="btn btn--quiet" id="playerDelete" type="button">Delete</button>
+                    </span>
+                </span>
+                <button class="btn" id="playerClose" type="button">Close</button>
+            </div>
+
+            <div class="modal__body">
+                <div class="player">
+
+                    <div class="player__frame" id="playerFrame" data-angle="all">
+                        <video class="player__video" id="playerVideo" preload="metadata" playsinline webkit-playsinline></video>
+                    </div>
+                    <div class="player__bar">
+                        <div class="transport">
+                            <button class="transport__btn transport__btn--play" id="playerPlay" type="button" aria-label="Play">
+                                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5l12 7-12 7z"/></svg>
+                            </button>
+                            <span class="transport__at" id="playerAt">0:00</span>
+                            <span class="scrub" id="playerScrub">
+                                <span class="scrub__track"></span>
+                                <span class="scrub__fill" id="playerFill"></span>
+                                <span class="scrub__marks" id="playerMarks"></span>
+                                <span class="scrub__knob" id="playerKnob"></span>
+                            </span>
+                            <span class="transport__at" id="playerEnd">0:00</span>
+                            <button class="transport__btn" id="playerMute" type="button" aria-label="Mute" aria-pressed="false">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h3l5 4V5L7 9z"/><path id="playerWaves" d="M16 9c1 1 1 5 0 6M19 7c2 2 2 8 0 10"/><path id="playerSlash" d="M3 3l18 18" style="display:none"/></svg>
+                            </button>
+                            <button class="transport__btn" id="playerFull" type="button" aria-label="Fullscreen" aria-pressed="false">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="playerFullIcon" d="M9 4H4v5M20 9V4h-5M15 20h5v-5M4 15v5h5"/></svg>
+                            </button>
+                        </div>
+                        <span class="seg seg--fill" id="angles">
+                            <button class="seg__btn" type="button" data-value="all" aria-pressed="true">All</button>
+                            <button class="seg__btn" type="button" data-value="front" aria-pressed="false">Front</button>
+                            <button class="seg__btn" type="button" data-value="right" aria-pressed="false">Right</button>
+                            <button class="seg__btn" type="button" data-value="rear" aria-pressed="false">Rear</button>
+                            <button class="seg__btn" type="button" data-value="left" aria-pressed="false">Left</button>
+                        </span>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="js/core.js"></script>
+    <script src="js/shell.js"></script>
+    <script src="js/library.js"></script>
+    <script src="js/budget.js"></script>
+    <script src="js/surveillance-settings.js"></script>
+    <script src="js/surveillance.js"></script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+package com.strike.camera
+
+import android.media.MediaCodec
+import android.media.MediaFormat
+import com.strike.daemon.DaemonLog
+import com.strike.daemon.PACKET_FLAG_CONFIG
+import com.strike.daemon.PACKET_FLAG_KEYFRAME
+import com.strike.daemon.PacketRelay
+import com.strike.recording.Encoder
+import com.strike.recording.Sample
+
+private const val TAG = "Live"
+
+/** Overdrive's High preset, the one its own UI defaults to. */
+const val LIVE_FRAME_RATE_FPS = 12
+const val LIVE_BITRATE_BPS = 1_500_000
+
+private const val CONSUMER = "live"
+
+/**
+ * The live camera as H.264 for a browser. Baseline, because Media Source
+ * Extensions on the head unit's Chrome 58 is the decoder and it is the profile
+ * Overdrive settled on for the same reason.
+ *
+ * One angle at a time, cropped out of the strip by the bus, so a viewer never
+ * competes with the recorder for the camera.
+ */
+class LiveStreamer(private val relay: PacketRelay) {
+
+    private var bus: FrameBus? = null
+    private var encoder: Encoder? = null
+    private var sentConfig = false
+
+    @Volatile
+    private var frames = 0L
+
+    @Volatile
+    var isStreaming = false
+        private set
+
+    @Volatile
+    var view = CameraView.FRONT
+        private set
+
+    fun start(bus: FrameBus, view: CameraView, frameRateFps: Int, bitrateBps: Int): Boolean {
+        if (isStreaming) return true
+        val frame = liveFrameOf(view, bus.stripWidth, bus.stripHeight)
+        val fresh = Encoder(
+            frame.width,
+            frame.height,
+            frameRateFps,
+            bitrateBps,
+            MediaFormat.MIMETYPE_VIDEO_AVC,
+            ::relay
+        )
+        val surface = fresh.start() ?: return false
+        bus.add(Consumer(CONSUMER, surface, view, frame))
+        this.bus = bus
+        this.view = view
+        encoder = fresh
+        sentConfig = false
+        frames = 0
+        isStreaming = true
+        DaemonLog.d(TAG, "live ${view.id} at ${frame.width}x${frame.height}, $bitrateBps bps")
+        return true
+    }
+
+    fun stop() {
+        if (!isStreaming) return
+        isStreaming = false
+        bus?.remove(CONSUMER)
+        bus = null
+        encoder?.stop()
+        encoder = null
+    }
+
+    /**
+     * A browser cannot decode a frame before it has the parameter sets, and a
+     * viewer who joins mid-stream never sees the encoder's first buffer. They
+     * are re-sent ahead of every keyframe so any join point is decodable.
+     */
+    private fun relay(sample: Sample) {
+        val header = encoder?.format
+        val keyFrame = sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
+        frames++
+        // Says whether the chip encoded anything at all, which a silent stage
+        // otherwise leaves indistinguishable from a browser that cannot decode.
+        if (frames == 1L) DaemonLog.d(TAG, "first live frame, ${sample.bytes.size} bytes")
+        if (frames % 240 == 0L) DaemonLog.d(TAG, "$frames live frames encoded")
+        if (keyFrame || !sentConfig) {
+            val config = parameterSets(header)
+            if (config != null) {
+                if (!sentConfig) DaemonLog.d(TAG, "live config ${config.size} bytes")
+                relay.send(config, sample.timeUs, PACKET_FLAG_CONFIG)
+                sentConfig = true
+            }
+        }
+        relay.send(sample.bytes, sample.timeUs, if (keyFrame) PACKET_FLAG_KEYFRAME else 0)
+    }
+}
+
+/** SPS and PPS as the encoder describes them, Annex-B, ready to prepend. */
+internal fun parameterSets(format: MediaFormat?): ByteArray? =
+    annexB(csd(format, "csd-0"), csd(format, "csd-1"))
+
+/**
+ * Qualcomm writes SPS in csd-0 and PPS in csd-1. Sending only the first
+ * leaves the browser's muxer without PPS, so it never opens a decoder.
+ */
+internal fun annexB(sps: ByteArray?, pps: ByteArray?): ByteArray? {
+    if (sps == null || sps.isEmpty()) return null
+    val head = withStart(sps)
+    if (pps == null || pps.isEmpty()) return head
+    return head + withStart(pps)
+}
+
+private fun csd(format: MediaFormat?, key: String): ByteArray? {
+    val buffer = try {
+        format?.getByteBuffer(key)
+    } catch (e: NullPointerException) {
+        null
+    } ?: return null
+    if (buffer.remaining() == 0) return null
+    val bytes = ByteArray(buffer.remaining())
+    buffer.duplicate().get(bytes)
+    return bytes
+}
+
+private val START = byteArrayOf(0, 0, 0, 1)
+
+private fun withStart(nal: ByteArray): ByteArray {
+    if (nal.size >= 3 && nal[0] == 0.toByte() && nal[1] == 0.toByte() && nal[2] == 1.toByte()) {
+        return nal
+    }
+    if (nal.size >= 4 && nal[0] == 0.toByte() && nal[1] == 0.toByte() &&
+        nal[2] == 0.toByte() && nal[3] == 1.toByte()
+    ) {
+        return nal
+    }
+    return START + nal
+}

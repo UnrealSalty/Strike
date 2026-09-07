@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Strike" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/shell_background</item>
+        <item name="android:statusBarColor">@color/shell_background</item>
+        <item name="android:navigationBarColor">@color/shell_background</item>
+    </style>
+
+</resources>
