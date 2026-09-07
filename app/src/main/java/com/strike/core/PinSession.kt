@@ -5,7 +5,7 @@ import java.security.SecureRandom
 private const val TAG = "PinSession"
 private const val TOKEN_BYTES = 16
 
-// Each browser has its own session; ACC off and process death clear all sessions.
+// Car screen sessions end on ACC off or process death.
 object PinSession {
 
     private val lock = Any()

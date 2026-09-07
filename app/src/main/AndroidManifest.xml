@@ -51,6 +51,8 @@
             </intent-filter>
         </activity>
 
+        <service android:name=".online.OnlineService" android:exported="false" />
+
         <receiver android:name=".recording.AccOff" android:exported="true">
             <intent-filter>
                 <action android:name="com.byd.action.ACC_OFF" />

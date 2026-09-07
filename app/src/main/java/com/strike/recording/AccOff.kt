@@ -3,6 +3,7 @@ package com.strike.recording
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.strike.StrikeApp
 import com.strike.core.Config
 import com.strike.core.Logs
 import com.strike.core.PinSession
@@ -16,6 +17,7 @@ private const val TAG = "AccOff"
 class AccOff : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        (context.applicationContext as StrikeApp).online.acc(false)
         PinSession.lock()
         WebUi.cover()
         val watching = Config.getBool(SurveillanceSettings.ENABLED, false)

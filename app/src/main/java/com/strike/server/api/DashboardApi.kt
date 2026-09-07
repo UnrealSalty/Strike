@@ -21,9 +21,10 @@ class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsA
     private val vehicle = VehicleTelemetry(context)
     private val events = EventStorage(context, shell)
 
-    fun status(): Response {
+    fun status(inCar: Boolean): Response {
         val payload = JSONObject()
-        payload.put("pinSet", pin.isSet())
+        payload.put("inCar", inCar)
+        if (inCar) payload.put("pinSet", pin.isSet())
         val volume = storage.selected()
         if (volume != null) {
             val clips = storage.clipsOn(volume).list()

@@ -11,7 +11,9 @@ import com.strike.server.api.DashboardApi
 import com.strike.server.api.RECORDER_API
 import com.strike.server.api.RecordingsApi
 import com.strike.server.api.SecurityApi
+import com.strike.server.api.OnlineApi
 import com.strike.server.api.SurveillanceApi
+import com.strike.online.Online
 import java.io.File
 import java.io.IOException
 
@@ -25,15 +27,17 @@ internal const val THUMBS_PATH = "/thumbs/"
 internal const val EVENTS_PATH = "/events/"
 internal const val HEROES_PATH = "/heroes/"
 internal const val LIVE_STREAM_PATH = "/live/stream"
+internal const val FAVICON_PATH = "/favicon.png"
 
-class Router(context: Context, private val pin: Pin, shell: Shell) {
+class Router(context: Context, private val pin: Pin, shell: Shell, online: Online, browsers: BrowserGate) {
 
     private val assets = context.assets
     private val recordings = RecordingsApi(context, shell)
     private val surveillance = SurveillanceApi(context, shell)
-    private val daemons = DaemonsApi(context, shell)
+    private val daemons = DaemonsApi(context, shell, online)
     private val dashboard = DashboardApi(context, shell, daemons, pin)
     private val security = SecurityApi(pin)
+    private val remote = OnlineApi(online, browsers)
     private val live = LiveStream(DaemonClient())
 
     fun locked(token: String?): Boolean = pin.isSet() && !PinSession.allows(token)
@@ -58,14 +62,20 @@ class Router(context: Context, private val pin: Pin, shell: Shell) {
 
     fun hero(name: String): Response = surveillance.hero(name)
 
-    fun api(method: String, path: String, body: String): Response = when {
+    fun api(method: String, path: String, body: String, inCar: Boolean): Response = when {
+        !inCar && path.startsWith(SECURITY_API) -> forbidden()
+        path == "/api/online" -> when (method) {
+            "GET" -> remote.status(inCar)
+            "POST" -> remote.update(body, inCar)
+            else -> methodNotAllowed()
+        }
         path == SECURITY_API -> when (method) {
             "GET" -> security.status()
             "POST" -> security.update(body)
             else -> methodNotAllowed()
         }
         path == UNLOCK_API -> if (method == "POST") security.unlock(body) else methodNotAllowed()
-        path == "/api/status" -> if (method == "GET") dashboard.status() else methodNotAllowed()
+        path == "/api/status" -> if (method == "GET") dashboard.status(inCar) else methodNotAllowed()
         path == "/api/recording/settings" -> when (method) {
             "GET" -> recordings.settings()
             "POST" -> recordings.save(body)
@@ -122,11 +132,20 @@ internal fun notFound(): Response = Response(404, TEXT, "Not found".toByteArray(
 
 internal fun methodNotAllowed(): Response = Response(405, TEXT, "Method not allowed".toByteArray())
 
+internal fun pagePath(path: String): String? = when (val page = path.removeSuffix(".html")) {
+    "/", "/index" -> "/"
+    "/live", "/recordings", "/surveillance", "/daemons", "/online", LOCK_PAGE, ACCESS_PAGE -> page
+    else -> null
+}
+
 internal fun resolveAssetPath(path: String): String? {
     if (!path.startsWith("/")) return null
     if (path.contains("..") || path.contains('\\') || path.contains("//")) return null
-    if (path == "/") return "$WEB_ROOT/index.html"
-    return WEB_ROOT + path
+    return when (val page = pagePath(path)) {
+        "/" -> "$WEB_ROOT/index.html"
+        null -> WEB_ROOT + path
+        else -> "$WEB_ROOT$page.html"
+    }
 }
 
 internal fun contentTypeFor(path: String): String = when {
@@ -134,5 +153,6 @@ internal fun contentTypeFor(path: String): String = when {
     path.endsWith(".css") -> "text/css; charset=utf-8"
     path.endsWith(".js") -> "application/javascript; charset=utf-8"
     path.endsWith(".json") -> JSON
+    path.endsWith(".png") -> "image/png"
     else -> "application/octet-stream"
 }

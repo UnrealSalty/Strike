@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Online &middot; Strike</title>
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/favicon.png">
+    <style>html,body,button,a,input{background:#0b0b0d;color:#f2f2f5;border:0}button{-webkit-appearance:none;appearance:none}</style>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/strike.css">
+</head>
+<body>
+
+    <header class="topbar">
+        <img class="topbar__brand" src="img/wordmark.webp" alt="Strike" width="144" height="20">
+        <nav class="nav">
+            <a class="nav__link" href="/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard
+            </a>
+            <a class="nav__link" href="/live">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 11l6-4v10l-6-4z"/></svg>Live
+            </a>
+            <a class="nav__link" href="/recordings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16"/></svg>Recordings
+            </a>
+            <a class="nav__link" href="/surveillance">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>Surveillance
+            </a>
+            <a class="nav__link" href="/daemons">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Daemons
+            </a>
+            <a class="nav__link" href="/online" aria-current="page">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 010 18 18 18 0 010-18z"/></svg>Online
+            </a>
+        </nav>
+    </header>
+
+    <main class="page online">
+        <div class="hero">
+            <h1 class="hero__title">Online</h1>
+            <p class="hero__sub">Access Strike from your phone or computer.</p>
+        </div>
+        <div class="columns">
+            <section class="card columns__wide online__tunnel">
+                <div class="row online__heading">
+                    <h2 class="card__name">Cloudflare tunnel</h2>
+                    <button class="btn" id="tunnelSettingsOpen" type="button" disabled>Settings</button>
+                </div>
+                <p class="note">Reach the car from anywhere through your own Cloudflare hostname.</p>
+                <div class="online__panel">
+                    <div class="online__panel-text">
+                        <p class="online__state" aria-live="polite"><span class="dot" id="tunnelDot"></span><span id="tunnelStatus">&mdash;</span></p>
+                        <p class="online__when" id="tunnelSchedule">&mdash;</p>
+                    </div>
+                    <span class="online__toggle" id="tunnelControl"><span class="sk" aria-hidden="true"></span></span>
+                </div>
+                <div class="online__address" id="remoteAddress" data-loading="true">
+                    <span class="sk" aria-hidden="true"></span>
+                    <input class="input" id="remoteUrl" type="text" readonly placeholder="&mdash;" aria-label="Remote address">
+                    <button class="btn online__copy" id="remoteCopy" type="button" aria-live="polite" disabled>Copy</button>
+                    <a class="btn online__open" id="remoteOpen" target="_blank" rel="noopener noreferrer">Open</a>
+                </div>
+                <button class="btn online__retry" id="tunnelRetry" type="button" hidden>Retry</button>
+                <p class="note online__message" id="onlineMessage" role="status" aria-live="polite" hidden></p>
+            </section>
+            <div class="columns__narrow">
+                <section class="card">
+                    <h2 class="card__name">Local network</h2>
+                    <p class="note">Connect to a network that can reach the car, then open this address. It stays available while Strike is running.</p>
+                    <div id="localAddresses"><div class="online__address" data-loading="true"><span class="sk" aria-hidden="true"></span></div></div>
+                </section>
+                <section class="card">
+                    <h2 class="card__name">Browser access</h2>
+                    <p class="note">Enter this code once in each browser, on the local network or through the tunnel.</p>
+                    <div class="online__access-content" id="accessContent">
+                        <div id="accessManage">
+                            <div class="online__address online__code" id="accessAddress" data-loading="true">
+                                <span class="sk" aria-hidden="true"></span>
+                                <input class="input" id="accessCode" type="password" readonly autocomplete="off" spellcheck="false" aria-label="Access code">
+                                <button class="btn online__show" id="accessShow" type="button" aria-pressed="false" disabled>Show</button>
+                                <button class="btn online__copy" id="accessCopy" type="button" aria-live="polite" disabled>Copy</button>
+                            </div>
+                            <div class="online__reset">
+                                <p class="note">Browsers already signed in have to enter the new code.</p>
+                                <button class="btn" id="accessRegenerate" type="button" disabled>Regenerate</button>
+                            </div>
+                        </div>
+                        <p class="note" id="accessInCar" hidden>Manage the access code in the car.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal online" id="tunnelSettings" hidden>
+        <form class="modal__panel" id="tunnelForm" role="dialog" aria-modal="true" aria-labelledby="tunnelSettingsTitle">
+            <div class="modal__head">
+                <span class="modal__title" id="tunnelSettingsTitle">Cloudflare settings</span>
+                <button class="btn" id="tunnelSettingsClose" type="button">Close</button>
+            </div>
+            <div class="modal__body">
+                <div class="online__form">
+                    <div class="row row--control">
+                        <span class="row__label" id="tunnelModeLabel">Run when</span>
+                        <span class="seg" id="tunnelMode" role="group" aria-labelledby="tunnelModeLabel">
+                            <button class="seg__btn" type="button" data-value="always" aria-pressed="false">Always</button>
+                            <button class="seg__btn" type="button" data-value="off" aria-pressed="true">Car off</button>
+                            <button class="seg__btn" type="button" data-value="lock" aria-pressed="false">On lock</button>
+                        </span>
+                    </div>
+                    <div class="row row--control">
+                        <label class="row__label" for="tunnelHostname">Hostname</label>
+                        <input class="input" id="tunnelHostname" type="text" placeholder="car.example.com" maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+                    </div>
+                    <div class="row row--control">
+                        <label class="row__label" for="tunnelToken">Tunnel token</label>
+                        <input class="input" id="tunnelToken" type="password" placeholder="Paste from Cloudflare" maxlength="2048" autocomplete="new-password" spellcheck="false">
+                    </div>
+                </div>
+                <p class="note online__message" id="setupMessage" role="status" aria-live="polite" hidden></p>
+            </div>
+            <div class="online__buttons">
+                <button class="btn btn--quiet" id="tunnelForget" type="button" hidden>Remove</button>
+                <button class="btn btn--primary" id="tunnelSave" type="submit" disabled>Save</button>
+            </div>
+        </form>
+    </div>
+    <script src="js/core.js"></script>
+    <script src="js/online.js"></script>
+</body>
+</html>

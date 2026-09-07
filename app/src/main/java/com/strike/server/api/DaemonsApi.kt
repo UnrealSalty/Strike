@@ -4,6 +4,7 @@ import android.content.Context
 import com.strike.core.Config
 import com.strike.core.LogLine
 import com.strike.core.Logs
+import com.strike.online.Online
 import com.strike.daemon.BydApps
 import com.strike.daemon.CAM_LOG_PATH
 import com.strike.daemon.CAM_SCRIPT_PATH
@@ -58,7 +59,7 @@ private val SENTRY_MODES = mapOf(
     "continuous" to "Continuous"
 )
 
-class DaemonsApi(context: Context, private val shell: Shell) {
+class DaemonsApi(context: Context, private val shell: Shell, private val online: Online) {
 
     private val bydApps = BydApps(context, shell)
     private val processes = Processes(shell)
@@ -99,6 +100,8 @@ class DaemonsApi(context: Context, private val shell: Shell) {
         cards.put(shellCard())
         cards.put(recorderCard())
         cards.put(surveillanceCard())
+        val tunnel = online.status()
+        cards.put(tunnelCard(tunnel))
 
         var running = 0
         for (i in 0 until cards.length()) {
@@ -168,6 +171,28 @@ class DaemonsApi(context: Context, private val shell: Shell) {
     private fun forget() = synchronized(cardsLock) {
         cards = null
         processes.forget()
+    }
+
+    private fun tunnelCard(status: JSONObject): JSONObject {
+        val state = status.getString("state")
+        val configured = status.getBoolean("hasToken")
+        val card = card("cloudflare", "Cloudflare tunnel",
+            if (state in setOf(RUNNING, STARTING, BROKEN)) state else OFF)
+        card.put("status", if (configured) status.getString("status") else "Set up in Online")
+        card.put("action", "switch")
+        card.put("path", "/api/online")
+        card.put("on", status.getBoolean("enabled"))
+        card.put("can", state != "stopping" && (status.getBoolean("enabled") ||
+            (configured && status.getBoolean("accessReady"))))
+        val facts = JSONArray()
+        fact(facts, "Hostname", status.getString("hostname").ifEmpty { DASH })
+        fact(facts, "Runs", when (status.getString("mode")) {
+            "always" -> "Whenever Strike is running"
+            "lock" -> "When the car is off and locked"
+            else -> "When the car is off"
+        })
+        card.put("facts", facts)
+        return card
     }
 
     private fun shellCard(): JSONObject {

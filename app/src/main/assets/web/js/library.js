@@ -174,6 +174,7 @@
                 if (xhr.readyState !== 4) {
                     return;
                 }
+                if (xhr.status === 401) { location.replace('/access'); return; }
                 var waiting = asking[id];
                 delete asking[id];
                 // Resolve failed thumbnails so truncated clips do not leave a permanent loading state.

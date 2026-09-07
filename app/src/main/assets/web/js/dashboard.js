@@ -74,7 +74,7 @@
 
     function activity(event) {
         var link = document.getElementById('lastEventLink');
-        link.href = event ? 'surveillance.html#' + encodeURIComponent(event.id) : 'surveillance.html';
+        link.href = event ? '/surveillance#' + encodeURIComponent(event.id) : '/surveillance';
         link.setAttribute('data-empty', event ? 'false' : 'true');
         say('lastEvent', event
             ? (EVENTS[event.seen] || EVENTS[event.kind]) + ' \u00b7 ' + event.date + ' ' + event.time
@@ -83,6 +83,7 @@
 
     Strike.dashboard = {
         render: function (status) {
+            document.getElementById('securityOpen').hidden = status.inCar !== true;
             battery(status.vehicle);
             footage(status.storage);
             daemons(status.daemons);

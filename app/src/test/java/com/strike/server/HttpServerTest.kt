@@ -4,8 +4,31 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.BufferedReader
+import java.io.IOException
+import java.io.StringReader
 
 class HttpServerTest {
+
+    @Test
+    fun headerLinesEndBeforeTheNextLineOrBody() {
+        val reader = BufferedReader(StringReader("GET / HTTP/1.1\r\nHost: car\r\n\r\ncode=1234"))
+        assertEquals("GET / HTTP/1.1", boundedLine(reader))
+        assertEquals("Host: car", boundedLine(reader))
+        assertEquals("", boundedLine(reader))
+        assertEquals("code=1234", reader.readText())
+        assertNull(boundedLine(reader))
+    }
+
+    @Test(expected = IOException::class)
+    fun truncatedHeadersAreNotTreatedAsComplete() {
+        boundedLine(BufferedReader(StringReader("Cookie: strike_browser=partial")))
+    }
+
+    @Test(expected = IOException::class)
+    fun oversizedHeadersAreRejected() {
+        boundedLine(BufferedReader(StringReader("Cookie: " + "a".repeat(16_384) + "\r\n")))
+    }
 
     @Test
     fun methodComesFromTheRequestLine() {

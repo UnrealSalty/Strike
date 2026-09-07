@@ -14,7 +14,11 @@ private const val PARKED = "P"
 private const val OFF = "off"
 
 /** Supplies app-side telemetry, cabin audio and mounted storage to the daemon. */
-class Triggers(context: Context, private val shell: Shell) {
+class Triggers(
+    context: Context,
+    private val shell: Shell,
+    private val onVehicle: (VehicleSnapshot) -> Unit = {}
+) {
 
     private val vehicle = VehicleTelemetry(context)
     private val daemon = DaemonClient()
@@ -29,6 +33,7 @@ class Triggers(context: Context, private val shell: Shell) {
     private fun watch() {
         while (true) {
             val snapshot = vehicle.parkingSnapshot()
+            onVehicle(snapshot)
             val connected = daemon.vehicle(snapshot)
             superviseAudio(connected && shouldRecord(mode(), snapshot), snapshot)
             if (snapshot.accOn != true) {

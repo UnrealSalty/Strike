@@ -9,10 +9,27 @@ import org.junit.Test
 class GateTest {
 
     @Test
+    fun crossSiteOriginsCannotUseAuthenticatedControls() {
+        assertTrue(sameOrigin("car.example.com", "https://car.example.com"))
+        assertTrue(sameOrigin("192.168.1.2:8090", "http://192.168.1.2:8090"))
+        assertTrue(sameOrigin("127.0.0.1:8090", null))
+        assertFalse(sameOrigin("car.example.com", "https://other.example.com"))
+        assertFalse(sameOrigin("car.example.com", "null"))
+        assertFalse(sameOrigin("car.example.com", "https://user@car.example.com"))
+        assertFalse(sameOrigin("car.example.com", "https://car.example.com/path"))
+    }
+
+    @Test
     fun pagesBecomeTheLockScreenWhenLocked() {
         assertTrue(rewriteToLock("/", true))
-        assertTrue(rewriteToLock("/recordings.html", true))
+        for (page in listOf("live", "recordings", "surveillance", "daemons", "online")) {
+            assertTrue(page, rewriteToLock("/$page", true))
+            assertTrue(page, rewriteToLock("/$page.html", true))
+            assertFalse(page, rewriteToLock("/$page", false))
+        }
+        assertFalse(rewriteToLock(LOCK_PAGE, true))
         assertFalse(rewriteToLock("/lock.html", true))
+        assertFalse(rewriteToLock(FAVICON_PATH, true))
         assertFalse(rewriteToLock("/css/strike.css", true))
         assertFalse(rewriteToLock("/", false))
     }
@@ -20,6 +37,8 @@ class GateTest {
     @Test
     fun lockAssetsAndUnlockStayReachable() {
         assertFalse(refuseWhenLocked("GET", "/lock.html", true))
+        assertFalse(refuseWhenLocked("GET", LOCK_PAGE, true))
+        assertFalse(refuseWhenLocked("GET", FAVICON_PATH, true))
         assertFalse(refuseWhenLocked("GET", "/css/tokens.css", true))
         assertFalse(refuseWhenLocked("GET", "/js/lock.js", true))
         assertFalse(refuseWhenLocked("GET", "/api/security", true))

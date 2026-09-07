@@ -10,7 +10,10 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLDecoder
-import java.util.concurrent.Executors
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "HttpServer"
 private const val READ_TIMEOUT_MS = 15_000
@@ -21,9 +24,9 @@ private const val COOKIE = "Cookie:"
 private const val BODY_MAX = 4096
 private const val COPY_BUFFER = 64 * 1024
 
-class HttpServer(private val port: Int, private val router: Router) {
+class HttpServer(private val port: Int, private val router: Router, private val browsers: BrowserGate) {
 
-    private val workers = Executors.newFixedThreadPool(8)
+    private val workers = ThreadPoolExecutor(8, 8, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue(16))
 
     fun start() {
         val socket = try {
@@ -44,7 +47,13 @@ class HttpServer(private val port: Int, private val router: Router) {
                 Logs.e(TAG, "stopped accepting connections", e)
                 return
             }
-            workers.execute { serve(client) }
+            try {
+                workers.execute { serve(client) }
+            } catch (e: RejectedExecutionException) {
+                try { client.close() } catch (e: IOException) {
+                    // The rejected client may already have disconnected.
+                }
+            }
         }
     }
 
@@ -53,17 +62,30 @@ class HttpServer(private val port: Int, private val router: Router) {
         try {
             client.soTimeout = READ_TIMEOUT_MS
             val reader = BufferedReader(InputStreamReader(client.getInputStream(), "UTF-8"))
-            val requestLine = reader.readLine() ?: return
+            val requestLine = boundedLine(reader) ?: return
             var bodyLength = 0
             var range: String? = null
             var socketKey: String? = null
             var cookie: String? = null
+            var host: String? = null
+            var origin: String? = null
+            var forwarded = false
+            var secure = false
+            var headerBytes = 0
+            var hasLength = false
             while (true) {
-                val header = reader.readLine() ?: break
+                val header = boundedLine(reader) ?: return
                 if (header.isEmpty()) break
+                headerBytes += header.length + 2
+                if (headerBytes > 32_768 || !header.contains(':')) throw IOException("Invalid headers")
                 if (header.startsWith(CONTENT_LENGTH, ignoreCase = true)) {
-                    bodyLength = header.substringAfter(':').trim().toIntOrNull() ?: 0
+                    if (hasLength) throw IOException("Duplicate body length")
+                    hasLength = true
+                    bodyLength = header.substringAfter(':').trim().toIntOrNull()
+                        ?: throw IOException("Invalid body length")
+                    if (bodyLength !in 0..BODY_MAX) throw IOException("Body too large")
                 }
+                if (header.startsWith("Transfer-Encoding:", ignoreCase = true)) throw IOException("Unsupported encoding")
                 if (header.startsWith(RANGE, ignoreCase = true)) {
                     range = header.substringAfter(':').trim()
                 }
@@ -71,24 +93,54 @@ class HttpServer(private val port: Int, private val router: Router) {
                     socketKey = header.substringAfter(':').trim()
                 }
                 if (header.startsWith(COOKIE, ignoreCase = true)) {
+                    if (cookie != null) throw IOException("Duplicate cookie header")
                     cookie = header.substringAfter(':').trim()
+                }
+                if (header.startsWith("Host:", ignoreCase = true)) {
+                    if (host != null) throw IOException("Duplicate host")
+                    host = header.substringAfter(':').trim()
+                }
+                if (header.startsWith("Origin:", ignoreCase = true)) {
+                    if (origin != null) throw IOException("Duplicate origin")
+                    origin = header.substringAfter(':').trim()
+                }
+                if (header.startsWith("Cf-Connecting-Ip:", ignoreCase = true)) forwarded = true
+                if (header.startsWith("X-Forwarded-Proto:", ignoreCase = true)) {
+                    secure = header.substringAfter(':').trim().equals("https", ignoreCase = true)
+                }
+            }
+            if (host == null) throw IOException("Missing host")
+            val method = requestMethod(requestLine) ?: return
+            val path = requestPath(requestLine) ?: return
+            if ((socketKey != null || method != "GET") && !sameOrigin(host, origin)) {
+                write(client.getOutputStream(), forbidden())
+                return
+            }
+            val body = read(reader, bodyLength)
+            val inCar = browsers.isCar(client.inetAddress, host, cookie, forwarded)
+            if (!inCar) {
+                val gate = browsers.guard(method, path, body, cookie, secure || forwarded, client, router::asset)
+                if (gate != null) {
+                    write(client.getOutputStream(), gate)
+                    return
                 }
             }
             val token = cookieValue(cookie, SESSION_COOKIE)
-            if (requestPath(requestLine) == LIVE_STREAM_PATH) {
-                if (refuseWhenLocked("GET", LIVE_STREAM_PATH, router.locked(token))) {
+            if (path == LIVE_STREAM_PATH) {
+                if (inCar && refuseWhenLocked("GET", LIVE_STREAM_PATH, router.locked(token))) {
                     write(client.getOutputStream(), forbidden())
                     return
                 }
                 streaming = upgrade(client, socketKey, queryValue(requestLine, "view"))
                 if (streaming) return
             }
-            write(client.getOutputStream(), respond(requestLine, read(reader, bodyLength), range, token))
+            write(client.getOutputStream(), respond(requestLine, body, range, token, inCar))
         } catch (e: IOException) {
             // The WebView drops connections on navigation; logging here floods.
         } finally {
             // The Live thread owns this socket after upgrade.
             if (!streaming) {
+                browsers.leave(client)
                 try {
                     client.close()
                 } catch (e: IOException) {
@@ -112,6 +164,7 @@ class HttpServer(private val port: Int, private val router: Router) {
             } catch (e: IOException) {
                 Logs.d(TAG, "the live viewer's connection ended: ${e.message}")
             } finally {
+                browsers.leave(client)
                 try {
                     client.close()
                 } catch (e: IOException) {
@@ -128,20 +181,20 @@ class HttpServer(private val port: Int, private val router: Router) {
         var filled = 0
         while (filled < chars.size) {
             val count = reader.read(chars, filled, chars.size - filled)
-            if (count < 0) break
+            if (count < 0) throw IOException("Incomplete request body")
             filled += count
         }
         return String(chars, 0, filled)
     }
 
-    private fun respond(requestLine: String, body: String, range: String?, token: String?): Response {
+    private fun respond(requestLine: String, body: String, range: String?, token: String?, inCar: Boolean): Response {
         val method = requestMethod(requestLine)
         val path = requestPath(requestLine)
         if (method == null || path == null) {
             return Response(400, TEXT, "Bad request".toByteArray())
         }
         return try {
-            route(method, path, body, range, token)
+            route(method, path, body, range, token, inCar)
         } catch (e: RuntimeException) {
             Logs.e(TAG, "$method $path failed", e)
             Response(500, TEXT, "Strike could not answer that".toByteArray())
@@ -153,13 +206,14 @@ class HttpServer(private val port: Int, private val router: Router) {
         path: String,
         body: String,
         range: String?,
-        token: String?
+        token: String?,
+        inCar: Boolean
     ): Response {
-        val locked = router.locked(token)
+        val locked = inCar && router.locked(token)
         if (rewriteToLock(path, locked)) return router.asset(LOCK_PAGE)
         if (refuseWhenLocked(method, path, locked)) return forbidden()
         return when {
-            path.startsWith("/api/") -> router.api(method, path, body)
+            path.startsWith("/api/") -> router.api(method, path, body, inCar)
             method != "GET" -> methodNotAllowed()
             path.startsWith(CLIPS_PATH) -> router.clip(path.substring(CLIPS_PATH.length), range)
             path.startsWith(THUMBS_PATH) -> router.thumb(path.substring(THUMBS_PATH.length))
@@ -193,6 +247,17 @@ class HttpServer(private val port: Int, private val router: Router) {
     companion object {
         const val PORT = 8090
     }
+}
+
+internal fun boundedLine(reader: BufferedReader): String? {
+    val line = StringBuilder()
+    while (line.length <= 8192) {
+        val next = reader.read()
+        if (next < 0) return if (line.isEmpty()) null else throw IOException("Incomplete header")
+        if (next == '\n'.code) return line.toString().removeSuffix("\r")
+        line.append(next.toChar())
+    }
+    throw IOException("Header too long")
 }
 
 internal fun requestMethod(requestLine: String): String? =
@@ -232,7 +297,10 @@ internal fun headerBlock(response: Response): String {
     for ((name, value) in response.headers) {
         headers.append(name).append(": ").append(value).append("\r\n")
     }
-    return headers.append("Cache-Control: no-store\r\n").append("Connection: close\r\n\r\n").toString()
+    return headers.append("Cache-Control: no-store\r\n")
+        .append("X-Frame-Options: DENY\r\n")
+        .append("Referrer-Policy: no-referrer\r\n")
+        .append("Connection: close\r\n\r\n").toString()
 }
 
 // Null selects a full response; multipart ranges are not supported.

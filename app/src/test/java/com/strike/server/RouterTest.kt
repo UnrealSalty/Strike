@@ -9,6 +9,29 @@ class RouterTest {
     @Test
     fun rootServesTheDashboard() {
         assertEquals("web/index.html", resolveAssetPath("/"))
+        assertEquals("web/index.html", resolveAssetPath("/index.html"))
+    }
+
+    @Test
+    fun pagesWorkWithCleanPathsAndExistingBookmarks() {
+        for (page in listOf("live", "recordings", "surveillance", "daemons", "online", "access", "lock")) {
+            assertEquals("web/$page.html", resolveAssetPath("/$page"))
+            assertEquals("web/$page.html", resolveAssetPath("/$page.html"))
+        }
+    }
+
+    @Test
+    fun pageRoutesDoNotCaptureStreamsApisOrUnknownPaths() {
+        for (path in listOf(LIVE_STREAM_PATH, "/api/online", "/clips/drive.mp4",
+                "/missing", "/online.html/extra", "/online.html.html", "//online", "online")) {
+            assertNull(path, pagePath(path))
+        }
+    }
+
+    @Test
+    fun faviconIsServedAsAPng() {
+        assertEquals("web/favicon.png", resolveAssetPath(FAVICON_PATH))
+        assertEquals("image/png", contentTypeFor("web/favicon.png"))
     }
 
     @Test

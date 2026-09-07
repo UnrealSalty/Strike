@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Access Strike</title>
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/favicon.png">
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/strike.css">
+</head>
+<body>
+    <main class="lock">
+        <img class="topbar__brand" src="/img/wordmark.webp" alt="Strike" width="144" height="20">
+        <h1 class="lock__title">Browser access</h1>
+        <p class="lock__sub">Find the access code in Online on the car's screen.</p>
+        <form class="access__form" id="accessForm">
+            <label class="access__label" for="accessCode">Access code</label>
+            <input class="input access__code" id="accessCode" name="code" type="password" maxlength="32" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="accessMessage" required>
+            <button class="btn btn--primary" id="accessSubmit" type="submit">Sign in</button>
+            <p class="note access__message" id="accessMessage" role="status" aria-live="polite"></p>
+            <p class="note">This browser stays signed in for 90 days. Regenerating the code signs out all browsers.</p>
+        </form>
+    </main>
+    <script src="/js/access.js"></script>
+</body>
+</html>

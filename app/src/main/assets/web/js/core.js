@@ -10,6 +10,7 @@ Strike.core = {
             if (xhr.readyState !== 4) {
                 return;
             }
+            if (xhr.status === 401) { location.replace('/access'); return; }
             if (xhr.status !== 200) {
                 onFail();
                 return;
@@ -34,6 +35,7 @@ Strike.core = {
             if (xhr.readyState !== 4) {
                 return;
             }
+            if (xhr.status === 401) { location.replace('/access'); return; }
             if (xhr.status !== 200) {
                 onFail();
                 return;
@@ -50,6 +52,7 @@ Strike.core = {
             if (xhr.readyState !== 4) {
                 return;
             }
+            if (xhr.status === 401) { location.replace('/access'); return; }
             if (xhr.status !== 200) {
                 onFail();
                 return;
