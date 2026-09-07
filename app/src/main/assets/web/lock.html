@@ -15,6 +15,12 @@
         <h1 class="lock__title">Enter PIN</h1>
         <p class="lock__sub" id="lockSub">Unlock Strike to continue.</p>
         <div id="lockPad"></div>
+        <button class="btn btn--quiet lock__help" id="pinRecoveryToggle" type="button" aria-expanded="false" aria-controls="pinRecovery">Forgot PIN?</button>
+        <div class="lock__recovery" id="pinRecovery" hidden>
+            <p>On a computer with an authorised ADB connection to the head unit, run:</p>
+            <code class="lock__command">adb shell touch /data/local/tmp/.strike_pin_reset</code>
+            <p>Reopen or refresh Strike, then set a new PIN in Dashboard &rarr; Security. Recordings and settings are kept.</p>
+        </div>
     </main>
 
     <script src="js/core.js"></script>

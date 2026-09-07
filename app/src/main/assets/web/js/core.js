@@ -295,6 +295,9 @@ Strike.pick = function (id, onChange) {
 
     // Blur tapped controls to clear Chrome 58's persistent focus outline; keep inputs focused.
     document.addEventListener('click', function (event) {
+        if (event.detail === 0) {
+            return;
+        }
         var node = event.target;
         while (node && node !== document.body) {
             var tag = node.tagName;

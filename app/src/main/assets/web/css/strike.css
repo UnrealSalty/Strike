@@ -631,7 +631,8 @@ main {
 }
 
 .lock {
-    flex: 1;
+    flex: 1 0 auto;
+    min-height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -658,6 +659,42 @@ main {
     color: var(--text-dim);
     font-size: 15px;
     text-align: center;
+}
+
+.lock__help {
+    margin-top: var(--gap);
+}
+
+.lock__help:focus {
+    text-decoration: underline;
+}
+
+.lock__recovery {
+    width: 100%;
+    max-width: calc(6 * var(--key));
+    margin-top: var(--gap);
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.lock__recovery > p {
+    margin: 0;
+}
+
+.lock__command {
+    display: block;
+    margin: var(--gap) 0;
+    padding: var(--pad);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font: 13px/1.5 var(--mono);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 .dots {

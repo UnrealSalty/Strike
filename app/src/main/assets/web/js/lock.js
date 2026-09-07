@@ -7,6 +7,12 @@
 
     var sub = document.getElementById('lockSub');
     var pad = Strike.keypad(document.getElementById('lockPad'), MIN, MAX, unlock);
+    var recovery = document.getElementById('pinRecovery');
+
+    document.getElementById('pinRecoveryToggle').onclick = function () {
+        recovery.hidden = !recovery.hidden;
+        this.setAttribute('aria-expanded', recovery.hidden ? 'false' : 'true');
+    };
 
     function say(text) {
         sub.textContent = text;
