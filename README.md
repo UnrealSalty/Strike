@@ -1,7 +1,7 @@
 # Strike
 
-A dashcam and parked-surveillance app for BYD head units. Built for an Atto 2,
-with a web dashboard for the car's screen and a phone on the same network.
+Dashcam and parked surveillance for BYD head units, with local recordings,
+motion detection, and a live web dashboard for the car's screen and your phone.
 
 ## What it does
 
@@ -19,8 +19,7 @@ head unit.
 
 ## Compatibility
 
-**Tested on BYD Atto 2. Other vehicles and firmware are unverified.**
-
+Compatibility depends on the head unit's camera layout and firmware APIs.
 The current build requires:
 
 - Android 9 or newer, with a 64-bit ARM system (`arm64-v8a`).
@@ -33,6 +32,9 @@ There is no model-name restriction, but the camera layout and firmware APIs
 matter. Different camera layouts need additional handling, and the Qualcomm
 AIS/QCarCam capture path used by some DiLink 5 units is not implemented. Installing
 the APK on a phone or emulator does not provide access to the car cameras.
+
+Testing so far has been on a BYD Atto 2. Other models and firmware versions
+have not yet been verified.
 
 ## Build
 
@@ -80,6 +82,19 @@ To use a phone, connect it to a network that can reach the head unit and open
 Set a PIN through **Dashboard → Security** if other devices can reach it.
 Without a PIN, the dashboard is accessible to any device that can connect to
 that port. The current server uses HTTP and is intended for a trusted local network.
+
+## PIN recovery
+
+If you forget your PIN, select **Forgot PIN?** below the lock-screen keypad.
+On a computer with an authorised ADB connection to the head unit, run:
+
+```powershell
+adb shell touch /data/local/tmp/.strike_pin_reset
+```
+
+Reopen or refresh Strike, then set a new PIN under **Dashboard → Security**.
+This clears the PIN and failed-attempt lockout. Recordings and other settings
+are preserved.
 
 ## Recording and surveillance
 

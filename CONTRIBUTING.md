@@ -1,8 +1,8 @@
 # Contributing to Strike
 
 Strike focuses on recording, parked surveillance, and the dashboard used to
-control them. The current hardware baseline is the Atto 2 described in the
-[README](README.md#compatibility).
+control them. See the [README](README.md#compatibility) for hardware requirements
+and tested configurations.
 
 ## Keep changes focused
 
