@@ -26,10 +26,9 @@ internal const val EVENTS_PATH = "/events/"
 internal const val HEROES_PATH = "/heroes/"
 internal const val LIVE_STREAM_PATH = "/live/stream"
 
-class Router(context: Context, private val pin: Pin) {
+class Router(context: Context, private val pin: Pin, shell: Shell) {
 
     private val assets = context.assets
-    private val shell = Shell(context)
     private val recordings = RecordingsApi(context, shell)
     private val surveillance = SurveillanceApi(context, shell)
     private val daemons = DaemonsApi(context, shell)

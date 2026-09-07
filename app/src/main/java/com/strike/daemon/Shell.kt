@@ -10,9 +10,9 @@ import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.Executor
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.FutureTask
 
 private const val TAG = "Shell"
 private const val HOST = "127.0.0.1"
@@ -20,26 +20,34 @@ private const val PORT = 5555
 private const val PORT_PROBE_MS = 300
 private const val CONNECT_TIMEOUT_MS = 3_000
 private const val SOCKET_TIMEOUT_MS = 45_000
-private const val HANDSHAKE_MS = 2_500L
+private const val AUTH_ATTEMPTS = 5
+private const val RETRY_MS = 5_000L
+private const val MAX_RETRY_MS = 30_000L
 
-private const val REFUSED_TTL_MS = 5_000L
-
-// Local ADB provides shell UID 2000 after the owner authorizes its key.
-class Shell(private val context: Context) {
+// The app shares one shell connection and key pair across HTTP and background work.
+class Shell internal constructor(
+    private val open: () -> Dadb?,
+    private val connector: Executor = Executors.newSingleThreadExecutor {
+        Thread(it, "shell-connect").also { thread -> thread.isDaemon = true }
+    },
+    private val nowMs: () -> Long = { System.nanoTime() / 1_000_000L }
+) {
+    constructor(context: Context) : this(adbOpener(context))
 
     private val lock = Any()
-    private val connector = Executors.newSingleThreadExecutor()
-    private var keys: AdbKeyPair? = null
+    private val commands = Any()
     private var dadb: Dadb? = null
-    private var authorised: Boolean? = null
-    private var refusedAtMs = 0L
+    private var pending: FutureTask<Dadb?>? = null
+    private var failures = 0
+    private var retryAtMs = 0L
 
-    fun isAuthorised(): Boolean = synchronized(lock) {
-        authorised ?: (connect() != null)
-    }
+    val isPending: Boolean
+        get() = synchronized(lock) { pending != null || failures in 1 until AUTH_ATTEMPTS }
+
+    fun isAuthorised(): Boolean = connect() != null
 
     /** The exit code, or null when there is no shell at all. */
-    fun run(command: String): Int? = synchronized(lock) {
+    fun run(command: String): Int? = synchronized(commands) {
         val exitCode = exec(command)?.exitCode
         if (exitCode != null && exitCode != 0) {
             Logs.w(TAG, "$command exited $exitCode")
@@ -48,12 +56,12 @@ class Shell(private val context: Context) {
     }
 
     /** For probes, where a non-zero exit is an answer rather than a failure. */
-    fun check(command: String): Boolean = synchronized(lock) {
+    fun check(command: String): Boolean = synchronized(commands) {
         exec(command)?.exitCode == 0
     }
 
     /** Standard output, or null when the command could not run or failed. */
-    fun read(command: String): String? = synchronized(lock) {
+    fun read(command: String): String? = synchronized(commands) {
         val response = exec(command) ?: return null
         if (response.exitCode != 0) return null
         response.output
@@ -65,102 +73,112 @@ class Shell(private val context: Context) {
             connection.shell(command)
         } catch (e: IOException) {
             Logs.d(TAG, "shell lost during: $command")
-            drop()
+            drop(connection)
             null
         }
     }
 
-    fun retry(): Boolean = synchronized(lock) {
-        drop()
-        connect() != null
-    }
+    fun retry(): Boolean = connect(force = true) != null
 
-    // Retry refusals after a short delay so accepting the ADB prompt takes effect.
-    private fun connect(): Dadb? {
+    private fun connect(force: Boolean = false): Dadb? = synchronized(lock) {
         dadb?.let { return it }
-        if (authorised == false && System.currentTimeMillis() - refusedAtMs < REFUSED_TTL_MS) {
-            return null
+        val attempt = pending
+        if (attempt != null) {
+            if (!attempt.isDone) return null
+            pending = null
+            val opened = attempt.get()
+            if (opened != null) {
+                dadb = opened
+                failures = 0
+                Logs.d(TAG, "shell authorised")
+                return opened
+            }
+            failures++
+            retryAtMs = nowMs() + minOf(RETRY_MS * (1L shl (failures - 1)), MAX_RETRY_MS)
+            if (failures == AUTH_ATTEMPTS) {
+                Logs.w(TAG, "shell unavailable; accept the debugging prompt and press Connect to retry")
+            }
         }
-        if (!portOpen()) {
-            enableAdb()
-            if (!portOpen()) return refused()
+        if (force) {
+            failures = 0
+            retryAtMs = 0L
         }
-        val opened = handshake()
-        if (opened == null) return refused()
-        authorised = true
-        dadb = opened
-        Logs.d(TAG, "shell authorised")
-        return opened
-    }
+        if (failures >= AUTH_ATTEMPTS || nowMs() < retryAtMs) return null
 
-    private fun refused(): Dadb? {
-        authorised = false
-        refusedAtMs = System.currentTimeMillis()
-        return null
-    }
-
-    private fun handshake(): Dadb? {
-        val attempt = connector.submit<Dadb?> {
+        // Keep a late approval: cancelling a Future does not stop socket I/O.
+        val next = FutureTask<Dadb?> {
             try {
-                val fresh = Dadb.create(HOST, PORT, keyPair(), CONNECT_TIMEOUT_MS, SOCKET_TIMEOUT_MS)
-                if (fresh.shell("echo ok").exitCode == 0) {
-                    fresh
-                } else {
-                    fresh.close()
-                    null
-                }
+                open()
             } catch (e: Exception) {
-                Logs.d(TAG, "adb handshake refused: ${e.message}")
+                Logs.d(TAG, "adb connection failed: ${e.message}")
                 null
             }
         }
-        return try {
-            attempt.get(HANDSHAKE_MS, TimeUnit.MILLISECONDS)
-        } catch (e: TimeoutException) {
-            attempt.cancel(true)
-            null
-        }
+        pending = next
+        connector.execute(next)
+        null
     }
 
-    private fun keyPair(): AdbKeyPair {
-        keys?.let { return it }
+    private fun drop(connection: Dadb) {
+        try {
+            connection.close()
+        } catch (e: IOException) {
+            Logs.d(TAG, "adb close failed")
+        }
+        synchronized(lock) {
+            dadb = null
+            failures = 0
+            retryAtMs = 0L
+        }
+    }
+}
+
+private fun adbOpener(context: Context): () -> Dadb? {
+    val keys by lazy {
         val privateKey = File(context.filesDir, "adbkey")
         val publicKey = File(context.filesDir, "adbkey.pub")
         if (!privateKey.exists() || !publicKey.exists()) {
             AdbKeyPair.generate(privateKey, publicKey)
         }
-        val pair = AdbKeyPair.read(privateKey, publicKey)
-        keys = pair
-        return pair
+        AdbKeyPair.read(privateKey, publicKey)
     }
-
-    private fun portOpen(): Boolean = try {
-        Socket().use {
-            it.connect(InetSocketAddress(HOST, PORT), PORT_PROBE_MS)
-            true
+    return {
+        var listening = portOpen()
+        if (!listening) {
+            enableAdb(context)
+            listening = portOpen()
         }
-    } catch (e: IOException) {
-        false
-    }
-
-    private fun enableAdb() {
-        try {
-            val resolver = context.contentResolver
-            Settings.Global.putInt(resolver, "adb_enabled", 1)
-            Settings.Global.putInt(resolver, "adb_wifi_enabled", 1)
-            Settings.Global.putInt(resolver, "adb_allowed_connection_time", 0)
-        } catch (e: SecurityException) {
-            Logs.d(TAG, "cannot turn adb on from here")
+        if (!listening) {
+            null
+        } else {
+            val fresh = Dadb.create(HOST, PORT, keys, CONNECT_TIMEOUT_MS, SOCKET_TIMEOUT_MS)
+            var accepted = false
+            try {
+                accepted = fresh.shell("echo ok").exitCode == 0
+                if (accepted) fresh else null
+            } finally {
+                if (!accepted) fresh.close()
+            }
         }
     }
+}
 
-    private fun drop() {
-        try {
-            dadb?.close()
-        } catch (e: IOException) {
-            Logs.d(TAG, "adb close failed")
-        }
-        dadb = null
-        authorised = null
+private fun portOpen(): Boolean = try {
+    Socket().use {
+        it.connect(InetSocketAddress(HOST, PORT), PORT_PROBE_MS)
+        true
+    }
+} catch (e: IOException) {
+    false
+}
+
+private fun enableAdb(context: Context) {
+    try {
+        val resolver = context.contentResolver
+        Settings.Global.putInt(resolver, "adb_enabled", 1)
+        Settings.Global.putInt(resolver, "adb_wifi_enabled", 1)
+        Settings.Global.putInt(resolver, "adb_allowed_connection_time", 0)
+    } catch (e: SecurityException) {
+        Logs.d(TAG, "cannot turn adb on from here")
     }
 }

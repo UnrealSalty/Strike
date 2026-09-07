@@ -3,6 +3,7 @@ package com.strike
 import android.app.Application
 import com.strike.core.Crashes
 import com.strike.core.Pin
+import com.strike.daemon.Shell
 import com.strike.recording.Triggers
 import com.strike.server.HttpServer
 import com.strike.server.Router
@@ -17,7 +18,8 @@ class StrikeApp : Application() {
         super.onCreate()
         Crashes.watch(filesDir)
         pin = Pin(File(filesDir, "pin.json"))
-        HttpServer(HttpServer.PORT, Router(this, pin)).start()
-        Triggers(this).start()
+        val shell = Shell(this)
+        HttpServer(HttpServer.PORT, Router(this, pin, shell)).start()
+        Triggers(this, shell).start()
     }
 }

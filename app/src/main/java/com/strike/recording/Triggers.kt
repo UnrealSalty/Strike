@@ -14,11 +14,10 @@ private const val PARKED = "P"
 private const val OFF = "off"
 
 /** Supplies app-side telemetry, cabin audio and mounted storage to the daemon. */
-class Triggers(context: Context) {
+class Triggers(context: Context, private val shell: Shell) {
 
     private val vehicle = VehicleTelemetry(context)
     private val daemon = DaemonClient()
-    private val shell = Shell(context)
     private val events = EventStorage(context, shell)
     private val clips = Storage(context, shell)
     private val cabin = CabinAudio()

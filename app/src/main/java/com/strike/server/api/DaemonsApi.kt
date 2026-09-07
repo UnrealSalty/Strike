@@ -172,8 +172,17 @@ class DaemonsApi(context: Context, private val shell: Shell) {
 
     private fun shellCard(): JSONObject {
         val authorised = shell.isAuthorised()
-        val card = card("shell", "Shell access", if (authorised) RUNNING else BROKEN)
-        card.put("status", if (authorised) "Authorised" else "Not authorised")
+        val pending = !authorised && shell.isPending
+        val card = card("shell", "Shell access", when {
+            authorised -> RUNNING
+            pending -> STARTING
+            else -> BROKEN
+        })
+        card.put("status", when {
+            authorised -> "Authorised"
+            pending -> "Waiting for debugging approval"
+            else -> "Not authorised"
+        })
         card.put("action", if (authorised) "none" else "connect")
         val facts = JSONArray()
         fact(facts, "Endpoint", "127.0.0.1:5555")
