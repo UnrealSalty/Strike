@@ -57,8 +57,7 @@ with the existing components and tokens. No framework, bundler, CDN, or remote
 fonts are needed.
 
 Keep data and controls on HTTP so the phone and head unit use the same behavior.
-Reserve the JavaScript bridge for device-only functions. Use English, the existing
-dark theme, and touch targets of at least 48 px.
+Use English, the existing dark theme, and touch targets of at least 48 px.
 
 The head unit has an old WebView. Use constructions that work on Chrome 58 until
 a newer capability is demonstrated on the device. Avoid flex `gap`, `aspect-ratio`,
@@ -109,17 +108,12 @@ touches those paths. Report what was run, its result, and anything not verified.
 
 ## Reference code and reports
 
-The maintainer's workspace has Overdrive at `../`. Consult the relevant
-implementation for BYD hardware behavior and say what it confirms. Other
-contributors can keep a reference checkout separately. Do not copy unrelated
-architecture, dependencies, UI, or comments into Strike.
+Overdrive is a reference for BYD hardware integration. When using it to support a
+change, identify the relevant implementation and what it confirms. Keep unrelated
+architecture, dependencies, and UI out of Strike.
 
 Bug reports should include the vehicle and firmware, Strike build, steps to
 reproduce, and expected versus actual behavior. Add relevant logs or screenshots
 when available; remove credentials, precise locations, and private footage before
 sharing them. Keep signing keys, tokens, `local.properties`, and generated build
 files out of contributions.
-
-`AGENTS.md` and `.cursor/rules/` contain the repository's assistant instructions.
-Changes made with an assistant need the same review and verification as any other
-contribution.

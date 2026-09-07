@@ -15,11 +15,11 @@ with a web dashboard for the car's screen and a phone on the same network.
 - Shows vehicle status, recorder controls, and local logs.
 
 Footage stays on the selected internal, SD, or USB storage. Detection runs on the
-head unit. Cloud access and an update checker are not implemented yet.
+head unit.
 
 ## Compatibility
 
-**Tested on the owner's BYD Atto 2. Other vehicles and firmware are unverified.**
+**Tested on BYD Atto 2. Other vehicles and firmware are unverified.**
 
 The current build requires:
 
@@ -31,8 +31,8 @@ The current build requires:
 
 There is no model-name restriction, but the camera layout and firmware APIs
 matter. Different camera layouts need additional handling, and the Qualcomm
-AIS/QCarCam capture path used by some DiLink 5 units is not implemented. Installing the APK
-on a phone or emulator does not provide access to the car cameras.
+AIS/QCarCam capture path used by some DiLink 5 units is not implemented. Installing
+the APK on a phone or emulator does not provide access to the car cameras.
 
 ## Build
 
@@ -58,8 +58,9 @@ The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 Java and Kotlin bytecode target Java 11; Gradle itself needs the newer JDK above.
 
 `targetSdk` remains 25 for the existing head-unit integration, while `minSdk` is
-28. The resulting Gradle warning is expected. Changing these values requires
-testing the full parked recording lifecycle.
+28. The debug build emits an SDK warning; release assembly is currently blocked
+by lint's `ExpiredTargetSdkVersion` check. Changing these values requires testing
+the full parked recording lifecycle.
 
 ## Set up on the car
 
@@ -132,8 +133,7 @@ a browser is watching. Vehicle telemetry is read-only; parked capture separately
 manages the camera power rails and deterrent display.
 
 Overdrive is the reference for the BYD camera, SDK, storage, and parked-power
-integration. The development workspace keeps that checkout at `../`; it is not
-required to build Strike. Person and vehicle detection uses the bundled
-`app/src/main/assets/models/yolo26n.tflite` model.
+integration; it is not required to build Strike. Person and vehicle detection
+uses the bundled `app/src/main/assets/models/yolo26n.tflite` model.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development and verification rules.
