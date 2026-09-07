@@ -49,6 +49,8 @@ android {
 
     androidResources { noCompress += listOf("html", "css", "js") }
 
+    lint { disable += "ExpiredTargetSdkVersion" }
+
     // android.util.Log throws from the mockable android.jar without this.
     testOptions { unitTests.isReturnDefaultValues = true }
 

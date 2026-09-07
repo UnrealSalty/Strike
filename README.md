@@ -76,9 +76,9 @@ architecture. Release builds remain ARM64-only. Camera capture and vehicle
 signals still require BYD hardware.
 
 `targetSdk` remains 25 for the existing head-unit integration, while `minSdk` is
-28. The debug build emits an SDK warning; release assembly is currently blocked
-by lint's `ExpiredTargetSdkVersion` check. Changing these values requires testing
-the full parked recording lifecycle.
+28. Lint's `ExpiredTargetSdkVersion` check is disabled because Strike is
+distributed as a sideloaded APK. Changing these SDK values requires testing the
+full parked recording lifecycle.
 
 ## Set up on the car
 
