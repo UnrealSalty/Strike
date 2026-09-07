@@ -3,6 +3,9 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val debugAbi = providers.gradleProperty("android.injected.build.abi").orNull
+    ?.split(',')?.firstOrNull { it == "arm64-v8a" || it == "x86_64" } ?: "arm64-v8a"
+
 android {
     namespace = "com.strike"
     compileSdk = 36
@@ -16,8 +19,6 @@ android {
         versionCode = 1
         versionName = "0.1"
 
-        ndk { abiFilters += "arm64-v8a" }
-
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=none" } }
     }
 
@@ -26,8 +27,10 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
+            ndk { abiFilters += debugAbi }
         }
         release {
+            ndk { abiFilters += "arm64-v8a" }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
