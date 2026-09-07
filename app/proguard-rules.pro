@@ -1,7 +1,3 @@
--keepclassmembers class com.strike.web.StrikeBridge {
-    @android.webkit.JavascriptInterface <methods>;
-}
-
 # app_process names this class on the command line.
 -keep class com.strike.daemon.CameraDaemon {
     public static void main(java.lang.String[]);
