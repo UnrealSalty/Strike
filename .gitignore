@@ -1,6 +1,7 @@
 .gradle/
 .cxx/
 build/
+app/release/
 local.properties
 .idea/
 *.iml
