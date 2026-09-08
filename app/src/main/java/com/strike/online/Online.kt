@@ -14,7 +14,7 @@ class Online(
     private val accessReady: () -> Boolean,
     private val launch: (String) -> Process,
     private val ready: () -> Boolean,
-    private val network: () -> Boolean,
+    private val network: () -> String?,
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000L },
     private val report: (String, String) -> Unit = { state, message ->
         if (state == "broken") Logs.w("Online", message) else Logs.d("Online", message)
@@ -26,6 +26,7 @@ class Online(
     private val retry = TunnelRetry()
     private var worker: Thread? = null
     private var child: Process? = null
+    private var outputReader: Thread? = null
     private var startedAtMs = 0L
     private var state = "off"
     private var message = "Off"
@@ -117,6 +118,7 @@ class Online(
 
     private fun watch() {
         var failed = false
+        var lastNetwork: String? = null
         try {
             while (true) {
                 val before = synchronized(lock) { revision }
@@ -127,14 +129,17 @@ class Online(
                         else -> tunnelWaiting(settings.mode, ignition.snapshot())
                     }
                 }
-                if (waitFor != null || !network()) {
+                val activeNetwork = if (waitFor == null) network() else null
+                if (waitFor != null || activeNetwork == null) {
                     if (!stopChild()) { failed = true; return }
                     synchronized(lock) {
                         change("waiting", waitFor ?: "Waiting for internet")
                     }
                 } else {
+                    if (activeNetwork != lastNetwork && !stopChild()) { failed = true; return }
                     supervise()
                 }
+                lastNetwork = activeNetwork
                 synchronized(lock) {
                     if (!settings.enabled || retry.exhausted) return
                     if (revision == before) lock.wait(EVERY_MS)
@@ -159,6 +164,7 @@ class Online(
         val process = synchronized(lock) { child }
         if (process != null && !process.isAlive) {
             val exitCode = process.exitValue()
+            outputReader?.join(500L)
             synchronized(lock) {
                 child = null
                 retry.failed(nowMs(), nowMs() - startedAtMs)
@@ -177,7 +183,8 @@ class Online(
                     child = opened
                     startedAtMs = nowMs()
                     change("starting", "Connecting to Cloudflare")
-                    Thread({ readErrors(opened) }, "strike-tunnel-log").also {
+                    val token = settings.token
+                    outputReader = Thread({ readErrors(opened, token) }, "strike-tunnel-log").also {
                         it.isDaemon = true
                         it.start()
                     }
@@ -199,11 +206,11 @@ class Online(
         }
     }
 
-    private fun readErrors(process: Process) {
+    private fun readErrors(process: Process, token: String) {
         try {
             process.inputStream.bufferedReader().useLines { lines ->
                 lines.forEach { line ->
-                    val hint = tunnelError(line) ?: return@forEach
+                    val hint = tunnelError(line, token) ?: return@forEach
                     synchronized(lock) { if (child === process) failureHint = hint }
                 }
             }
@@ -241,12 +248,4 @@ class Online(
         revision++
         lock.notifyAll()
     }
-}
-
-internal fun tunnelError(line: String): String? = when {
-    line.contains("Unauthorized", true) || line.contains("invalid tunnel secret", true) ||
-        line.contains("Invalid tunnel token", true) -> "Cloudflare rejected the token. Update the setup"
-    line.contains("x509:", true) -> "Cloudflare certificate check failed. Check the car's date and time"
-    line.contains("no such host", true) -> "Cloudflare could not be resolved. Check the car's connection"
-    else -> null
 }

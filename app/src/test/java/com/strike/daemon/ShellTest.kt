@@ -30,14 +30,16 @@ class ShellTest {
         }
     } as Dadb
     private var open: () -> Dadb? = { transport }
+    private var authorisations = 0
     private val shell = Shell(
         open = { open() },
         connector = Executor { tasks.addLast(it) },
-        nowMs = { nowMs }
+        nowMs = { nowMs },
+        onAuthorised = { authorisations++ }
     )
 
     @Test
-    fun lateApprovalEnablesStatusAndCommandsWithoutRestarting() {
+    fun lateApprovalKeepsTheAuthorisedTransport() {
         assertFalse(shell.isAuthorised())
         assertTrue(shell.isPending)
 
@@ -54,6 +56,7 @@ class ShellTest {
         assertEquals("shell reply", shell.read("echo ready"))
         assertTrue(tasks.isEmpty())
         assertEquals(0, closed)
+        assertEquals(1, authorisations)
     }
 
     @Test

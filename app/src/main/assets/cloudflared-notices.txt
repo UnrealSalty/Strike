@@ -1,7 +1,7 @@
 cloudflared 2026.8.3 - https://github.com/cloudflare/cloudflared/tree/2026.8.3
 Copyright Cloudflare, Inc. Licensed under Apache-2.0.
 Build targets: Android arm64 (car) and x86_64 (emulator), using Go 1.26.6 and Android NDK 27.0.12077973.
-Strike adds tools/cloudflared/parent_android.go to stop the connector when its parent closes stdin. Other upstream source files are unmodified.
+Strike adds tools/cloudflared/parent_android.go for process cleanup and dns_android.go for Android system DNS. Other upstream source files are unmodified.
 Build: tools/build-cloudflared.ps1. Vendored dependency notices follow, including components not used by this build.
 
 === LICENSE ===

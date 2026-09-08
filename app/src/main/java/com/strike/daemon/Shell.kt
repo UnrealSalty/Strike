@@ -30,9 +30,11 @@ class Shell internal constructor(
     private val connector: Executor = Executors.newSingleThreadExecutor {
         Thread(it, "shell-connect").also { thread -> thread.isDaemon = true }
     },
-    private val nowMs: () -> Long = { System.nanoTime() / 1_000_000L }
+    private val nowMs: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val onAuthorised: () -> Unit = {}
 ) {
-    constructor(context: Context) : this(adbOpener(context))
+    constructor(context: Context, onAuthorised: () -> Unit = {}) :
+        this(adbOpener(context), onAuthorised = onAuthorised)
 
     private val lock = Any()
     private val commands = Any()
@@ -103,6 +105,7 @@ class Shell internal constructor(
                 dadb = opened
                 failures = 0
                 Logs.d(TAG, "shell authorised")
+                onAuthorised()
                 return opened
             }
             failures++

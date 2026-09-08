@@ -9,12 +9,30 @@ import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.PipedInputStream
+import java.io.PipedOutputStream
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.createTempDirectory
 
 class OnlineTest {
+    @Test fun anImmediateExitReportsItsErrorAndTheNextProcessStartsWithoutIt() {
+        val fixture = Fixture()
+        try {
+            fixture.online.enable(true)
+            val process = fixture.launched.poll(5, TimeUnit.SECONDS)!!
+            process.crash(JSONObject().put("level", "error")
+                .put("error", "listen tcp 127.0.0.1:19889: bind: address already in use").toString())
+            fixture.online.vehicle(car(true))
+            fixture.await("The tunnel's local port is already in use. Retrying shortly")
+            fixture.now.addAndGet(60_000L)
+            fixture.online.vehicle(car(true))
+            assertNotNull(fixture.launched.poll(5, TimeUnit.SECONDS))
+            fixture.await("Connecting to Cloudflare")
+        } finally { fixture.close() }
+    }
+
     @Test fun repeatedCrashesStopUntilAnExplicitRetry() {
         val fixture = Fixture()
         try {
@@ -145,6 +163,24 @@ class OnlineTest {
         } finally { fixture.close() }
     }
 
+    @Test fun changingNetworksReplacesTheTunnelAndItsDnsSettings() {
+        val fixture = Fixture()
+        try {
+            fixture.online.enable(true)
+            val first = fixture.launched.poll(5, TimeUnit.SECONDS)!!
+            fixture.network = "mobile"
+            fixture.online.vehicle(car(true))
+            val next = fixture.launched.poll(5, TimeUnit.SECONDS)!!
+            assertFalse(first.isAlive)
+            assertTrue(next.isAlive)
+            fixture.ready = true
+            fixture.online.vehicle(car(true))
+            fixture.await("Connected")
+            assertTrue(next.isAlive)
+            assertEquals(0, fixture.launched.size)
+        } finally { fixture.close() }
+    }
+
     @Test fun pinRecoveryDoesNotStopTheTunnelOrBrowserSession() {
         val fixture = Fixture()
         try {
@@ -198,6 +234,7 @@ class OnlineTest {
         private val states = LinkedBlockingQueue<String>()
         @Volatile var ready = false
         @Volatile var internet = true
+        @Volatile var network = "wifi"
         @Volatile var accessReady = true
         val online: Online
 
@@ -207,7 +244,7 @@ class OnlineTest {
             saved.configure("car.example.com", sampleTunnelToken(), mode)
             online = Online(saved, { accessReady }, {
                 Child().also { child -> launched.offer(child) }
-            }, { ready }, { internet }, { now.get() }, { _, text -> states.offer(text) })
+            }, { ready }, { if (internet) network else null }, { now.get() }, { _, text -> states.offer(text) })
         }
 
         fun await(wanted: String) {
@@ -227,10 +264,17 @@ class OnlineTest {
     }
 
     private class Child : Process() {
+        private val output = PipedOutputStream()
+        private val input = PipedInputStream(output)
         @Volatile private var alive = true
         @Volatile private var code = 0
-        fun crash() { code = 7; alive = false }
-        override fun getInputStream() = ByteArrayInputStream(ByteArray(0))
+        fun crash(reason: String = "") {
+            if (reason.isNotEmpty()) output.write((reason + "\n").toByteArray())
+            output.close()
+            code = 7
+            alive = false
+        }
+        override fun getInputStream() = input
         override fun getErrorStream() = ByteArrayInputStream(ByteArray(0))
         override fun getOutputStream() = ByteArrayOutputStream()
         override fun waitFor(): Int = 0
@@ -239,8 +283,8 @@ class OnlineTest {
             if (alive) throw IllegalThreadStateException()
             return code
         }
-        override fun destroy() { alive = false }
-        override fun destroyForcibly(): Process { alive = false; return this }
+        override fun destroy() { output.close(); alive = false }
+        override fun destroyForcibly(): Process { destroy(); return this }
         override fun isAlive() = alive
     }
 }

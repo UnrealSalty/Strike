@@ -2,6 +2,7 @@ package com.strike.online
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import java.io.File
 import java.io.IOException
@@ -17,9 +18,19 @@ internal fun cloudflared(context: Context, token: String): Process {
     val binary = File(context.applicationInfo.nativeLibraryDir, "libcloudflared.so")
     val builder = ProcessBuilder(binary.absolutePath, "tunnel", "--no-autoupdate",
         "--protocol", "http2", "--edge-ip-version", "4", "--metrics", METRICS,
-        "--loglevel", "error", "--grace-period", "2s", "run")
+        "--loglevel", "error", "--output", "json", "--grace-period", "2s", "run")
     builder.environment()["TUNNEL_TOKEN"] = token
     builder.environment()["STRIKE_PARENT_PIPE"] = "1"
+    val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val active = connectivity.activeNetwork
+    val link = active?.let { connectivity.getLinkProperties(it) }
+    if (link != null) {
+        builder.environment()["STRIKE_DNS_SERVERS"] = link.dnsServers.mapNotNull { it.hostAddress }.joinToString(" ")
+        if (link.isPrivateDnsActive) {
+            builder.environment()["STRIKE_DNS_TLS"] = "1"
+            builder.environment()["STRIKE_DNS_NAME"] = link.privateDnsServerName.orEmpty()
+        }
+    }
     builder.directory(context.filesDir)
     builder.redirectErrorStream(true)
     return builder.start()
@@ -39,11 +50,20 @@ internal fun tunnelReady(): Boolean {
     }
 }
 
-internal fun hasInternet(context: Context): Boolean {
+internal fun tunnelNetwork(context: Context): String? {
     val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val active = connectivity.activeNetwork ?: return false
-    return connectivity.getNetworkCapabilities(active)
-        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    val active = internetNetwork(connectivity) ?: return null
+    val link = connectivity.getLinkProperties(active)
+    return "$active:${link?.dnsServers}:${link?.isPrivateDnsActive}:${link?.privateDnsServerName}"
+}
+
+internal fun hasInternet(context: Context): Boolean =
+    internetNetwork(context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager) != null
+
+private fun internetNetwork(connectivity: ConnectivityManager): Network? {
+    val active = connectivity.activeNetwork ?: return null
+    return active.takeIf { connectivity.getNetworkCapabilities(it)
+        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true }
 }
 
 internal fun localAddresses(): List<String> = try {

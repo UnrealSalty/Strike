@@ -27,6 +27,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $source 'go.mod'))) {
     if ($LASTEXITCODE -ne 0) { throw 'Could not extract cloudflared' }
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'cloudflared\parent_android.go') -Destination (Join-Path $source 'cmd\cloudflared\parent_android.go')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'cloudflared\dns_android.go') -Destination (Join-Path $source 'edgediscovery\allregions\dns_android.go')
 $buildEnv = @{
     GOOS = 'android'; GOARCH = $goArch; CGO_ENABLED = '1'; CC = $compiler
     GOCACHE = (Join-Path $cache 'cache'); GOMODCACHE = (Join-Path $cache 'modules')
@@ -49,7 +50,7 @@ try {
     [void]$notices.AppendLine("cloudflared $version - https://github.com/cloudflare/cloudflared/tree/$version")
     [void]$notices.AppendLine('Copyright Cloudflare, Inc. Licensed under Apache-2.0.')
     [void]$notices.AppendLine('Build targets: Android arm64 (car) and x86_64 (emulator), using Go 1.26.6 and Android NDK 27.0.12077973.')
-    [void]$notices.AppendLine('Strike adds tools/cloudflared/parent_android.go to stop the connector when its parent closes stdin. Other upstream source files are unmodified.')
+    [void]$notices.AppendLine('Strike adds tools/cloudflared/parent_android.go for process cleanup and dns_android.go for Android system DNS. Other upstream source files are unmodified.')
     [void]$notices.AppendLine('Build: tools/build-cloudflared.ps1. Vendored dependency notices follow, including components not used by this build.')
     $licenses = @(Get-Item -LiteralPath (Join-Path $source 'LICENSE')) + @(Get-ChildItem -LiteralPath (Join-Path $source 'vendor') -Recurse -File | Where-Object { $_.Name -match '^(LICENSE|COPYING|NOTICE)' } | Sort-Object FullName)
     foreach ($license in $licenses) {

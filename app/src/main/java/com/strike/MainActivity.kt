@@ -33,11 +33,32 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        (application as StrikeApp).setup.foreground(hasFocus)
+    }
+
+    override fun onPause() {
+        (application as StrikeApp).setup.foreground(false)
+        super.onPause()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1) {
+            (application as StrikeApp).setup.permissionsFinished(
+                grantResults.any { it == PackageManager.PERMISSION_GRANTED })
+        }
+    }
+
     // Storage access and microphone capture run under the app UID.
     private fun askForPermissions() {
         val missing = NEEDED.filter {
             checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), 1)
+        if (missing.isNotEmpty()) {
+            (application as StrikeApp).setup.permissionsRequested()
+            requestPermissions(missing.toTypedArray(), 1)
+        }
     }
 }
