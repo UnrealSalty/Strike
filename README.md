@@ -2,8 +2,9 @@
   <img src="app/src/main/assets/web/img/wordmark.webp" alt="Strike" width="288" height="40">
 </p>
 
-Dashcam, parked surveillance, and live cameras for BYD head units. View and control
-it from the car's screen or your phone.
+Lightweight dashcam, parked surveillance, and live cameras for BYD head units.
+Built around recording, with a small web interface for the car's screen and your
+phone.
 
 **[Download the APK](https://github.com/UnrealSalty/Strike/releases/latest)** · [Get started](#get-started) · [Report a bug](https://github.com/UnrealSalty/Strike/issues)
 
@@ -27,6 +28,11 @@ it from the car's screen or your phone.
 
 Footage is stored on the car, and detection runs on the head unit. Remote access
 is optional. Strike has no account or subscription of its own.
+
+Recording, surveillance, and live view share one camera feed. Strike uses hardware
+video encoding on supported head units and only runs the live encoder while
+someone is watching. Motion checks limit how often Smart surveillance runs person
+and vehicle detection.
 
 <table>
   <tr>
@@ -117,7 +123,8 @@ before using Live or recordings through a public tunnel hostname.
 **Smart** saves activity when a person or vehicle comes close. Each confirmed
 event keeps recording for another 20 seconds. Continued activity stays recorded,
 splitting into clips of about two minutes. The red screen can hide while the clip
-is still recording.
+is still recording. Between events, motion detection stays on while the recording
+encoder is idle.
 
 **Continuous** records throughout the armed period using the configured clip
 length. Parked clips do not include cabin audio. If lock state is unavailable,
