@@ -28,7 +28,7 @@ private val NATIVE_LIBS = arrayOf("cutils", "utils", "binder", "gui", "bmmcamera
 /** Empty means the factory never mapped the cameras, and then no tag resolves. */
 private const val CAM_SORT_PROP = "vehicle.config.cam_sort"
 
-// Fallback for the tested Atto 2 firmware when no camera tags resolve.
+// Camera 0 is verified on Atto 2; unnamed legacy head units default to camera 1.
 val RAW_STRIP = CameraChoice(id = 0, tag = "strip", width = 5120, height = 960)
 
 fun loadCameraLibraries() {
@@ -115,12 +115,14 @@ fun cameraStack(): String {
 }
 
 // Reuse discovery results: probing again during camera startup can wedge the HAL.
-fun roadCamera(found: List<CameraChoice>): CameraChoice? {
-    if (found.isEmpty() || found.singleOrNull() === RAW_STRIP) return RAW_STRIP
+fun roadCamera(found: List<CameraChoice>, model: String? = null): CameraChoice? {
+    if (found.isEmpty()) return fallbackCamera(model)
+    if (found.singleOrNull() === RAW_STRIP) return RAW_STRIP
     return TAGS.firstNotNullOfOrNull { tag -> found.firstOrNull { it.tag == tag } }
 }
 
-fun cameras(): CameraInventory {
+fun cameras(profile: CameraProfile = CameraProfile.AUTO): CameraInventory {
+    profile.camera?.let { return CameraInventory(listOf(it), "") }
     val bmm = classOrNull(BMM_CAMERA_INFO)
         ?: return CameraInventory(emptyList(), "this firmware has no camera library Strike can drive")
     val tags = validTags(bmm)

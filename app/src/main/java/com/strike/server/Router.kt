@@ -1,13 +1,16 @@
 package com.strike.server
 
 import android.content.Context
+import com.strike.camera.CAMERA_PROFILE
 import com.strike.camera.CameraView
 import com.strike.camera.LiveQuality
+import com.strike.core.Config
 import com.strike.core.Pin
 import com.strike.core.PinSession
 import com.strike.daemon.DaemonClient
 import com.strike.daemon.Shell
 import com.strike.server.api.DaemonsApi
+import com.strike.server.api.CameraApi
 import com.strike.server.api.DashboardApi
 import com.strike.server.api.RECORDER_API
 import com.strike.server.api.RecordingsApi
@@ -42,6 +45,10 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
     private val security = SecurityApi(pin)
     private val remote = OnlineApi(online, browsers)
     private val updater = UpdatesApi(updates)
+    private val cameras = CameraApi(
+        { Config.getString(CAMERA_PROFILE, "auto") },
+        { profile -> Config.put(shell, CAMERA_PROFILE, profile) }
+    )
     private val live = LiveStream(DaemonClient())
 
     fun locked(token: String?): Boolean = pin.isSet() && !PinSession.allows(token)
@@ -95,6 +102,11 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
         path == "/api/recording/settings" -> when (method) {
             "GET" -> recordings.settings()
             "POST" -> recordings.save(body)
+            else -> methodNotAllowed()
+        }
+        path == "/api/camera/settings" -> when (method) {
+            "GET" -> cameras.settings(inCar)
+            "POST" -> cameras.save(body, inCar)
             else -> methodNotAllowed()
         }
         path == "/api/recording/clips" -> if (method == "GET") recordings.clips() else methodNotAllowed()

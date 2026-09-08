@@ -3,8 +3,14 @@ package com.strike.daemon
 import android.os.Looper
 import android.os.Handler
 import android.os.Process
+import android.os.Build
+import android.os.SystemClock
+import com.strike.camera.CAMERA_PROFILE
+import com.strike.camera.CAMERA_FIRST_FRAME_MS
 import com.strike.camera.CameraChoice
+import com.strike.camera.CameraProfile
 import com.strike.camera.CameraSource
+import com.strike.camera.CameraStartup
 import com.strike.camera.CameraView
 import com.strike.camera.FrameBus
 import com.strike.camera.LIVE_BITRATE_BPS
@@ -15,10 +21,11 @@ import com.strike.camera.cameraStack
 import com.strike.camera.cameras
 import com.strike.camera.AvcHal
 import com.strike.camera.CameraTexture
-import com.strike.camera.RAW_STRIP
+import com.strike.camera.fallbackCamera
 import com.strike.camera.loadCameraLibraries
 import com.strike.camera.roadCamera
 import com.strike.core.Config
+import com.strike.core.systemProperty
 import com.strike.recording.ClipStore
 import com.strike.recording.MB
 import com.strike.recording.Reapable
@@ -54,9 +61,8 @@ private const val SUPERVISE_EVERY_MS = 1_000L
 private const val REAP_EVERY_MS = 30_000L
 private const val RETRY_AFTER_MS = 10_000L
 
-// The strip takes five to eight seconds to wake, and longer from a cold slot.
-private const val FIRST_FRAME_MS = 25_000L
 private const val STALL_MS = 6_000L
+private const val CAMERA_SETTLE_MS = 1_500L
 
 private enum class SentryMode { OFF, SMART, CONTINUOUS }
 
@@ -116,6 +122,10 @@ object CameraDaemon {
     private var flagged: Flag? = null
     private val marked = ArrayList<Mark>()
     private var inventory: List<CameraChoice>? = null
+    private var cameraProfile = CameraProfile.AUTO
+    private var cameraStartup: CameraStartup? = null
+    private var cameraOpenedAtMs = 0L
+    private var cameraRetryAtMs = 0L
     private var camerasReason = ""
     private var failedAtMs = 0L
     private var remountedAtMs = 0L
@@ -128,6 +138,8 @@ object CameraDaemon {
         DaemonLog.d(TAG, "starting as uid ${Process.myUid()}, pid ${Process.myPid()}")
         // A duplicate daemon must stop its watchdog without clearing the active daemon's lock.
         if (!lock.take()) exitProcess(EXIT_ALREADY_RUNNING)
+        cameraProfile = CameraProfile.of(Config.getString(CAMERA_PROFILE, "auto")) ?: CameraProfile.AUTO
+        DaemonLog.d(TAG, "camera profile: ${cameraProfile.label}")
         // The camera HAL posts its callbacks to the main looper, as in Overdrive's daemon.
         Looper.prepareMainLooper()
         DaemonFonts.install()
@@ -271,7 +283,11 @@ object CameraDaemon {
             if (bus != null) {
                 AvcHal.keepAlive(if (sentryMode != SentryMode.OFF) 10_000L else 60_000L)
             }
-            if (nothingWatching()) cameraDown() else superviseFrames()
+            if (nothingWatching() && wantedTarget == null && !(liveWanted && relay.hasReader)) {
+                cameraDown()
+            } else {
+                superviseFrames()
+            }
             if (now - reapedAtMs > REAP_EVERY_MS) {
                 reapedAtMs = now
                 reap()
@@ -354,13 +370,7 @@ object CameraDaemon {
             watching.disarm()
             return
         }
-        val now = System.currentTimeMillis()
-        if (bus == null && now - failedAtMs <= RETRY_AFTER_MS) return
-        val strip = bus ?: cameraUp()
-        if (strip == null) {
-            failedAtMs = now
-            return
-        }
+        val strip = bus ?: cameraUp() ?: return
         synchronized(acc) {
             if (!alive || sentryMode != SentryMode.SMART) return
             if (watching.isArmed) watching.rebind(strip) else watching.arm(strip)
@@ -397,8 +407,9 @@ object CameraDaemon {
         }
         if (streamer.isStreaming && !streamer.adjustBitrate(liveBitrateBps)) streamer.stop()
         if (!streamer.isStreaming) {
-            val bus = cameraUp()
-            if (bus == null || !streamer.start(bus, liveView, LIVE_FRAME_RATE_FPS, liveBitrateBps)) {
+            val bus = cameraUp() ?: return
+            if (bus.frameCount == 0L) return
+            if (!streamer.start(bus, liveView, LIVE_FRAME_RATE_FPS, liveBitrateBps)) {
                 liveWanted = false
             }
         }
@@ -407,7 +418,10 @@ object CameraDaemon {
     private fun cameraUp(): FrameBus? {
         if (!alive) return null
         bus?.let { return it }
-        val strip = roadCamera(inventoryNow()) ?: return null
+        if (SystemClock.elapsedRealtime() < cameraRetryAtMs) return null
+        inventoryNow()
+        val strip = cameraStartup?.choice ?: return null
+        cameraRetryAtMs = SystemClock.elapsedRealtime() + RETRY_AFTER_MS
         AvcHal.warmAndWait()
         if (!alive) return null
         val fresh = FrameBus(strip.width, strip.height)
@@ -426,6 +440,8 @@ object CameraDaemon {
             return null
         }
         bus = fresh
+        cameraOpenedAtMs = SystemClock.elapsedRealtime()
+        cameraRetryAtMs = 0L
         DaemonLog.d(TAG, "camera ${strip.id} open, strip ${strip.width}x${strip.height}")
         return fresh
     }
@@ -441,10 +457,21 @@ object CameraDaemon {
     // Recover stalled parked capture without disarming surveillance.
     private fun superviseFrames() {
         val watched = bus ?: return
-        val quiet = watched.quietForMs
-        val allowed = if (watched.frameCount == 0L) FIRST_FRAME_MS else STALL_MS
+        val startup = cameraStartup ?: return
+        val frames = watched.frameCount
+        val previous = startup.choice
+        val waitingMs = SystemClock.elapsedRealtime() - cameraOpenedAtMs
+        val changed = startup.observe(frames, waitingMs)
+        val quiet = if (frames == 0L) waitingMs else watched.quietForMs
+        val allowed = if (frames == 0L) CAMERA_FIRST_FRAME_MS else STALL_MS
         if (quiet < allowed) return
-        DaemonLog.w(TAG, "the camera went quiet for ${quiet / 1000}s, reopening it")
+        if (changed) {
+            DaemonLog.w(TAG, "camera ${previous.id} sent no frames in ${quiet / 1000}s; trying raw camera 0")
+        } else if (frames == 0L) {
+            DaemonLog.e(TAG, "camera ${startup.choice.id} sent no frames in ${quiet / 1000}s; reopening it")
+        } else {
+            DaemonLog.w(TAG, "the camera went quiet for ${quiet / 1000}s, reopening it")
+        }
         recorder?.stop()
         recorder = null
         target = null
@@ -453,6 +480,10 @@ object CameraDaemon {
         watched.stop()
         bus = null
         if (sentryMode != SentryMode.OFF) ParkedRails.reassert()
+        if (changed) {
+            cameraRetryAtMs = SystemClock.elapsedRealtime() + CAMERA_SETTLE_MS
+            return
+        }
         val strip = cameraUp() ?: return
         sentry?.rebind(strip)
     }
@@ -504,11 +535,8 @@ object CameraDaemon {
     private fun startRecording(wantedTarget: Target) {
         bringUp(wantedTarget.dir)
         if (!alive) return
-        val bus = cameraUp()
-        if (bus == null) {
-            failedAtMs = System.currentTimeMillis()
-            return
-        }
+        val bus = cameraUp() ?: return
+        if (bus.frameCount == 0L) return
         val fresh = Recorder(wantedTarget.dir, wantedTarget.mode, audioFor(wantedTarget)) { clipLanded() }
         if (!fresh.start(wantedTarget.options, bus)) {
             failedAtMs = System.currentTimeMillis()
@@ -570,23 +598,37 @@ object CameraDaemon {
     private fun inventoryNow(): List<CameraChoice> {
         var known = inventory
         if (known == null) {
-            val probed = cameras()
+            val probed = cameras(cameraProfile)
             if (probed.cameras.isEmpty()) {
                 DaemonLog.w(TAG, "no named camera: ${probed.reason}")
                 DaemonLog.d(TAG, "camera stack: " + cameraStack())
             }
-            known = probed.cameras.ifEmpty { listOf(RAW_STRIP) }
+            known = probed.cameras.ifEmpty {
+                val model = systemProperty("ro.product.model")
+                DaemonLog.d(TAG, "camera model: ${model ?: "unavailable"}")
+                listOf(fallbackCamera(model))
+            }
             inventory = known
+            roadCamera(known)?.let {
+                cameraStartup = CameraStartup(
+                    it, cameraProfile == CameraProfile.AUTO,
+                    File("$STRIKE_DIR/camera.raw"), Build.FINGERPRINT
+                )
+            }
             camerasReason = if (roadCamera(known) == null) "No supported road camera was found" else ""
             if (camerasReason.isNotEmpty()) DaemonLog.e(TAG, camerasReason)
-            DaemonLog.d(TAG, "cameras: " + known.joinToString(", ") { "${it.tag} ${it.width}x${it.height}" })
+            val label = if (probed.cameras.isEmpty()) "fallback camera (assumed size)" else "cameras"
+            DaemonLog.d(TAG, "$label: " + known.joinToString(", ") { "${it.tag} id=${it.id} ${it.width}x${it.height}" })
         }
         return known
     }
 
     private fun found(): JSONArray {
         val list = JSONArray()
-        for (camera in inventoryNow()) {
+        val known = inventoryNow()
+        val selected = cameraStartup?.choice
+        val reported = if (selected != null && selected !in known) listOf(selected) else known
+        for (camera in reported) {
             val row = JSONObject()
             row.put("id", camera.id)
             row.put("tag", camera.tag)

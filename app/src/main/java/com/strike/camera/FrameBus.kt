@@ -21,7 +21,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 private const val TAG = "FrameBus"
 private const val FRAME_WAIT_MS = 500L
-private const val SILENCE_MS = 10_000L
 
 private const val POOL = 6
 
@@ -40,7 +39,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
     private val consumers = CopyOnWriteArrayList<Consumer>()
     private val targets = HashMap<String, EGLSurface>()
     private val retired = ConcurrentLinkedQueue<String>()
-    private val draws = HashMap<String, Long>()
+    private val drawn = HashSet<String>()
     private val reported = HashSet<String>()
 
     private var display: EGLDisplay = EGL14.EGL_NO_DISPLAY
@@ -211,7 +210,6 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
     }
 
     private fun spin() {
-        var complained = false
         running = true
         openedAtMs = System.currentTimeMillis()
         while (running) {
@@ -221,18 +219,10 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
                 pending = false
                 had
             }
-            if (!arrivedNow) {
-                if (!complained && frames == 0L &&
-                    System.currentTimeMillis() - openedAtMs > SILENCE_MS
-                ) {
-                    complained = true
-                    DaemonLog.e(TAG, "the camera opened but has sent no frame in ${SILENCE_MS / 1000}s")
-                }
-                continue
-            }
+            if (!arrivedNow) continue
             if (bind()) {
-                frames++
                 frameAtMs = System.currentTimeMillis()
+                frames++
                 paint(stamp())
             }
         }
@@ -286,7 +276,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
                 fault(consumer.name, "would not take the frame")
                 continue
             }
-            drew(consumer.name)
+            if (drawn.add(consumer.name)) DaemonLog.d(TAG, "${consumer.name} took its first frame")
         }
     }
 
@@ -294,16 +284,9 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         while (true) {
             val name = retired.poll() ?: return
             targets.remove(name)?.let { EGL14.eglDestroySurface(display, it) }
-            draws.remove(name)
+            drawn.remove(name)
             reported.remove(name)
         }
-    }
-
-    private fun drew(name: String) {
-        val count = (draws[name] ?: 0L) + 1L
-        draws[name] = count
-        if (count == 1L) DaemonLog.d(TAG, "$name took its first frame")
-        else if (count % 240 == 0L) DaemonLog.d(TAG, "$name took $count frames")
     }
 
     private fun fault(name: String, what: String) {

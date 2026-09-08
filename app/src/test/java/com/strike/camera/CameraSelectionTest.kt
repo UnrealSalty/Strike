@@ -8,12 +8,11 @@ import org.junit.Test
 class CameraSelectionTest {
 
     @Test
-    fun unnamedFirmwareKeepsTheTestedCameraZeroFallback() {
-        assertSame(RAW_STRIP, roadCamera(emptyList()))
-        assertSame(RAW_STRIP, roadCamera(listOf(RAW_STRIP)))
-        assertEquals(0, RAW_STRIP.id)
-        assertEquals(5120, RAW_STRIP.width)
-        assertEquals(960, RAW_STRIP.height)
+    fun unnamedFirmwareUsesOverdrivesLegacyCamera() {
+        val camera = roadCamera(emptyList())!!
+        assertEquals(1, camera.id)
+        assertEquals(5120, camera.width)
+        assertEquals(960, camera.height)
     }
 
     @Test
@@ -48,5 +47,20 @@ class CameraSelectionTest {
     @Test
     fun aRearCameraAloneDoesNotReplaceThePanoramicSource() {
         assertNull(roadCamera(listOf(CameraChoice(1, "rear", 1280, 960))))
+    }
+
+    @Test
+    fun discoveredPanoramaTakesPriorityOverModelDefaults() {
+        val advertised = CameraChoice(2, "pano_h", 5120, 720)
+        for (model in listOf(null, "BYD AUTO", "Atto 2", "Atto 3", "Seal 2026")) {
+            assertSame(advertised, roadCamera(listOf(advertised), model))
+        }
+    }
+
+    @Test
+    fun explicitProfilesTakePriorityOverConflictingModelNames() {
+        assertSame(RAW_STRIP, roadCamera(cameras(CameraProfile.ATTO_2).cameras, "BYD AUTO"))
+        val seal = roadCamera(cameras(CameraProfile.SEAL).cameras, "Atto 2")!!
+        assertEquals(1, seal.id)
     }
 }

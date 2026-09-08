@@ -42,7 +42,7 @@
     <main class="page">
         <div class="hero">
             <h1 class="hero__title">Settings</h1>
-            <p class="hero__sub">Updates and the screen PIN.</p>
+            <p class="hero__sub">Updates, cameras, and the screen PIN.</p>
         </div>
         <div class="columns">
             <section class="card columns__wide" id="updates">
@@ -88,6 +88,20 @@
                         </span>
                     </div>
                 </section>
+                <section class="card" id="cameraSettings">
+                    <h2 class="card__name">Cameras</h2>
+                    <div class="row row--control">
+                        <span class="row__label" id="cameraProfileLabel">Profile</span>
+                        <span class="pick" id="cameraProfile">
+                            <button class="pick__btn" type="button" aria-expanded="false" aria-labelledby="cameraProfileLabel cameraProfileValue" disabled>
+                                <span id="cameraProfileValue"><span class="sk sk--line"></span></span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                            </button>
+                            <div class="pick__menu" hidden></div>
+                        </span>
+                    </div>
+                    <p class="note" id="cameraProfileNote">After changing the profile, turn Recorder off and on in Daemons to apply it.</p>
+                </section>
             </div>
         </div>
     </main>
@@ -124,5 +138,6 @@
     <script src="js/security.js"></script>
     <script src="js/release-notes.js"></script>
     <script src="js/updates.js"></script>
+    <script src="js/camera-settings.js"></script>
 </body>
 </html>

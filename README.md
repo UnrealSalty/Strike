@@ -80,6 +80,18 @@ model-name restriction; support depends on the head unit and firmware.
 Testing so far has been on a BYD Atto 2. Other models and firmware versions have
 not yet been verified.
 
+If the camera views are split incorrectly, **Settings → Cameras** offers legacy
+profiles for Seal, Atto 3, and Tang 2022 using Overdrive's camera mappings, plus
+Strike's Atto 2 profile. After choosing one, turn **Recorder** off and on in
+**Daemons**. Automatic uses camera-tag discovery, then recognizable Atto 2 or
+Atto 3 model names, otherwise Overdrive's legacy camera-1 profile. If that camera
+opens but sends no frames for 25 seconds, Automatic tries raw camera 0 and remembers
+it after frames arrive. A firmware change clears that preference. These profiles
+still need testing on each head unit.
+
+Selecting **Atto 2** keeps camera 0 without waiting for automatic recovery, even
+when the head unit identifies itself only as "BYD AUTO".
+
 <details>
 <summary>Hardware details</summary>
 
