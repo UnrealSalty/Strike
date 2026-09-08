@@ -62,8 +62,6 @@ class VehicleTelemetry(
 
     fun accOn(): Boolean? = accOnOf(read(device(BODYWORK), "getPowerLevel")?.toInt())
 
-    fun soc(): Int? = socOf(read(device(STATISTIC), "getElecPercentageValue")?.toDouble())
-
     fun parkingSnapshot(): VehicleSnapshot = VehicleSnapshot(
         soc = null,
         rangeKm = null,

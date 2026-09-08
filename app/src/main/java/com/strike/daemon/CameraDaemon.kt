@@ -101,7 +101,6 @@ object CameraDaemon {
         vehicle = telemetry
         telemetry?.parkingSnapshot()
     })
-    private val soc = SocReader(read = { vehicle?.soc() })
 
     private val relay = PacketRelay()
     private val audio = AudioIngest()
@@ -302,7 +301,6 @@ object CameraDaemon {
                 }
                 val trouble = try {
                     acc.poll()
-                    if (soc.poll()) DaemonLog.d("Soc", socLine(soc.percent, acc.snapshot()?.accOn))
                     null
                 } catch (e: RuntimeException) {
                     e
@@ -310,7 +308,7 @@ object CameraDaemon {
                     e
                 }
                 val reason = trouble?.let { it.message ?: it.javaClass.simpleName }
-                if (reason != null && reason != failure) DaemonLog.w("ACC", "vehicle read failed: $reason")
+                if (reason != null && reason != failure) DaemonLog.w("ACC", "power state read failed: $reason")
                 failure = reason
                 updateVehicle()
                 handler.postDelayed(this, SUPERVISE_EVERY_MS)
