@@ -15,6 +15,8 @@ import com.strike.online.tunnelReady
 import com.strike.server.HttpServer
 import com.strike.server.BrowserGate
 import com.strike.server.Router
+import com.strike.server.api.DaemonsApi
+import com.strike.update.Updates
 import java.io.File
 
 class StrikeApp : Application() {
@@ -24,6 +26,8 @@ class StrikeApp : Application() {
     lateinit var online: Online
         private set
     lateinit var browsers: BrowserGate
+        private set
+    lateinit var updates: Updates
         private set
 
     override fun onCreate() {
@@ -35,8 +39,11 @@ class StrikeApp : Application() {
         online = Online(TunnelSettings(File(filesDir, "online.json")), browsers.access::isReady,
             { cloudflared(this, it) }, ::tunnelReady, { hasInternet(this) },
             keepAlive = { OnlineService.keepAlive(this, it) })
-        HttpServer(HttpServer.PORT, Router(this, pin, shell, online, browsers), browsers).start()
+        val daemons = DaemonsApi(this, shell, online)
+        updates = Updates(this, shell, daemons::pauseForUpdate, daemons::resumeAfterUpdate)
+        HttpServer(HttpServer.PORT, Router(this, pin, shell, online, browsers, daemons, updates), browsers).start()
         Triggers(this, shell, online::vehicle).start()
         online.restore()
+        updates.resume()
     }
 }

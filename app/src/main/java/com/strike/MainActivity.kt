@@ -25,6 +25,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        (application as StrikeApp).updates.resume()
         if ((application as StrikeApp).pin.isSet()) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else {

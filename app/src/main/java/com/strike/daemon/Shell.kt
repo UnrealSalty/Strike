@@ -67,6 +67,18 @@ class Shell internal constructor(
         response.output
     }
 
+    fun push(file: File, path: String): Boolean = synchronized(commands) {
+        val connection = connect() ?: return false
+        try {
+            connection.push(file, path)
+            true
+        } catch (e: IOException) {
+            Logs.w(TAG, "Could not transfer the update to the installer")
+            drop(connection)
+            false
+        }
+    }
+
     private fun exec(command: String): AdbShellResponse? {
         val connection = connect() ?: return null
         return try {

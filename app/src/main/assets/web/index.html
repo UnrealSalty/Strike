@@ -98,6 +98,13 @@
                             <span class="action__sub" id="pinState">&mdash;</span>
                         </span>
                     </button>
+                    <button class="action" id="updatesOpen" type="button">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5l5 5 5-5M5 16v5h14v-5"/></svg>
+                        <span class="action__text">
+                            <span class="action__name">Updates</span>
+                            <span class="action__sub" id="updateSummary">&mdash;</span>
+                        </span>
+                    </button>
                 </div>
             </section>
             <div class="columns__narrow">
@@ -137,7 +144,46 @@
         </div>
     </div>
 
+    <div class="modal" id="updates" hidden>
+        <section class="modal__panel modal__panel--narrow" role="dialog" aria-modal="true" aria-labelledby="updatesTitle">
+            <div class="modal__head">
+                <span class="modal__title" id="updatesTitle">Updates</span>
+                <button class="btn" id="updatesClose" type="button">Close</button>
+            </div>
+            <div class="modal__body">
+                <div class="boxes">
+                    <div class="box">
+                        <span class="box__label">Installed</span>
+                        <span class="box__value"><span id="updateCurrent"><span class="sk sk--value"></span></span></span>
+                    </div>
+                    <div class="box">
+                        <span class="box__label">Latest release</span>
+                        <span class="box__value"><span id="updateLatest"><span class="sk sk--value"></span></span></span>
+                    </div>
+                </div>
+                <div class="updates__panel">
+                    <p class="updates__status" id="updateMessage" role="status" aria-live="polite">&mdash;</p>
+                    <p class="updates__checked">Last checked <span id="updateChecked">&mdash;</span></p>
+                    <div class="updates__progress" id="updateProgress" hidden>
+                        <span class="meter" role="progressbar" id="updateMeter" aria-label="APK download" aria-valuemin="0" aria-valuemax="100"><span class="meter__fill" id="updateFill"></span></span>
+                        <span class="note" id="updateBytes"></span>
+                    </div>
+                </div>
+                <p class="note">Checks once a day when Strike opens. Downloads start when you choose.</p>
+                <div class="updates__notes" id="updateNotesBox" hidden>
+                    <h3 class="head">Release notes</h3>
+                    <p id="updateNotes"></p>
+                </div>
+            </div>
+            <div class="updates__buttons">
+                <button class="btn" id="updateCheck" type="button" disabled>Check now</button>
+                <button class="btn btn--primary" id="updateApply" type="button" hidden disabled>Download</button>
+            </div>
+        </section>
+    </div>
+
     <script src="js/core.js"></script>
+    <script src="js/updates.js"></script>
     <script src="js/shell.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/keypad.js"></script>

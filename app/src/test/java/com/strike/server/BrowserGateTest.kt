@@ -77,7 +77,7 @@ class BrowserGateTest {
 
     @Test fun linksToFootageAndLiveCannotBypassBrowserAuthentication() {
         val gate = gate()
-        val paths = listOf("/api/status", "/api/online", "/clips/drive.mp4", "/events/event.mp4",
+        val paths = listOf("/api/status", "/api/online", "/api/updates", "/clips/drive.mp4", "/events/event.mp4",
             "/thumbs/drive.jpg", "/heroes/event.jpg", LIVE_STREAM_PATH)
         val pinCookie = "$SESSION_COOKIE=${gate.access.login(gate.access.code()!!).token}"
         Socket().use { socket ->
@@ -86,6 +86,7 @@ class BrowserGateTest {
                 assertEquals(path, 401, guard(gate, socket, "GET", path, cookie = pinCookie)!!.status)
             }
             assertEquals(401, guard(gate, socket, "POST", "/css/strike.css")!!.status)
+            assertEquals(401, guard(gate, socket, "POST", "/api/updates", "action=install&confirmed=true")!!.status)
         }
     }
 
@@ -99,6 +100,7 @@ class BrowserGateTest {
                 assertNull(path, guard(gate, socket, "GET", path, cookie = cookie))
             }
             assertNull(guard(gate, socket, "POST", "/api/recording/settings", cookie = cookie))
+            assertNull(guard(gate, socket, "POST", "/api/updates", "action=check", cookie = cookie))
             for (path in listOf(LOCK_PAGE, "/lock.html")) {
                 val lock = guard(gate, socket, "GET", path, cookie = cookie)!!
                 assertEquals(302, lock.status)

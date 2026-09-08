@@ -83,6 +83,7 @@
 
     Strike.dashboard = {
         render: function (status) {
+            Strike.updates.summary(status.updates);
             document.getElementById('securityOpen').hidden = status.inCar !== true;
             battery(status.vehicle);
             footage(status.storage);

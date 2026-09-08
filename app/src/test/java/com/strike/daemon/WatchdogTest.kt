@@ -152,6 +152,20 @@ class WatchdogTest {
         assertEquals(listOf("-9 111"), file("killed").readLines())
     }
 
+    @Test
+    fun anUpdateCannotKillAClipThatIsStillFinishing() {
+        val fakeProcesses = """
+            ps() { echo '111 $CAM_PROCESS'; }
+            pidof() { echo 111; }
+            sleep() { echo waiting >> sleeps; }
+            kill() { echo "${'$'}*" >> killed; }
+        """.trimIndent()
+
+        assertEquals(1, execute(fakeProcesses + "\n" + stopDaemonLine(graceful = true, force = false)))
+        assertEquals(20, file("sleeps").readLines().size)
+        assertFalse(file("killed").exists())
+    }
+
     private fun watchdog(exits: List<String>, setup: String = ":", afterSleep: String = ":"): Int {
         file("base.apk").writeText("")
         file("exits").writeText(exits.joinToString("\n"))

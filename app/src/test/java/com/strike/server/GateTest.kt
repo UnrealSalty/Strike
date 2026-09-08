@@ -49,6 +49,8 @@ class GateTest {
     @Test
     fun clipsStatusAndLiveAreHeld() {
         assertTrue(refuseWhenLocked("GET", "/api/status", true))
+        assertTrue(refuseWhenLocked("GET", "/api/updates", true))
+        assertTrue(refuseWhenLocked("POST", "/api/updates", true))
         assertTrue(refuseWhenLocked("GET", "/clips/drive.mp4", true))
         assertTrue(refuseWhenLocked("GET", "/thumbs/drive.jpg", true))
         assertTrue(refuseWhenLocked("GET", LIVE_STREAM_PATH, true))

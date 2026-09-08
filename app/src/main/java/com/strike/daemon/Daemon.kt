@@ -12,6 +12,16 @@ class Daemon(private val context: Context, private val shell: Shell) {
     fun start(): Boolean {
         val apk = apkPath() ?: return false
         if (!stop()) return false
+        return launch(apk)
+    }
+
+    @Synchronized
+    fun resume(): Boolean {
+        val apk = apkPath() ?: return false
+        return launch(apk)
+    }
+
+    private fun launch(apk: String): Boolean {
         val script = watchdogScript(
             context.packageName, apk, context.applicationInfo.nativeLibraryDir, DAEMON_CLASS
         )
@@ -24,9 +34,9 @@ class Daemon(private val context: Context, private val shell: Shell) {
     }
 
     @Synchronized
-    fun stop(shutdown: () -> Boolean = { false }): Boolean {
+    fun stop(shutdown: () -> Boolean = { false }, force: Boolean = true): Boolean {
         if (shell.run(stopWatchdogLine()) != 0) return false
-        return shell.run(stopDaemonLine(shutdown())) == 0
+        return shell.run(stopDaemonLine(shutdown(), force)) == 0
     }
 
     private fun apkPath(): String? {
@@ -41,11 +51,11 @@ internal fun stopWatchdogLine(): String =
         "echo stopped from the app > $CAM_SENTINEL_PATH || exit 1; chmod 644 $CAM_SENTINEL_PATH; " +
         killLine(CAM_SCRIPT_PATH) + "; rm -f $CAM_SCRIPT_PATH $CAM_WATCHDOG_PID_PATH"
 
-internal fun stopDaemonLine(graceful: Boolean): String =
+internal fun stopDaemonLine(graceful: Boolean, force: Boolean = true): String =
     (if (graceful) "" else killLine(CAM_PROCESS, 15) + "; ") + "WAITED=0; " +
         "while pidof $CAM_PROCESS >/dev/null 2>&1 && [ \$WAITED -lt 20 ]; do " +
         "sleep 1; WAITED=\$((WAITED + 1)); done; " +
-        killLine(CAM_PROCESS) + "; " +
+        (if (force) killLine(CAM_PROCESS) + "; " else "") +
         "if pidof $CAM_PROCESS >/dev/null 2>&1; then exit 1; fi; " +
         "rm -f $CAM_LOCK_PATH"
 

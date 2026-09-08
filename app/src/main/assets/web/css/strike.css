@@ -873,6 +873,67 @@ main {
     margin-left: var(--gap);
 }
 
+.updates__panel {
+    margin-top: var(--gap);
+    padding: var(--gap) var(--pad);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.updates__status {
+    margin: 0;
+    font-size: 15px;
+}
+
+.updates__status[data-error="true"] {
+    color: var(--bad);
+}
+
+.updates__checked {
+    margin: 4px 0 0;
+    color: var(--text-dim);
+    font-size: 13px;
+}
+
+.updates__progress {
+    margin-top: var(--gap);
+}
+
+.updates__progress > .note {
+    display: block;
+}
+
+.updates__notes {
+    margin-top: var(--pad);
+    padding-top: var(--pad);
+    border-top: 1px solid var(--line);
+}
+
+.updates__notes[hidden] {
+    display: none;
+}
+
+.updates__notes > p {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    color: var(--text-dim);
+    font-size: 14px;
+}
+
+.updates__buttons {
+    display: flex;
+    justify-content: flex-end;
+    flex: none;
+    padding: var(--pad);
+    border-top: 1px solid var(--line);
+}
+
+.updates__buttons > .btn + .btn {
+    margin-left: var(--gap);
+}
+
 .entry {
     display: flex;
     flex-direction: column;

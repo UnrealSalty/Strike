@@ -10,12 +10,14 @@ import com.strike.surveillance.EventStorage
 import com.strike.server.JSON
 import com.strike.server.Response
 import com.strike.vehicle.VehicleTelemetry
+import com.strike.update.Updates
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsApi, private val pin: Pin) {
+class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsApi, private val pin: Pin,
+                   private val updates: Updates) {
 
     private val storage = Storage(context, shell)
     private val vehicle = VehicleTelemetry(context)
@@ -24,6 +26,7 @@ class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsA
     fun status(inCar: Boolean): Response {
         val payload = JSONObject()
         payload.put("inCar", inCar)
+        payload.put("updates", updates.status(full = false))
         if (inCar) payload.put("pinSet", pin.isSet())
         val volume = storage.selected()
         if (volume != null) {

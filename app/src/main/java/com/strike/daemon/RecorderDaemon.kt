@@ -2,8 +2,10 @@ package com.strike.daemon
 
 import com.strike.core.Logs
 import org.json.JSONObject
+import java.io.IOException
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.FutureTask
 
 private const val TAG = "Recorder"
 private const val ANSWER_WITHIN_MS = 20_000L
@@ -24,7 +26,10 @@ class RecorderDaemon internal constructor(
         Thread(it, "recorder-control").also { thread -> thread.isDaemon = true }
     },
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000L },
-    private val pause: (Long) -> Unit = { Thread.sleep(it) }
+    private val pause: (Long) -> Unit = { Thread.sleep(it) },
+    private val haltForUpdate: () -> Boolean = haltDaemon,
+    private val resumeDaemon: () -> Boolean = launchDaemon,
+    private val watchdogRunning: () -> Boolean = { false }
 ) {
 
     constructor(shell: Shell, daemon: Daemon, client: DaemonClient, beforeLaunch: () -> Unit) : this(
@@ -36,7 +41,11 @@ class RecorderDaemon internal constructor(
         {
             val tail = shell.read("tail -n $FAILURE_TAIL_LINES $CAM_LOG_PATH")
             tail?.let { lastDaemonError(it) }
-        }
+        },
+        haltForUpdate = { daemon.stop(client::shutdown, force = false) },
+        resumeDaemon = daemon::resume,
+        watchdogRunning = { shell.check("pidof $CAM_PROCESS >/dev/null || " +
+            "kill -0 \$(cat $CAM_WATCHDOG_PID_PATH 2>/dev/null) 2>/dev/null") }
     )
 
     @Volatile
@@ -107,6 +116,53 @@ class RecorderDaemon internal constructor(
         }
     }
 
+    fun pauseForUpdate(beforeStop: (Boolean) -> Unit) {
+        val task = FutureTask {
+            synchronized(this) {
+                val wasRunning = canStop || readStatus() != null || watchdogRunning()
+                beforeStop(wasRunning)
+                request++
+                phase = Phase.STOPPING
+                step = "Finishing the clip"
+            }
+            val stopped = haltForUpdate()
+            synchronized(this) {
+                phase = if (stopped) Phase.OFF else Phase.FAILED
+                canStop = !stopped
+                step = ""
+                failure = if (stopped) "" else "The recorder is still stopping. Update cancelled"
+            }
+            if (!stopped) throw IOException(failure)
+        }
+        worker.execute(task)
+        try {
+            task.get()
+        } catch (e: java.util.concurrent.ExecutionException) {
+            throw IOException(e.cause?.message ?: "The recorder could not be paused", e.cause)
+        }
+    }
+
+    @Synchronized
+    fun resumeAfterUpdate() {
+        val current = ++request
+        phase = Phase.STARTING
+        canStop = true
+        step = "Restarting after update"
+        failure = ""
+        worker.execute {
+            if (!isStarting(current)) return@execute
+            try {
+                prepare()
+                if (!isStarting(current)) return@execute
+                if (!resumeDaemon()) return@execute fail(current, "The recorder could not restart",
+                    cleanup = false, keepStop = true)
+                awaitDaemon(current, cleanup = false)
+            } catch (e: Exception) {
+                fail(current, "The recorder could not restart", cleanup = false, keepStop = true, error = e)
+            }
+        }
+    }
+
     private fun launch(current: Long) {
         if (!isStarting(current)) return
         try {
@@ -122,7 +178,7 @@ class RecorderDaemon internal constructor(
         }
     }
 
-    private fun awaitDaemon(current: Long) {
+    private fun awaitDaemon(current: Long, cleanup: Boolean = true) {
         val deadline = nowMs() + ANSWER_WITHIN_MS
         while (isStarting(current) && nowMs() < deadline) {
             val reply = readStatus()
@@ -137,16 +193,18 @@ class RecorderDaemon internal constructor(
             }
             pause(ASK_EVERY_MS)
         }
-        if (isStarting(current)) fail(current, lastError() ?: "The daemon did not stay running")
+        if (isStarting(current)) fail(current, lastError() ?: "The daemon did not stay running",
+            cleanup, keepStop = !cleanup)
     }
 
-    private fun fail(current: Long, reason: String, cleanup: Boolean = true, error: Throwable? = null) {
+    private fun fail(current: Long, reason: String, cleanup: Boolean = true,
+                     keepStop: Boolean = false, error: Throwable? = null) {
         if (!isStarting(current)) return
         val stopped = !cleanup || haltDaemon()
         synchronized(this) {
             if (!isStarting(current)) return
             failure = if (stopped) reason else "$reason. Stop could not be confirmed. Try Stop again"
-            canStop = !stopped
+            canStop = !stopped || keepStop
             step = ""
             phase = Phase.FAILED
             Logs.w(TAG, "recorder daemon failed: $failure", error)

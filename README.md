@@ -82,7 +82,8 @@ full parked recording lifecycle.
 
 ## Set up on the car
 
-1. Install the debug APK on the head unit and open Strike.
+1. Install `Strike.apk` from [Releases](https://github.com/UnrealSalty/Strike/releases)
+   on the head unit and open Strike. A local debug build also works for development.
 2. Grant storage and microphone permissions. Microphone access is used only when
    cabin audio is enabled.
 3. Enable the head unit's ADB access, then use **Daemons → Connect** and accept
@@ -170,6 +171,31 @@ connector. The script pins and verifies the upstream source, selects Go 1.26.6,
 and adds the parent-exit guard in `tools/cloudflared/parent_android.go`. Normal APK
 builds use the bundled binary. Its [license notices](app/src/main/assets/cloudflared-notices.txt)
 are included in the APK.
+
+## Updates
+
+Open **Dashboard → Updates** to check, download, or install a release. Strike checks
+GitHub when the app opens or resumes, at most once every 24 hours. **Check now**
+checks immediately. Downloads and installation require your action;
+there is no background update service.
+
+Before installation, Strike checks the APK's checksum, package, signing key,
+version, Android requirement, and processor architecture. It finishes the current
+clip before installing and restarts recording afterward if the recorder was
+running. If the clip cannot finish, installation is cancelled. Settings and saved
+footage are preserved.
+
+In-app installation uses the same authorised shell access as the recorder. A
+debug build cannot update to a release signed with a different key. Keep using
+the same signing key for all published APKs.
+
+To publish an update:
+
+1. Increase `versionCode` and `versionName` in `app/build.gradle.kts`.
+2. Build a signed release APK with the original keystore.
+3. Create a GitHub release with a matching tag, such as `v0.2` for version `0.2`.
+4. Attach the signed APK as **Strike.apk** and publish the release as the latest
+   stable release. Drafts and prereleases are not offered by the checker.
 
 ## PIN recovery
 

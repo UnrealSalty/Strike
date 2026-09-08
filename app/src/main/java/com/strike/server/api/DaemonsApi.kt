@@ -75,6 +75,13 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
 
     fun daemons(): Response = Response(200, JSON, payload().toString().toByteArray())
 
+    fun pauseForUpdate(beforeStop: (Boolean) -> Unit) = recorder.pauseForUpdate(beforeStop)
+
+    fun resumeAfterUpdate() {
+        recorder.resumeAfterUpdate()
+        forget()
+    }
+
     fun count(): JSONObject {
         val payload = payload()
         val count = JSONObject()
