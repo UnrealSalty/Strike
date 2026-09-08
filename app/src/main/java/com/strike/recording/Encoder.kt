@@ -2,7 +2,9 @@ package com.strike.recording
 
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaFormat
+import android.os.Build
 import android.os.Bundle
 import android.view.Surface
 import com.strike.daemon.DaemonLog
@@ -58,33 +60,96 @@ class Encoder(
             wanted.setInteger(MediaFormat.KEY_LEVEL, avcLevelFor(width, height))
         }
 
-        return try {
-            val fresh = MediaCodec.createEncoderByType(mimeType)
-            codec = fresh
+        val attempted = HashSet<String>()
+        val failures = ArrayList<String>()
+        val opened = firstEncoder(
+            preferred = { open(wanted, null, attempted, failures) },
+            alternatives = { alternatives(wanted, attempted, failures) },
+            start = { open(wanted, it, attempted, failures) }
+        )
+        if (opened == null) {
+            DaemonLog.e(TAG, "no encoder could start $mimeType ${width}x$height at " +
+                "$frameRateFps fps, $bitrateBps bps: ${failures.joinToString("; ")}")
+            return null
+        }
+        val (fresh, surface) = opened
+        codec = fresh
+        inputSurface = surface
+        running = true
+        DaemonLog.d(TAG, "${width}x$height on ${fresh.codecInfo.name}, ${instances(fresh)} at once")
+        drain = Thread({ pump(fresh) }, "encoder").also { it.start() }
+        return surface
+    }
+
+    private fun open(
+        wanted: MediaFormat,
+        name: String?,
+        attempted: MutableSet<String>,
+        failures: MutableList<String>
+    ): Pair<MediaCodec, Surface>? {
+        var fresh: MediaCodec? = null
+        var surface: Surface? = null
+        var started = false
+        var label = name ?: "default"
+        try {
+            fresh = if (name == null) MediaCodec.createEncoderByType(mimeType)
+                else MediaCodec.createByCodecName(name)
+            label = fresh.name
+            attempted.add(label)
+            if (Build.VERSION.SDK_INT >= 29) attempted.add(fresh.canonicalName)
             if (!encodable(fresh)) {
-                fresh.release()
-                codec = null
+                failures.add("$label does not support ${width}x$height")
                 return null
             }
             fresh.configure(wanted, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            val surface = fresh.createInputSurface()
-            inputSurface = surface
+            surface = fresh.createInputSurface()
             fresh.start()
-            running = true
-            DaemonLog.d(TAG, "${width}x$height on ${fresh.codecInfo.name}, ${instances(fresh)} at once")
-            drain = Thread({ pump(fresh) }, "encoder").also { it.start() }
-            surface
+            started = true
+            return Pair(fresh, surface)
         } catch (e: IOException) {
-            DaemonLog.e(TAG, "no $mimeType encoder on this device: ${e.message}")
-            null
+            failures.add("$label: ${e.message}")
         } catch (e: IllegalStateException) {
-            DaemonLog.e(TAG, "encoder refused ${width}x$height at $bitrateBps bps: ${e.message}")
-            release()
-            null
+            failures.add("$label: ${e.message}")
         } catch (e: IllegalArgumentException) {
-            DaemonLog.e(TAG, "encoder refused ${width}x$height at $bitrateBps bps: ${e.message}")
-            release()
-            null
+            failures.add("$label: ${e.message}")
+        } finally {
+            if (!started) {
+                try {
+                    fresh?.release()
+                } catch (e: IllegalStateException) {
+                    failures.add("$label could not release: ${e.message}")
+                } finally {
+                    surface?.release()
+                }
+            }
+        }
+        return null
+    }
+
+    private fun alternatives(
+        wanted: MediaFormat,
+        attempted: MutableSet<String>,
+        failures: MutableList<String>
+    ): Sequence<String> = sequence {
+        val available = try {
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+        } catch (e: RuntimeException) {
+            failures.add("encoder list unavailable: ${e.message}")
+            return@sequence
+        }
+        for (candidate in available) {
+            if (!candidate.isEncoder) continue
+            val hardware = if (Build.VERSION.SDK_INT >= 29) candidate.isHardwareAccelerated
+                else legacyHardwareEncoder(candidate.name)
+            if (!hardware) continue
+            val name = if (Build.VERSION.SDK_INT >= 29) candidate.canonicalName else candidate.name
+            if (!attempted.add(name)) continue
+            val supported = try {
+                candidate.getCapabilitiesForType(mimeType).isFormatSupported(wanted)
+            } catch (e: IllegalArgumentException) {
+                false
+            }
+            if (supported) yield(candidate.name)
         }
     }
 
@@ -100,13 +165,7 @@ class Encoder(
         } catch (e: IllegalArgumentException) {
             return true
         }
-        if (video.isSizeSupported(width, height)) return true
-        DaemonLog.e(
-            TAG,
-            "the encoder cannot take ${width}x$height, it stops at " +
-                "${video.supportedWidths.upper}x${video.supportedHeights.upper}"
-        )
-        return false
+        return video.isSizeSupported(width, height)
     }
 
     fun splitAtNextKeyFrame() {
@@ -198,6 +257,27 @@ class Encoder(
             inputSurface = null
         }
     }
+}
+
+// Firmware capability reports can be incomplete; keep a working default before considering alternatives.
+internal fun <T : Any> firstEncoder(
+    preferred: () -> T?,
+    alternatives: () -> Sequence<String>,
+    start: (String) -> T?
+): T? {
+    preferred()?.let { return it }
+    for (name in alternatives()) start(name)?.let { return it }
+    return null
+}
+
+// Android 9 has no hardware-acceleration flag; software components must be excluded by name.
+internal fun legacyHardwareEncoder(name: String): Boolean {
+    val lower = name.lowercase(java.util.Locale.ROOT)
+    return (lower.startsWith("omx.") || lower.startsWith("c2.")) &&
+        !lower.startsWith("omx.google.") && !lower.startsWith("c2.android.") &&
+        !lower.startsWith("c2.google.") && !lower.startsWith("omx.ffmpeg.") &&
+        !lower.contains(".sw.") && !lower.contains(".sw_") && !lower.endsWith(".sw") &&
+        !lower.startsWith("omx.sec.")
 }
 
 /** H.264 Table A-1, MaxFS in macroblocks against the level that allows it. */
