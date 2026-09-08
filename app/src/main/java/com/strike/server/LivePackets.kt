@@ -21,41 +21,44 @@ private const val PACKET_MAX_BYTES = 1 shl 20
 class LivePackets(private val viewers: LiveStream) {
 
     @Volatile
-    private var reading = false
+    private var socket: Socket? = null
 
+    @Synchronized
     fun start() {
-        if (reading) return
-        reading = true
-        Thread({ pump() }, "strike-packets").start()
+        if (socket != null) return
+        val opened = Socket()
+        socket = opened
+        Thread({ pump(opened) }, "strike-packets").start()
     }
 
+    @Synchronized
     fun stop() {
-        reading = false
-    }
-
-    private fun pump() {
-        val socket = try {
-            Socket().also { it.connect(InetSocketAddress(HOST, PACKET_PORT), CONNECT_MS) }
-        } catch (e: IOException) {
-            Logs.w(TAG, "the camera daemon is not offering live frames")
-            reading = false
-            return
-        }
+        val closing = socket
+        socket = null
         try {
-            socket.soTimeout = IDLE_MS
-            socket.use { relay(DataInputStream(it.getInputStream())) }
+            closing?.close()
         } catch (e: IOException) {
-            if (reading) Logs.d(TAG, "live frames stopped arriving")
-        } finally {
-            reading = false
+            Logs.d(TAG, "live packet connection did not close cleanly")
         }
     }
 
-    // The read has to time out, or a camera that never produces a frame would
-    // leave this thread blocked past the last viewer leaving.
-    private fun relay(input: DataInputStream) {
+    private fun pump(opened: Socket) {
+        try {
+            opened.use {
+                it.connect(InetSocketAddress(HOST, PACKET_PORT), CONNECT_MS)
+                it.soTimeout = IDLE_MS
+                relay(DataInputStream(it.getInputStream()), it)
+            }
+        } catch (e: IOException) {
+            if (socket === opened) Logs.d(TAG, "live frames stopped arriving")
+        } finally {
+            synchronized(this) { if (socket === opened) socket = null }
+        }
+    }
+
+    private fun relay(input: DataInputStream, opened: Socket) {
         var forwarded = 0L
-        while (reading && viewers.isWatched) {
+        while (socket === opened) {
             val length = try {
                 input.readInt()
             } catch (e: SocketTimeoutException) {

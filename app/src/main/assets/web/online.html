@@ -46,11 +46,15 @@
         </div>
         <div class="columns">
             <section class="card columns__wide online__tunnel">
-                <div class="row online__heading">
-                    <h2 class="card__name">Cloudflare tunnel</h2>
-                    <button class="btn" id="tunnelSettingsOpen" type="button" disabled>Settings</button>
+                <div class="card__actions">
+                    <div class="card__lead">
+                        <h2 class="card__name">Cloudflare tunnel</h2>
+                        <p class="note">Reach the car from anywhere through your own Cloudflare hostname.</p>
+                    </div>
+                    <span class="card__tools">
+                        <button class="btn" id="tunnelSettingsOpen" type="button" disabled>Settings</button>
+                    </span>
                 </div>
-                <p class="note">Reach the car from anywhere through your own Cloudflare hostname.</p>
                 <div class="online__panel">
                     <div class="online__panel-text">
                         <p class="online__state" aria-live="polite"><span class="dot" id="tunnelDot"></span><span id="tunnelStatus"><span class="sk sk--line"></span></span></p>
@@ -64,8 +68,8 @@
                     <button class="btn online__copy" id="remoteCopy" type="button" aria-live="polite" disabled>Copy</button>
                     <a class="btn online__open" id="remoteOpen" target="_blank" rel="noopener noreferrer">Open</a>
                 </div>
+                <p class="note" id="tunnelInCar" hidden>Edit tunnel settings from the car.</p>
                 <button class="btn online__retry" id="tunnelRetry" type="button" hidden>Retry</button>
-                <p class="note online__message" id="onlineMessage" role="status" aria-live="polite" hidden></p>
             </section>
             <div class="columns__narrow">
                 <section class="card">
@@ -74,19 +78,22 @@
                     <div id="localAddresses"><div class="online__address" data-loading="true"><span class="sk" aria-hidden="true"></span></div></div>
                 </section>
                 <section class="card">
-                    <h2 class="card__name">Browser access</h2>
-                    <p class="note">Enter this code once in each browser, on the local network or through the tunnel.</p>
+                    <div class="card__actions">
+                        <div class="card__lead">
+                            <h2 class="card__name">Browser access</h2>
+                            <p class="note">Enter this code once in each browser, on the local network or through the tunnel. Regenerating signs the others out.</p>
+                        </div>
+                        <span class="card__tools">
+                            <button class="btn" id="accessRegenerate" type="button" disabled>Regenerate</button>
+                        </span>
+                    </div>
                     <div class="online__access-content" id="accessContent">
                         <div id="accessManage">
-                            <div class="online__address online__code" id="accessAddress" data-loading="true">
+                            <div class="online__address" id="accessAddress" data-loading="true">
                                 <span class="sk" aria-hidden="true"></span>
                                 <input class="input" id="accessCode" type="password" readonly autocomplete="off" spellcheck="false" aria-label="Access code">
                                 <button class="btn online__show" id="accessShow" type="button" aria-pressed="false" disabled>Show</button>
                                 <button class="btn online__copy" id="accessCopy" type="button" aria-live="polite" disabled>Copy</button>
-                            </div>
-                            <div class="online__reset">
-                                <p class="note">Browsers already signed in have to enter the new code.</p>
-                                <button class="btn" id="accessRegenerate" type="button" disabled>Regenerate</button>
                             </div>
                         </div>
                         <p class="note" id="accessInCar" hidden>Manage the access code in the car.</p>
@@ -121,7 +128,6 @@
                         <input class="input" id="tunnelToken" type="password" placeholder="Paste from Cloudflare" maxlength="2048" autocomplete="new-password" spellcheck="false">
                     </div>
                 </div>
-                <p class="note online__message" id="setupMessage" role="status" aria-live="polite" hidden></p>
             </div>
             <div class="online__buttons">
                 <button class="btn btn--quiet" id="tunnelForget" type="button" hidden>Remove</button>
@@ -129,7 +135,9 @@
             </div>
         </form>
     </div>
+    <script src="js/session.js"></script>
     <script src="js/core.js"></script>
+    <script src="js/toast.js"></script>
     <script src="js/online.js"></script>
 </body>
 </html>

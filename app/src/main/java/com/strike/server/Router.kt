@@ -2,6 +2,7 @@ package com.strike.server
 
 import android.content.Context
 import com.strike.camera.CameraView
+import com.strike.camera.LiveQuality
 import com.strike.core.Pin
 import com.strike.core.PinSession
 import com.strike.daemon.DaemonClient
@@ -45,7 +46,8 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
 
     fun locked(token: String?): Boolean = pin.isSet() && !PinSession.allows(token)
 
-    fun stream(socket: WebSocket, view: String?) = live.serve(socket, CameraView.of(view).id)
+    fun stream(socket: WebSocket, view: String?, quality: String?) =
+        live.serve(socket, CameraView.of(view).id, LiveQuality.of(quality))
 
     fun asset(path: String): Response {
         val assetPath = resolveAssetPath(path) ?: return notFound()
@@ -112,7 +114,7 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
             else methodNotAllowed()
         }
         path == "/api/live/cameras" -> if (method == "GET") daemons.cameras() else methodNotAllowed()
-        path == "/api/daemons" -> if (method == "GET") daemons.daemons() else methodNotAllowed()
+        path == "/api/daemons" -> if (method == "GET") daemons.daemons(inCar) else methodNotAllowed()
         path == "/api/daemons/shell" -> if (method == "POST") daemons.connect() else methodNotAllowed()
         path == RECORDER_API -> if (method == "POST") daemons.setRecorder(body) else methodNotAllowed()
         path == "/api/logs" -> if (method == "GET") daemons.logs() else methodNotAllowed()

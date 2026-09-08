@@ -46,7 +46,10 @@
 
     function save(key, value) {
         var body = 'key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value);
-        Strike.core.post(SETTINGS, body, load, load);
+        Strike.core.post(SETTINGS, body, function () {
+            load();
+            Strike.toast('Recording settings saved');
+        }, function () { load(); Strike.toast('Could not save recording settings', true); });
     }
 
     function show(open) {
@@ -81,7 +84,8 @@
                 }
                 var on = toggle.getAttribute('aria-pressed') === 'true';
                 var body = 'enabled=' + (on ? 'false' : 'true');
-                Strike.core.post('/api/byd/' + this.getAttribute('data-app'), body, load, load);
+                Strike.core.post('/api/byd/' + this.getAttribute('data-app'), body, load,
+                    function () { load(); Strike.toast('Could not change the factory app', true); });
             };
         }
 

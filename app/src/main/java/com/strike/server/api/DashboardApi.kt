@@ -43,7 +43,9 @@ class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsA
         }
         payload.put("daemons", daemons.count())
         payload.put("recording", daemons.recording())
-        val latest = events.store().latest()
+        val summary = events.store().summary()
+        payload.put("eventCount", if (events.selected() == null) JSONObject.NULL else summary.clips)
+        val latest = summary.latest
         payload.put("lastEvent", if (latest == null) JSONObject.NULL else JSONObject().apply {
             put("id", latest.id)
             put("date", latest.date)

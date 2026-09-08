@@ -18,37 +18,57 @@
     var pad = null;
     var isSet = null;
     var open = document.getElementById('securityOpen');
+    var clear = document.getElementById('pinClear');
 
     function pinState(set) {
         isSet = set;
-        document.getElementById('pinState').textContent = set ? 'PIN set' : 'Off';
+        var sub = document.getElementById('pinState');
+        sub.hidden = false;
+        sub.textContent = '';
+        if (set) {
+            var mark = document.createElement('span');
+            mark.className = 'dot';
+            mark.setAttribute('data-state', 'ok');
+            sub.appendChild(mark);
+            sub.appendChild(document.createTextNode('PIN set'));
+        } else {
+            sub.textContent = 'Off';
+        }
         open.textContent = set ? 'Change PIN' : 'Set PIN';
+        open.hidden = false;
         open.disabled = false;
+        clear.hidden = !set;
+        clear.disabled = false;
     }
 
     function load() {
         open.disabled = true;
+        clear.disabled = true;
         var xhr = new XMLHttpRequest();
         xhr.open('GET', SECURITY, true);
         xhr.timeout = 8000;
         xhr.onloadend = function () {
-            if (xhr.status === 401) { location.replace('/access'); return; }
+            if (xhr.status === 401) { Strike.session.signIn(); return; }
             if (xhr.status === 403) {
-                document.getElementById('securityCard').hidden = true;
+                document.getElementById('pinState').hidden = true;
+                document.getElementById('securityNote').textContent = 'Set the PIN from the car\'s screen.';
+                open.hidden = true;
+                clear.hidden = true;
                 return;
             }
             var payload = null;
             if (xhr.status === 200) {
                 try { payload = JSON.parse(xhr.responseText); } catch (e) { payload = null; }
             }
-            document.getElementById('securityCard').hidden = false;
             if (payload && typeof payload.set === 'boolean') {
                 pinState(payload.set);
             } else {
                 isSet = null;
                 document.getElementById('pinState').textContent = 'Cannot load security';
                 open.textContent = 'Retry';
+                open.hidden = false;
                 open.disabled = false;
+                clear.hidden = true;
             }
         };
         xhr.send();
@@ -61,6 +81,7 @@
     function closed(set) {
         document.getElementById('security').hidden = true;
         pinState(set);
+        Strike.toast(set ? 'PIN saved' : 'PIN turned off');
     }
 
     function ask(step) {
@@ -75,7 +96,6 @@
         current = '';
         chosen = '';
         document.getElementById('securityTitle').textContent = TITLES[next];
-        document.getElementById('pinClear').hidden = next !== 'change';
         document.getElementById('security').hidden = false;
         ask(next === 'set' ? 'pin' : 'current');
     }
@@ -159,7 +179,7 @@
         document.getElementById('security').hidden = true;
     };
 
-    document.getElementById('pinClear').onclick = function () {
+    clear.onclick = function () {
         start('clear');
     };
 

@@ -26,10 +26,11 @@ class OnlineApi(
         return Response(200, JSON, payload.toString().toByteArray())
     }
 
-    fun update(body: String, inCar: Boolean = false): Response = try {
+    fun update(body: String, inCar: Boolean = false): Response = if (!inCar) {
+        Response(403, TEXT, "Edit tunnel settings from the car".toByteArray())
+    } else try {
         when (formValue(body, "action") ?: "toggle") {
             "regenerate" -> {
-                check(inCar) { "Manage the access code in the car" }
                 browsers.regenerate()
             }
             "save" -> online.configure(formValue(body, "hostname") ?: "",

@@ -111,7 +111,7 @@ internal fun browserCookie(token: String, secure: Boolean): String =
         if (secure) "; Secure" else ""
 
 internal fun browserPublicAsset(path: String): Boolean = pagePath(path) == ACCESS_PAGE || when (path) {
-    FAVICON_PATH, "/css/strike.css", "/css/tokens.css", "/js/access.js", "/img/wordmark.webp" -> true
+    FAVICON_PATH, "/css/strike.css", "/css/tokens.css", "/js/access.js", "/js/session.js", "/img/wordmark.webp" -> true
     else -> false
 }
 

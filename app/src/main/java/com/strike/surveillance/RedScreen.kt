@@ -1,8 +1,13 @@
 package com.strike.surveillance
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
 import android.os.Binder
 import android.os.IBinder
@@ -14,6 +19,7 @@ import com.strike.daemon.DaemonFonts
 import com.strike.daemon.DaemonLog
 import com.strike.daemon.ParkedRails
 import java.io.IOException
+import java.util.zip.ZipFile
 
 private const val TAG = "RedScreen"
 private const val LAYER = "StrikeDeterrent"
@@ -21,6 +27,9 @@ private const val FALLBACK_WIDTH = 1920
 private const val FALLBACK_HEIGHT = 1080
 private const val TEXT_MAX = 132f
 private const val TEXT_SHARE = 0.8f
+private const val WORDMARK = "assets/web/img/wordmark.webp"
+private const val WORDMARK_WIDTH = 520f
+private const val WORDMARK_MID = 0.26f
 private const val WAKE_REASSERT_MS = 5_000L
 private const val HOLD_POLL_MS = 200L
 
@@ -29,9 +38,14 @@ private val RED = Color.rgb(190, 20, 20)
 // Parked display output requires a shell-owned SurfaceControl layer.
 class RedScreen {
 
+    /** app_process has no AssetManager, so the wordmark is read out of the apk. */
+    var apkPath: String? = null
+
     private var control: Any? = null
     private var surface: Surface? = null
     private var power: Any? = null
+    private var wordmark: Bitmap? = null
+    private var readWordmark = false
     private var untilMs = 0L
     private var wokeAtMs = 0L
     private var offLockHeld = false
@@ -114,8 +128,9 @@ class RedScreen {
             return false
         }
         canvas.drawColor(RED)
+        val scale = Math.min(size.width() / FALLBACK_WIDTH.toFloat(), size.height() / FALLBACK_HEIGHT.toFloat())
+        drawWordmark(canvas, size, scale)
         if (DaemonFonts.canDraw) {
-            val scale = Math.min(size.width() / 1920f, size.height() / 1080f)
             val mid = size.width() / 2f
             val room = size.width() * TEXT_SHARE
             val headline = Paint()
@@ -138,6 +153,41 @@ class RedScreen {
         }
         onto.unlockCanvasAndPost(canvas)
         return true
+    }
+
+    private fun drawWordmark(canvas: Canvas, size: Rect, scale: Float) {
+        val mark = wordmark() ?: return
+        val wide = WORDMARK_WIDTH * scale
+        val high = wide * mark.height / mark.width
+        val mid = size.width() / 2f
+        val centre = size.height() * WORDMARK_MID
+        val into = Rect(
+            Math.round(mid - wide / 2f),
+            Math.round(centre - high / 2f),
+            Math.round(mid + wide / 2f),
+            Math.round(centre + high / 2f)
+        )
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        paint.colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(mark, null, into, paint)
+    }
+
+    private fun wordmark(): Bitmap? {
+        wordmark?.let { return it }
+        if (readWordmark) return null
+        readWordmark = true
+        val path = apkPath ?: return null
+        val read = try {
+            ZipFile(path).use { apk ->
+                val entry = apk.getEntry(WORDMARK)
+                if (entry == null) null else apk.getInputStream(entry).use { BitmapFactory.decodeStream(it) }
+            }
+        } catch (e: IOException) {
+            null
+        }
+        if (read == null) DaemonLog.w(TAG, "the wordmark did not decode; the deterrent shows text only")
+        wordmark = read
+        return read
     }
 
     private fun panelSize(): Rect {

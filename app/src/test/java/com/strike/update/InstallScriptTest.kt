@@ -1,6 +1,9 @@
 package com.strike.update
 
 import com.strike.daemon.STRIKE_DIR
+import com.strike.core.Pin
+import com.strike.core.PinCheck
+import com.strike.online.BrowserAccess
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -17,6 +20,12 @@ class InstallScriptTest {
             val root = folder.newFolder().absolutePath.replace('\\', '/')
             val id = "a".repeat(32)
             File(root, "update-$id").mkdir()
+            val pinFile = File(root, "pin.json")
+            Pin(pinFile, File(root, "reset")).set("2580")
+            val accessFile = File(root, "browser-access.json")
+            val access = BrowserAccess(accessFile)
+            val accessCode = access.code()!!
+            val session = access.login(accessCode).token
             val fakeAndroid = """
                 pm() { printf '%s\n' "${'$'}*" > "$root/pm-args"; return $code; }
                 am() {
@@ -42,6 +51,10 @@ class InstallScriptTest {
             assertEquals("$id:$code", File(root, "update-result").readText().trim())
             assertEquals("install -r $root/update-$id/Strike.apk", File(root, "pm-args").readText().trim())
             assertEquals("start -n com.strike/.MainActivity", File(root, "am-args").readText().trim())
+            assertEquals(PinCheck.OK, Pin(pinFile, File(root, "reset")).check("2580"))
+            val reloaded = BrowserAccess(accessFile)
+            assertEquals(accessCode, reloaded.code())
+            assertTrue(reloaded.allows(session))
         }
     }
 }

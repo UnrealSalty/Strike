@@ -6,11 +6,12 @@ Strike.core = {
     get: function (path, onOk, onFail) {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', path, true);
+        xhr.timeout = 8000;
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== 4) {
                 return;
             }
-            if (xhr.status === 401) { location.replace('/access'); return; }
+            if (xhr.status === 401) { Strike.session.signIn(); return; }
             if (xhr.status !== 200) {
                 onFail();
                 return;
@@ -35,7 +36,7 @@ Strike.core = {
             if (xhr.readyState !== 4) {
                 return;
             }
-            if (xhr.status === 401) { location.replace('/access'); return; }
+            if (xhr.status === 401) { Strike.session.signIn(); return; }
             if (xhr.status !== 200) {
                 onFail();
                 return;
@@ -52,7 +53,7 @@ Strike.core = {
             if (xhr.readyState !== 4) {
                 return;
             }
-            if (xhr.status === 401) { location.replace('/access'); return; }
+            if (xhr.status === 401) { Strike.session.signIn(); return; }
             if (xhr.status !== 200) {
                 onFail();
                 return;
@@ -134,20 +135,25 @@ Strike.core = {
         var last = remembered();
         if (last) {
             try {
-                onOk(JSON.parse(last));
+                onOk(JSON.parse(last), true);
             } catch (e) {
                 keep(null);
             }
         }
 
+        var pending = false;
         function tick() {
+            if (pending || document.hidden || Strike.session.leaving) return;
+            pending = true;
             Strike.core.get(path, function (payload) {
+                pending = false;
                 keep(payload);
-                onOk(payload);
-            }, onFail);
+                onOk(payload, false);
+            }, function () { pending = false; onFail(); });
         }
         tick();
         setInterval(tick, everyMs);
+        document.addEventListener('visibilitychange', tick);
     },
 
     value: function (id, value) {

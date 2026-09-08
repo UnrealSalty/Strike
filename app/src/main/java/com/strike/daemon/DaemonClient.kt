@@ -21,7 +21,8 @@ class DaemonClient {
 
     fun shutdown(): Boolean = accepted(send("shutdown"))
 
-    fun liveStart(view: String): Boolean = accepted(send("live.start", view))
+    fun liveStart(view: String, bitrateBps: Int): Boolean = accepted(exchange(JSONObject()
+        .put("cmd", "live.start").put("view", view).put("bitrateBps", bitrateBps)))
 
     fun liveStop(): Boolean = accepted(send("live.stop"))
 

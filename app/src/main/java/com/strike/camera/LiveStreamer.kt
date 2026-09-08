@@ -22,6 +22,7 @@ class LiveStreamer(private val relay: PacketRelay) {
     private var bus: FrameBus? = null
     private var encoder: Encoder? = null
     private var sentConfig = false
+    private var bitrateBps = 0
 
     @Volatile
     private var frames = 0L
@@ -49,6 +50,7 @@ class LiveStreamer(private val relay: PacketRelay) {
         bus.add(Consumer(CONSUMER, surface, view, frame))
         this.bus = bus
         this.view = view
+        this.bitrateBps = bitrateBps
         encoder = fresh
         sentConfig = false
         frames = 0
@@ -64,6 +66,13 @@ class LiveStreamer(private val relay: PacketRelay) {
         bus = null
         encoder?.stop()
         encoder = null
+    }
+
+    fun adjustBitrate(bitrateBps: Int): Boolean {
+        if (this.bitrateBps == bitrateBps) return true
+        if (encoder?.setBitrate(bitrateBps) != true) return false
+        this.bitrateBps = bitrateBps
+        return true
     }
 
     // Repeat SPS/PPS before keyframes so viewers can join an existing stream.

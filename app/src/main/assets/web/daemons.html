@@ -44,12 +44,48 @@
             <h1 class="hero__title">Daemons</h1>
             <p class="hero__sub hero__sub--status"><span class="dot" id="countDot"></span><span id="count" data-empty="true">&mdash;</span></p>
         </div>
-        <div class="daemons" id="daemons"></div>
+        <div class="daemons" id="daemons" aria-busy="true">
+            <div class="daemon" aria-hidden="true">
+                <div class="daemon__row">
+                    <span class="daemon__bar"></span>
+                    <div class="daemon__open">
+                        <span class="daemon__text"><span class="daemon__name">Shell access</span><span class="daemon__status"><span class="sk sk--line"></span></span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="daemon" aria-hidden="true">
+                <div class="daemon__row">
+                    <span class="daemon__bar"></span>
+                    <div class="daemon__open">
+                        <span class="daemon__text"><span class="daemon__name">Recorder</span><span class="daemon__status"><span class="sk sk--line"></span></span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="daemon" aria-hidden="true">
+                <div class="daemon__row">
+                    <span class="daemon__bar"></span>
+                    <div class="daemon__open">
+                        <span class="daemon__text"><span class="daemon__name">Surveillance</span><span class="daemon__status"><span class="sk sk--line"></span></span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="daemon" aria-hidden="true">
+                <div class="daemon__row">
+                    <span class="daemon__bar"></span>
+                    <div class="daemon__open">
+                        <span class="daemon__text"><span class="daemon__name">Cloudflare tunnel</span><span class="daemon__status"><span class="sk sk--line"></span></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p class="note" id="daemonMessage" role="status" hidden></p>
         <h2 class="head">Log</h2>
         <div class="log" id="log"></div>
     </main>
 
+    <script src="js/session.js"></script>
     <script src="js/core.js"></script>
+    <script src="js/toast.js"></script>
     <script src="js/shell.js"></script>
     <script src="js/daemons.js"></script>
 </body>

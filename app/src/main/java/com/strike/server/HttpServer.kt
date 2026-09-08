@@ -131,7 +131,8 @@ class HttpServer(private val port: Int, private val router: Router, private val 
                     write(client.getOutputStream(), forbidden())
                     return
                 }
-                streaming = upgrade(client, socketKey, queryValue(requestLine, "view"))
+                streaming = upgrade(client, socketKey, queryValue(requestLine, "view"),
+                    if (inCar) null else queryValue(requestLine, "quality"))
                 if (streaming) return
             }
             write(client.getOutputStream(), respond(requestLine, body, range, token, inCar))
@@ -151,7 +152,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
     }
 
     // Long-lived viewers use separate threads so API workers remain available.
-    private fun upgrade(client: Socket, socketKey: String?, view: String?): Boolean {
+    private fun upgrade(client: Socket, socketKey: String?, view: String?, quality: String?): Boolean {
         val accept = acceptKey(socketKey) ?: return false
         client.soTimeout = 0
         client.tcpNoDelay = true
@@ -160,7 +161,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
         output.flush()
         Thread({
             try {
-                router.stream(WebSocket(client.getInputStream(), output), view)
+                router.stream(WebSocket(client.getInputStream(), output), view, quality)
             } catch (e: IOException) {
                 Logs.d(TAG, "the live viewer's connection ended: ${e.message}")
             } finally {

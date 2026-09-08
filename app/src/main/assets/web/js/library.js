@@ -174,7 +174,7 @@
                 if (xhr.readyState !== 4) {
                     return;
                 }
-                if (xhr.status === 401) { location.replace('/access'); return; }
+                if (xhr.status === 401) { Strike.session.signIn(); return; }
                 var waiting = asking[id];
                 delete asking[id];
                 // Resolve failed thumbnails so truncated clips do not leave a permanent loading state.
@@ -616,7 +616,8 @@
             Strike.core.del(plan.rows + '/' + encodeURIComponent(id), function () {
                 load();
                 Strike.settings.load();
-            }, load);
+                Strike.toast('Clip deleted');
+            }, function () { load(); Strike.toast('Could not delete the clip', true); });
         }
 
         function wire() {

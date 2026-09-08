@@ -31,6 +31,8 @@ class Event(
 
 class Band(val startMs: Long, val endMs: Long, val seen: String)
 
+class EventSummary(val clips: Int, val latest: Event?)
+
 // Merge adjacent sightings into one timeline band.
 internal fun bandsOf(marks: List<Mark>): List<Band> {
     val bands = ArrayList<Band>()
@@ -60,14 +62,13 @@ class EventStore(private val root: File) : Reapable {
     }
 
     // The dashboard needs one sidecar, not the whole event history every poll.
-    fun latest(): Event? {
-        val files = root.listFiles() ?: return null
+    fun summary(): EventSummary {
+        val files = root.listFiles()?.filter { it.isFile && EVENT_NAME.matches(it.name) } ?: emptyList()
         for (file in files.sortedByDescending { it.name.substringAfter('_') }) {
-            if (!file.isFile) continue
             val event = read(file.name, file.length())
-            if (event != null) return event
+            if (event != null) return EventSummary(files.size, event)
         }
-        return null
+        return EventSummary(files.size, null)
     }
 
     fun file(id: String): File? {

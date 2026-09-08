@@ -7,6 +7,8 @@
     var message = document.getElementById('accessMessage');
     var pending = false;
 
+    Strike.session.clear();
+
     function payload(xhr) {
         try { return JSON.parse(xhr.responseText); } catch (e) { return null; }
     }
@@ -26,8 +28,8 @@
         xhr.timeout = 10000;
         xhr.onloadend = function () {
             var reply = payload(xhr);
-            code.value = '';
             if (xhr.status === 200 && reply && reply.ok) {
+                Strike.session.clear();
                 location.replace('/');
                 return;
             }

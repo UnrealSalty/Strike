@@ -22,7 +22,6 @@
     var accessShow = document.getElementById('accessShow');
     var accessCopy = document.getElementById('accessCopy');
     var regenerate = document.getElementById('accessRegenerate');
-    var message = document.getElementById('onlineMessage');
     var loaded = false;
     var fresh = false;
     var pending = false;
@@ -62,10 +61,7 @@
     }
 
     function say(text, failed) {
-        var target = settings.hidden ? message : document.getElementById('setupMessage');
-        target.textContent = text;
-        target.hidden = !text;
-        target.setAttribute('data-error', failed ? 'true' : 'false');
+        if (text) Strike.toast(text, failed);
     }
 
     function copy(input, button) {
@@ -118,16 +114,17 @@
     }
 
     function controls() {
+        var canManage = state && state.browserAccess.canManage;
         var active = state && (state.enabled || state.running || state.state === 'stopping');
-        toggle.disabled = pending || !fresh || !state || state.state === 'stopping' ||
+        toggle.disabled = !canManage || pending || !fresh || !state || state.state === 'stopping' ||
             (!state.enabled && (!state.accessReady || !state.hasToken));
-        hostname.disabled = token.disabled = save.disabled = pending || !fresh || !state || active;
-        settingsOpen.disabled = pending || !fresh || !state || active;
+        hostname.disabled = token.disabled = save.disabled = !canManage || pending || !fresh || !state || active;
+        settingsOpen.disabled = !canManage || pending || !fresh || !state || active;
         settingsClose.disabled = pending;
-        forget.disabled = pending || !fresh || active;
-        retry.disabled = pending || !fresh;
+        forget.disabled = !canManage || pending || !fresh || active;
+        retry.disabled = !canManage || pending || !fresh;
         var buttons = mode.getElementsByTagName('button');
-        for (var i = 0; i < buttons.length; i++) buttons[i].disabled = pending || !fresh || !state || active;
+        for (var i = 0; i < buttons.length; i++) buttons[i].disabled = !canManage || pending || !fresh || !state || active;
         var access = state && state.browserAccess;
         accessShow.disabled = accessCopy.disabled = pending || !fresh || !access || !access.canManage || !access.code;
         regenerate.disabled = pending || !fresh || !access || !access.canManage;
@@ -135,6 +132,7 @@
 
     function paint(payload, cached) {
         state = payload;
+        document.getElementById('tunnelInCar').hidden = payload.browserAccess.canManage;
         addresses(payload.addresses);
         if (!loaded) {
             hostname.value = payload.hostname;
@@ -165,6 +163,7 @@
         document.getElementById('accessContent').setAttribute('data-manage', payload.browserAccess.canManage ? 'true' : 'false');
         document.getElementById('accessManage').setAttribute('aria-hidden', payload.browserAccess.canManage ? 'false' : 'true');
         document.getElementById('accessInCar').hidden = payload.browserAccess.canManage;
+        regenerate.hidden = !payload.browserAccess.canManage;
         accessCode.value = payload.browserAccess.code || '';
         accessCode.placeholder = Strike.core.dash;
         if (!cached) addressReady('accessAddress');
@@ -190,7 +189,7 @@
         xhr.timeout = 8000;
         xhr.onloadend = function () {
             polling = false;
-            if (xhr.status === 401) { location.replace('/access'); return; }
+            if (xhr.status === 401) { Strike.session.signIn(); return; }
             if (xhr.status === 403) { location.replace('/lock'); return; }
             if (!pending && before === revision) {
                 var found = payload(xhr);
@@ -229,8 +228,13 @@
         xhr.timeout = 8000;
         xhr.onloadend = function () {
             pending = false;
-            if (xhr.status === 401) { location.replace('/access'); return; }
-            if (xhr.status === 403) { location.replace('/lock'); return; }
+            if (xhr.status === 401) { Strike.session.signIn(); return; }
+            if (xhr.status === 403) {
+                closeSettings();
+                say('Edit tunnel settings from the car', true);
+                load();
+                return;
+            }
             var found = payload(xhr);
             if (found) {
                 if (saved) { loaded = false; token.value = ''; }
@@ -239,6 +243,7 @@
                     closeSettings();
                     say(body === 'action=forget' ? 'Setup removed.' : 'Setup saved.', false);
                 }
+                if (body === 'action=regenerate') say('Access code regenerated', false);
             } else {
                 var plain = (xhr.getResponseHeader('Content-Type') || '').indexOf('text/plain') === 0;
                 say(xhr.status === 0 && stopping ? 'The connection closed. Use the car or its local address to reconnect.' :

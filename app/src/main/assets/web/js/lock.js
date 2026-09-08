@@ -9,9 +9,11 @@
     var pad = Strike.keypad(document.getElementById('lockPad'), MIN, MAX, unlock);
     var recovery = document.getElementById('pinRecovery');
 
-    document.getElementById('pinRecoveryToggle').onclick = function () {
-        recovery.hidden = !recovery.hidden;
-        this.setAttribute('aria-expanded', recovery.hidden ? 'false' : 'true');
+    document.getElementById('pinRecoveryOpen').onclick = function () {
+        recovery.hidden = false;
+    };
+    document.getElementById('pinRecoveryClose').onclick = function () {
+        recovery.hidden = true;
     };
 
     function say(text) {
@@ -35,7 +37,7 @@
             payload = null;
         }
         if (payload && payload.error === 'locked') {
-            waitFor(payload.lockoutMs);
+            waitFor(typeof payload.lockoutMs === 'number' ? payload.lockoutMs : 0);
             return;
         }
         say('Wrong PIN.');
@@ -68,7 +70,7 @@
                 location.replace('/');
                 return;
             }
-            waitFor(payload.lockoutMs);
+            waitFor(typeof payload.lockoutMs === 'number' ? payload.lockoutMs : 0);
         }, function () {});
     });
 }());

@@ -64,7 +64,10 @@
 
     function save(key, value) {
         var body = 'key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value);
-        Strike.core.post(SETTINGS, body, load, load);
+        Strike.core.post(SETTINGS, body, function () {
+            load();
+            Strike.toast('Surveillance settings saved');
+        }, function () { load(); Strike.toast('Could not save surveillance settings', true); });
     }
 
     function show(open) {

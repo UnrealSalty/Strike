@@ -66,7 +66,8 @@
             button.type = 'button';
             button.onclick = function () {
                 this.disabled = true;
-                Strike.core.post(post.path, '', load, load);
+                Strike.core.post(post.path, '', load,
+                    function () { load(); Strike.toast('Could not connect shell access', true); });
             };
             return button;
         }
@@ -81,7 +82,8 @@
         if (card.can && card.path) {
             toggle.onclick = function () {
                 this.disabled = true;
-                Strike.core.post(card.path, 'enabled=' + (card.on ? 'false' : 'true'), load, load);
+                Strike.core.post(card.path, 'enabled=' + (card.on ? 'false' : 'true'), load,
+                    function () { load(); Strike.toast('Could not change ' + card.name.toLowerCase(), true); });
             };
         }
         return toggle;
@@ -148,17 +150,25 @@
         return host;
     }
 
-    function paint(payload) {
+    function paint(payload, cached) {
         var count = document.getElementById('count');
         count.textContent = payload.running + ' of ' + payload.total + ' running';
         count.setAttribute('data-empty', 'false');
         document.getElementById('countDot').setAttribute('data-state', payload.health);
 
         var host = document.getElementById('daemons');
+        host.setAttribute('aria-busy', 'false');
+        document.getElementById('daemonMessage').hidden = true;
         host.innerHTML = '';
         for (var i = 0; i < payload.cards.length; i++) {
             host.appendChild(daemon(payload.cards[i]));
         }
+        if (cached) disableControls();
+    }
+
+    function disableControls() {
+        var buttons = document.querySelectorAll('#daemons .daemon__actions button');
+        for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
     }
 
     function unreachable() {
@@ -167,8 +177,16 @@
         count.setAttribute('data-empty', 'true');
         document.getElementById('countDot').removeAttribute('data-state');
         var host = document.getElementById('daemons');
-        host.innerHTML = '';
-        host.appendChild(Strike.core.el('p', 'note', 'Cannot reach Strike.'));
+        host.setAttribute('aria-busy', 'false');
+        var placeholders = host.querySelectorAll('.sk');
+        for (var i = 0; i < placeholders.length; i++) {
+            placeholders[i].className = '';
+            placeholders[i].textContent = Strike.core.dash;
+        }
+        disableControls();
+        var message = document.getElementById('daemonMessage');
+        message.textContent = 'Cannot reach Strike';
+        message.hidden = false;
     }
 
     function following(host) {

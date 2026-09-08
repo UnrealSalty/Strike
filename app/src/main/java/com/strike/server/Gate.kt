@@ -13,7 +13,7 @@ internal fun rewriteToLock(path: String, locked: Boolean): Boolean {
 
 internal fun refuseWhenLocked(method: String, path: String, locked: Boolean): Boolean {
     if (!locked) return false
-    if (pagePath(path) != null || path == FAVICON_PATH) return false
+    if (pagePath(path) != null || path == FAVICON_PATH || path == "/img/wordmark.webp") return false
     if (path.startsWith("/css/") || path.startsWith("/js/")) return false
     if (path == SECURITY_API && method == "GET") return false
     if (path == UNLOCK_API && method == "POST") return false

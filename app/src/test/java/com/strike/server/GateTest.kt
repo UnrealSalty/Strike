@@ -39,6 +39,7 @@ class GateTest {
         assertFalse(refuseWhenLocked("GET", "/lock.html", true))
         assertFalse(refuseWhenLocked("GET", LOCK_PAGE, true))
         assertFalse(refuseWhenLocked("GET", FAVICON_PATH, true))
+        assertFalse(refuseWhenLocked("GET", "/img/wordmark.webp", true))
         assertFalse(refuseWhenLocked("GET", "/css/tokens.css", true))
         assertFalse(refuseWhenLocked("GET", "/js/lock.js", true))
         assertFalse(refuseWhenLocked("GET", "/api/security", true))

@@ -73,7 +73,15 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     private var cards: JSONObject? = null
     private var cardsAtMs = 0L
 
-    fun daemons(): Response = Response(200, JSON, payload().toString().toByteArray())
+    fun daemons(inCar: Boolean): Response {
+        val response = JSONObject(payload().toString())
+        val cards = response.getJSONArray("cards")
+        if (!inCar) for (i in 0 until cards.length()) {
+            val card = cards.getJSONObject(i)
+            if (card.getString("id") == "cloudflare") card.put("can", false)
+        }
+        return Response(200, JSON, response.toString().toByteArray())
+    }
 
     fun pauseForUpdate(beforeStop: (Boolean) -> Unit) = recorder.pauseForUpdate(beforeStop)
 

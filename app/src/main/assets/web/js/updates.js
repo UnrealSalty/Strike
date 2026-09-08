@@ -51,8 +51,7 @@
         Strike.core.value('updateLatest', version(payload.latest));
         Strike.core.value('updateChecked', checked(payload.checkedAtMs));
         document.getElementById('updateChecked').title = payload.checkedAtMs ? new Date(payload.checkedAtMs).toLocaleString() : '';
-        document.getElementById('updateNotes').textContent = payload.notes || '';
-        document.getElementById('updateNotesBox').hidden = !payload.notes;
+        Strike.releaseNotes(payload.notes);
         message.textContent = confirming ? 'Recording pauses during installation. Strike restarts afterward.' : status(payload);
         message.setAttribute('data-error', payload.failed ? 'true' : 'false');
         var downloading = payload.phase === 'downloading';
@@ -73,7 +72,7 @@
     }
 
     function reply(xhr) {
-        if (xhr.status === 401) { location.replace('/access'); return null; }
+        if (xhr.status === 401) { Strike.session.signIn(); return null; }
         if (xhr.status === 403) { location.replace('/lock'); return null; }
         if (xhr.status !== 200) return null;
         try { return JSON.parse(xhr.responseText); } catch (e) { return null; }

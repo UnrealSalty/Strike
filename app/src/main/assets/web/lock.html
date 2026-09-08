@@ -13,19 +13,30 @@
 <body>
 
     <main class="lock">
-        <p class="lock__brand">Strike</p>
+        <img class="lock__brand" src="img/wordmark.webp" alt="Strike" width="144" height="20">
         <h1 class="lock__title">Enter PIN</h1>
         <p class="lock__sub" id="lockSub">Unlock Strike to continue.</p>
         <div id="lockPad"></div>
-        <button class="btn btn--quiet lock__help" id="pinRecoveryToggle" type="button" aria-expanded="false" aria-controls="pinRecovery">Forgot PIN?</button>
-        <div class="lock__recovery" id="pinRecovery" hidden>
-            <p>On a computer with an authorised ADB connection to the head unit, run:</p>
-            <code class="lock__command">adb shell touch /data/local/tmp/.strike_pin_reset</code>
-            <p>Reopen or refresh Strike, then set a new PIN in Settings &rarr; Security. Recordings and settings are kept.</p>
-        </div>
+        <button class="btn btn--quiet lock__help" id="pinRecoveryOpen" type="button">Forgot PIN?</button>
     </main>
 
+    <div class="modal" id="pinRecovery" hidden>
+        <section class="modal__panel modal__panel--narrow" role="dialog" aria-modal="true" aria-labelledby="pinRecoveryTitle">
+            <div class="modal__head">
+                <span class="modal__title" id="pinRecoveryTitle">Forgot PIN</span>
+                <button class="btn" id="pinRecoveryClose" type="button">Close</button>
+            </div>
+            <div class="modal__body">
+                <p class="note">On a computer with an authorised ADB connection to the head unit, run:</p>
+                <code class="lock__command">adb shell touch /data/local/tmp/.strike_pin_reset</code>
+                <p class="note">Reopen or refresh Strike, then set a new PIN in Settings. Recordings and settings are kept.</p>
+            </div>
+        </section>
+    </div>
+
+    <script src="js/session.js"></script>
     <script src="js/core.js"></script>
+    <script src="js/toast.js"></script>
     <script src="js/keypad.js"></script>
     <script src="js/lock.js"></script>
 </body>

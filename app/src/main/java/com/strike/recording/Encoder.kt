@@ -187,6 +187,20 @@ class Encoder(
         release()
     }
 
+    fun setBitrate(bitrateBps: Int): Boolean {
+        val active = codec ?: return false
+        return try {
+            active.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, bitrateBps) })
+            true
+        } catch (e: IllegalStateException) {
+            DaemonLog.w(TAG, "live bitrate change needs an encoder restart")
+            false
+        } catch (e: IllegalArgumentException) {
+            DaemonLog.w(TAG, "live bitrate change is not supported while encoding")
+            false
+        }
+    }
+
     private fun pump(codec: MediaCodec) {
         val info = MediaCodec.BufferInfo()
         val startedAtMs = System.currentTimeMillis()

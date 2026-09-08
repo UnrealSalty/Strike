@@ -10,6 +10,7 @@ import com.strike.camera.FrameBus
 import com.strike.camera.LIVE_BITRATE_BPS
 import com.strike.camera.LIVE_FRAME_RATE_FPS
 import com.strike.camera.LiveStreamer
+import com.strike.camera.LiveQuality
 import com.strike.camera.cameraStack
 import com.strike.camera.cameras
 import com.strike.camera.AvcHal
@@ -84,6 +85,9 @@ object CameraDaemon {
     private var liveView = CameraView.FRONT
 
     @Volatile
+    private var liveBitrateBps = LIVE_BITRATE_BPS
+
+    @Volatile
     private var sentryMode = SentryMode.OFF
 
     @Volatile
@@ -97,6 +101,7 @@ object CameraDaemon {
         vehicle = telemetry
         telemetry?.parkingSnapshot()
     })
+    private val soc = SocReader(read = { vehicle?.soc() })
 
     private val relay = PacketRelay()
     private val audio = AudioIngest()
@@ -129,6 +134,7 @@ object CameraDaemon {
         DaemonFonts.install()
         loadCameraLibraries()
         CameraTexture.load(args.firstOrNull())
+        screen.apkPath = args.getOrNull(1)
         sentry = Sentry(args.getOrNull(1), screen)
         vehicle = DaemonContext.get()?.let { context ->
             VehicleTelemetry(context) { DaemonLog.w("ACC", it) }
@@ -172,6 +178,8 @@ object CameraDaemon {
         }
         "live.start" -> {
             liveView = CameraView.of(command.optString("view"))
+            liveBitrateBps = command.optInt("bitrateBps", LIVE_BITRATE_BPS)
+                .takeIf { bitrate -> LiveQuality.entries.any { it.bitrateBps == bitrate } } ?: LIVE_BITRATE_BPS
             liveWanted = true
             ok()
         }
@@ -294,6 +302,7 @@ object CameraDaemon {
                 }
                 val trouble = try {
                     acc.poll()
+                    if (soc.poll()) DaemonLog.d("Soc", socLine(soc.percent))
                     null
                 } catch (e: RuntimeException) {
                     e
@@ -301,7 +310,7 @@ object CameraDaemon {
                     e
                 }
                 val reason = trouble?.let { it.message ?: it.javaClass.simpleName }
-                if (reason != null && reason != failure) DaemonLog.w("ACC", "power state read failed: $reason")
+                if (reason != null && reason != failure) DaemonLog.w("ACC", "vehicle read failed: $reason")
                 failure = reason
                 updateVehicle()
                 handler.postDelayed(this, SUPERVISE_EVERY_MS)
@@ -388,9 +397,10 @@ object CameraDaemon {
         if (streamer.isStreaming && streamer.view != liveView) {
             streamer.stop()
         }
+        if (streamer.isStreaming && !streamer.adjustBitrate(liveBitrateBps)) streamer.stop()
         if (!streamer.isStreaming) {
             val bus = cameraUp()
-            if (bus == null || !streamer.start(bus, liveView, LIVE_FRAME_RATE_FPS, LIVE_BITRATE_BPS)) {
+            if (bus == null || !streamer.start(bus, liveView, LIVE_FRAME_RATE_FPS, liveBitrateBps)) {
                 liveWanted = false
             }
         }

@@ -92,6 +92,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
                         <span class="action__text">
                             <span class="action__name">Surveillance</span>
+                            <span class="action__sub" id="eventCount">&mdash;</span>
                         </span>
                     </a>
                 </div>
@@ -104,10 +105,14 @@
                     <p class="card__sub" id="usedSub">&mdash;</p>
                 </section>
                 <section class="card">
-                    <h2 class="card__name">Recent activity</h2>
-                    <a class="row row--link" id="lastEventLink" href="/surveillance" data-empty="true">
-                        <span class="row__label">Latest surveillance clip</span>
-                        <span class="row__value" id="lastEvent">&mdash;</span>
+                    <h2 class="card__name">Latest surveillance clip</h2>
+                    <a class="latest" id="lastEventLink" href="/surveillance" aria-label="Open the latest surveillance clip">
+                        <span class="latest__picture" id="lastEventPicture" data-loading="true">
+                            <span class="sk"></span>
+                            <img id="lastEventImage" alt="" hidden>
+                            <span class="latest__empty" id="lastEventEmpty" hidden>&mdash;</span>
+                        </span>
+                        <span class="latest__caption" id="lastEvent"><span class="sk sk--line"></span></span>
                     </a>
                     <a class="row row--link" id="updateLink" href="/settings#updates" data-empty="false" hidden>
                         <span class="row__label">Update available</span>
@@ -119,7 +124,9 @@
 
     </main>
 
+    <script src="js/session.js"></script>
     <script src="js/core.js"></script>
+    <script src="js/toast.js"></script>
     <script src="js/shell.js"></script>
     <script src="js/dashboard.js"></script>
 </body>

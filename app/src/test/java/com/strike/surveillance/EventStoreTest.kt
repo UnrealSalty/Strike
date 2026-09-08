@@ -129,4 +129,27 @@ class EventStoreTest {
     private fun write(name: String) {
         folder.newFile(name).writeText(name)
     }
+
+    @Test
+    fun dashboardCountsClipsAndPreviewsTheNewestAcrossBothKinds() {
+        write("event_20260905_180000.mp4")
+        write("watch_20260905_193000.mp4")
+        write("drive_20260905_200000.mp4")
+        folder.newFolder("event_20260905_210000.mp4")
+        val store = EventStore(folder.root)
+        store.flag("watch_20260905_193000.mp4", PERSON, 0.8f, byteArrayOf(1))
+
+        val summary = store.summary()
+
+        assertEquals(2, summary.clips)
+        assertEquals("watch_20260905_193000.mp4", summary.latest!!.id)
+        assertEquals(PERSON, summary.latest.seen)
+    }
+
+    @Test
+    fun dashboardWithoutStorageHasNoLatestClip() {
+        val summary = EventStore(File(folder.root, "unmounted")).summary()
+        assertEquals(0, summary.clips)
+        assertNull(summary.latest)
+    }
 }

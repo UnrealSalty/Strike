@@ -209,7 +209,37 @@ class OnlineTest {
         assertEquals("Cloudflare rejected the token. Update the setup",
             tunnelError("Unauthorized: " + sampleTunnelToken()))
         assertTrue(String(api.status(true).body).contains(fixture.browsers.access.code()!!))
-        assertEquals(409, api.update("action=regenerate").status)
+        assertEquals(403, api.update("action=regenerate").status)
+    }
+
+    @Test fun browsersCannotChangeTunnelSettingsOrTheirAccessCode() {
+        val fixture = Fixture()
+        val api = OnlineApi(fixture.online, fixture.browsers) { emptyList() }
+        val before = String(api.status(true).body)
+        for (action in listOf("toggle&enabled=true", "save&hostname=other.example.com",
+            "forget", "retry", "regenerate")) {
+            assertEquals(403, api.update("action=$action").status)
+            assertEquals(before, String(api.status(true).body))
+        }
+    }
+
+    @Test fun parkingAndWakingKeepTheAccessCodeAndRememberedBrowser() {
+        val fixture = Fixture(mode = "off")
+        val code = fixture.browsers.access.code()!!
+        val token = fixture.browsers.access.login(code).token
+        try {
+            fixture.online.enable(true)
+            fixture.online.acc(true)
+            fixture.now.addAndGet(11_000L)
+            fixture.online.acc(false)
+            assertNotNull(fixture.launched.poll(5, TimeUnit.SECONDS))
+            assertEquals(code, fixture.browsers.access.code())
+            assertTrue(fixture.browsers.access.allows(token))
+            assertNotNull(fixture.browsers.access.login(code).token)
+            fixture.online.acc(true)
+            assertEquals(code, fixture.browsers.access.code())
+            assertTrue(fixture.browsers.access.allows(token))
+        } finally { fixture.close() }
     }
 
     @Test fun codeRegenerationIsAvailableInTheCarAndRevokesBrowserSessions() {

@@ -35,6 +35,12 @@
     var ticket = 0;
     var shotW = 0;
     var shotH = 0;
+    var mediaUrl = null;
+    var quality = Strike.liveQuality(function () {
+        if (!socket && !drawn) return;
+        reset('Changing stream quality', '');
+        connect();
+    });
 
     function eye() {
         var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -171,6 +177,7 @@
 
     function render(status) {
         vehicle(status.vehicle);
+        quality.inCar(status.inCar);
     }
 
     function forget() {
@@ -311,6 +318,7 @@
         video.pause();
         video.removeAttribute('src');
         video.load();
+        if (mediaUrl) { URL.revokeObjectURL(mediaUrl); mediaUrl = null; }
         idle(headline, detail);
     }
 
@@ -324,7 +332,8 @@
             return;
         }
         media = new MediaSource();
-        video.src = URL.createObjectURL(media);
+        mediaUrl = URL.createObjectURL(media);
+        video.src = mediaUrl;
         media.addEventListener('sourceopen', function () {
             if (mine !== ticket) {
                 return;
@@ -335,7 +344,7 @@
         });
 
         var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host +
-            '/live/stream?view=all';
+            '/live/stream?view=all&quality=' + quality.value();
         socket = new WebSocket(url);
         socket.binaryType = 'arraybuffer';
         socket.onmessage = function (event) {

@@ -46,7 +46,14 @@
         </div>
         <div class="columns">
             <section class="card columns__wide" id="updates">
-                <h2 class="card__name">Updates</h2>
+                <div class="card__actions">
+                    <h2 class="card__name">Updates</h2>
+                    <span class="card__tools">
+                        <button class="btn" id="releaseNotesOpen" type="button" disabled>Release notes</button>
+                        <button class="btn" id="updateCheck" type="button" disabled>Check now</button>
+                        <button class="btn btn--primary" id="updateApply" type="button" hidden disabled>Download</button>
+                    </span>
+                </div>
                 <div class="boxes">
                     <div class="box">
                         <span class="box__label">Installed</span>
@@ -66,36 +73,40 @@
                     </div>
                 </div>
                 <p class="note">Checks once a day when Strike opens. Downloads start when you choose.</p>
-                <div class="updates__notes" id="updateNotesBox" hidden>
-                    <h3 class="head">Release notes</h3>
-                    <p id="updateNotes"></p>
-                </div>
-                <div class="updates__buttons">
-                    <button class="btn" id="updateCheck" type="button" disabled>Check now</button>
-                    <button class="btn btn--primary" id="updateApply" type="button" hidden disabled>Download</button>
-                </div>
             </section>
             <div class="columns__narrow">
-                <section class="card" id="securityCard" hidden>
-                    <h2 class="card__name">Security</h2>
-                    <p class="note">Protect the app on the car's screen with a PIN.</p>
-                    <div class="row row--control">
-                        <span class="row__label" id="pinState">&mdash;</span>
-                        <button class="btn" id="securityOpen" type="button" disabled>Set PIN</button>
+                <section class="card" id="securityCard">
+                    <div class="card__actions">
+                        <div class="card__lead">
+                            <h2 class="card__name">Security</h2>
+                            <p class="card__sub" id="pinState"><span class="sk sk--line"></span></p>
+                            <p class="note" id="securityNote">Protect the app on the car's screen with a PIN.</p>
+                        </div>
+                        <span class="card__tools">
+                            <button class="btn" id="pinClear" type="button" hidden>Turn off</button>
+                            <button class="btn" id="securityOpen" type="button" disabled>Set PIN</button>
+                        </span>
                     </div>
                 </section>
             </div>
         </div>
     </main>
 
+    <div class="modal" id="releaseNotes" hidden>
+        <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="releaseNotesTitle">
+            <div class="modal__head">
+                <span class="modal__title" id="releaseNotesTitle">Release notes</span>
+                <button class="btn" id="releaseNotesClose" type="button">Close</button>
+            </div>
+            <div class="modal__body"><p class="release-notes" id="updateNotes"></p></div>
+        </section>
+    </div>
+
     <div class="modal" id="security" hidden>
         <div class="modal__panel modal__panel--narrow">
             <div class="modal__head">
                 <span class="modal__title" id="securityTitle">Set PIN</span>
-                <span class="modal__tools">
-                    <button class="btn btn--danger" id="pinClear" type="button" hidden>Turn off</button>
-                    <button class="btn" id="securityClose" type="button">Close</button>
-                </span>
+                <button class="btn" id="securityClose" type="button">Close</button>
             </div>
             <div class="modal__body">
                 <div class="entry">
@@ -106,9 +117,12 @@
         </div>
     </div>
 
+    <script src="js/session.js"></script>
     <script src="js/core.js"></script>
+    <script src="js/toast.js"></script>
     <script src="js/keypad.js"></script>
     <script src="js/security.js"></script>
+    <script src="js/release-notes.js"></script>
     <script src="js/updates.js"></script>
 </body>
 </html>

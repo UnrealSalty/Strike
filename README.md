@@ -103,6 +103,10 @@ This code protects both local and remote access. Regenerating it signs out all
 browsers. The optional in-car PIN in **Settings → Security** is separate. Local addresses use HTTP, so use a
 trusted network.
 
+In the browser's Live view, choose **Low data**, **Balanced**, or **High** stream
+quality. This leaves recorded clips unchanged. If several browsers are watching,
+the lowest selected quality applies to the shared live stream.
+
 ![Online page with Cloudflare tunnel controls, local address, and masked browser access code](art/screenshots/online.png)
 
 <details>
@@ -120,7 +124,8 @@ trusted network.
 The tunnel can run **Always**, when the **Car is off**, or **On lock**. On lock
 requires a confirmed lock reading. Automatic modes stop if ignition readings are
 unavailable. The same tunnel switch appears in **Daemons**; turning it off cancels
-automatic starts too. Use the car or local address to turn it back on.
+automatic starts too. Tunnel controls and setup are available from the car;
+browsers show their status.
 
 The head unit must stay awake and have internet access. The tunnel cannot wake
 the car. Playback depends on upload speed and browser codec support. Review
@@ -153,7 +158,9 @@ download and install.
 
 The updater finishes the current clip before installation and restores recording
 afterward if it was running. If the clip cannot finish, installation is cancelled.
-Settings and saved footage are kept. In-app installation needs authorized ADB
+Settings, the in-car PIN, browser access code, remembered browser sessions, and
+saved footage are kept. Uninstalling Strike or clearing its app data resets the
+PIN and browser access. In-app installation needs authorized ADB
 access and an APK signed with the same key as the installed version.
 
 ![Settings page with installed and latest versions, release notes, and the in-car PIN control](art/screenshots/settings.png)
