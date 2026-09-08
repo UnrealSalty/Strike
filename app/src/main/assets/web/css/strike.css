@@ -167,12 +167,6 @@ body {
     background: transparent;
 }
 
-.online__open {
-    display: inline-flex;
-    align-items: center;
-    text-decoration: none;
-}
-
 .online__retry {
     margin-top: var(--gap);
 }

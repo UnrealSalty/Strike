@@ -153,11 +153,9 @@
         addressReady('remoteAddress');
         var url = payload.hostname ? 'https://' + payload.hostname + '/' : '';
         document.getElementById('remoteUrl').value = url;
-        var remoteOpen = document.getElementById('remoteOpen');
         var remoteCopy = document.getElementById('remoteCopy');
-        remoteOpen.hidden = remoteCopy.hidden = !url;
+        remoteCopy.hidden = !url;
         remoteCopy.disabled = !url;
-        if (url) remoteOpen.href = url; else remoteOpen.removeAttribute('href');
         forget.hidden = !payload.hasToken;
         retry.hidden = !payload.canRetry;
         document.getElementById('accessContent').setAttribute('data-manage', payload.browserAccess.canManage ? 'true' : 'false');
@@ -207,7 +205,6 @@
                     if (!state) {
                         addresses([]);
                         document.getElementById('remoteCopy').hidden = true;
-                        document.getElementById('remoteOpen').hidden = true;
                     }
                 }
             }
