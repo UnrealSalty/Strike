@@ -12,7 +12,6 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
-import java.util.concurrent.FutureTask
 
 private const val TAG = "Shell"
 private const val HOST = "127.0.0.1"
@@ -39,12 +38,12 @@ class Shell internal constructor(
     private val lock = Any()
     private val commands = Any()
     private var dadb: Dadb? = null
-    private var pending: FutureTask<Dadb?>? = null
+    private var connecting = false
     private var failures = 0
     private var retryAtMs = 0L
 
     val isPending: Boolean
-        get() = synchronized(lock) { pending != null || failures in 1 until AUTH_ATTEMPTS }
+        get() = synchronized(lock) { connecting || failures in 1 until AUTH_ATTEMPTS }
 
     fun isAuthorised(): Boolean = connect() != null
 
@@ -96,41 +95,40 @@ class Shell internal constructor(
 
     private fun connect(force: Boolean = false): Dadb? = synchronized(lock) {
         dadb?.let { return it }
-        val attempt = pending
-        if (attempt != null) {
-            if (!attempt.isDone) return null
-            pending = null
-            val opened = attempt.get()
-            if (opened != null) {
-                dadb = opened
-                failures = 0
-                Logs.d(TAG, "shell authorised")
-                onAuthorised()
-                return opened
-            }
-            failures++
-            retryAtMs = nowMs() + minOf(RETRY_MS * (1L shl (failures - 1)), MAX_RETRY_MS)
-            if (failures == AUTH_ATTEMPTS) {
-                Logs.w(TAG, "shell unavailable; accept the debugging prompt and press Connect to retry")
-            }
-        }
+        if (connecting) return null
         if (force) {
             failures = 0
             retryAtMs = 0L
         }
         if (failures >= AUTH_ATTEMPTS || nowMs() < retryAtMs) return null
 
-        // Keep a late approval: cancelling a Future does not stop socket I/O.
-        val next = FutureTask<Dadb?> {
-            try {
+        connecting = true
+        connector.execute {
+            val opened = try {
                 open()
             } catch (e: Exception) {
                 Logs.d(TAG, "adb connection failed: ${e.message}")
                 null
             }
+            synchronized(lock) {
+                connecting = false
+                dadb = opened
+                if (opened != null) {
+                    failures = 0
+                    retryAtMs = 0L
+                } else {
+                    failures++
+                    retryAtMs = nowMs() + minOf(RETRY_MS * (1L shl (failures - 1)), MAX_RETRY_MS)
+                    if (failures == AUTH_ATTEMPTS) {
+                        Logs.w(TAG, "shell unavailable; accept the debugging prompt and press Connect to retry")
+                    }
+                }
+            }
+            if (opened != null) {
+                Logs.d(TAG, "shell authorised")
+                onAuthorised()
+            }
         }
-        pending = next
-        connector.execute(next)
         null
     }
 

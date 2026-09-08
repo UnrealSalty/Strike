@@ -42,9 +42,13 @@ class StrikeApp : Application() {
         browsers = BrowserGate(BrowserAccess(File(filesDir, "browser-access.json")))
         val main = Handler(Looper.getMainLooper())
         val shell = Shell(this) { main.post { setup.shellAuthorised() } }
-        setup = SetupRestart(!File(filesDir, "adbkey").isFile) {
+        setup = SetupRestart(
+            File(filesDir, "setup.pending"),
+            !File(filesDir, "adbkey").isFile || !File(filesDir, "adbkey.pub").isFile,
+            { shell.retry() }
+        ) {
             Thread({
-                Logs.d("Shell", "Restarting Strike after permission setup")
+                Logs.d("Shell", "Restarting Strike after USB debugging approval")
                 // The shell survives the app process; the recorder has its own UID.
                 val started = shell.check("nohup sh -c 'am force-stop com.strike; " +
                     "am start -n com.strike/.MainActivity' </dev/null >/dev/null 2>&1 &")

@@ -39,6 +39,18 @@ class ShellTest {
     )
 
     @Test
+    fun successfulApprovalNotifiesSetupWithoutASecondConnectionProbe() {
+        assertFalse(shell.isAuthorised())
+        nowMs += 120_000L
+        tasks.removeFirst().run()
+        assertEquals(1, authorisations)
+        assertTrue(shell.isAuthorised())
+        assertEquals("shell reply", shell.read("echo ready"))
+        assertEquals(1, authorisations)
+        assertTrue(tasks.isEmpty())
+    }
+
+    @Test
     fun lateApprovalKeepsTheAuthorisedTransport() {
         assertFalse(shell.isAuthorised())
         assertTrue(shell.isPending)
