@@ -21,7 +21,7 @@ class BrowserAccessTest {
         val file = File(directory.root, "access.json")
         val access = access(file)
         val code = access.code()!!
-        assertTrue(code.matches(Regex("[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){3}")))
+        assertTrue(code.matches(Regex("[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){2}")))
         val token = access.login(code).token!!
         val reloaded = access(file)
         assertEquals(code, reloaded.code())
@@ -33,6 +33,31 @@ class BrowserAccessTest {
         val code = access.code()!!.lowercase().replace("-", " \t")
         assertTrue(access.allows(access.login("\n$code\r").token))
         assertTrue(access.allows(access.login(access.code()!!.replace("-", "")).token))
+    }
+
+    @Test fun anExistingFourGroupCodeAndSessionSurviveUntilRegenerated() {
+        val file = File(directory.root, "access.json")
+        val oldCode = "0123456789ABCDEF"
+        file.writeText(JSONObject().put("version", 1).put("code", oldCode)
+            .put("key", Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32) { it.toByte() }))
+            .toString())
+        val access = access(file)
+        assertEquals("0123-4567-89AB-CDEF", access.code())
+        val token = access.login(access.code()!!).token!!
+        assertTrue(access(file).allows(token))
+        assertNull(access.login(oldCode.take(12)).token)
+        val shorter = access.regenerate()
+        assertEquals(14, shorter.length)
+        val reloaded = access(file)
+        assertEquals(shorter, reloaded.code())
+        assertFalse(reloaded.allows(token))
+        assertNull(reloaded.login(oldCode).token)
+        assertNotNull(reloaded.login(shorter).token)
+    }
+
+    @Test fun extendingAShortCodeCannotAuthenticate() {
+        val access = access()
+        assertNull(access.login(access.code()!! + "-ABCD").token)
     }
 
     @Test fun wrongCodesCannotCreateOrServeAsBrowserSessions() {

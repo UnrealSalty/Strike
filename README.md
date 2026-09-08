@@ -121,6 +121,9 @@ the lowest selected quality applies to the shared live stream.
 5. Turn on the tunnel and open `https://car.example.com/`. Enter Strike's browser
    access code. You can also put Cloudflare Access in front of it.
 
+Use a separate tunnel for emulator testing. If two devices run the same tunnel
+token, Cloudflare can send requests to either device.
+
 The tunnel can run **Always**, when the **Car is off**, or **On lock**. On lock
 requires a confirmed lock reading. Automatic modes stop if ignition readings are
 unavailable. The same tunnel switch appears in **Daemons**; turning it off cancels

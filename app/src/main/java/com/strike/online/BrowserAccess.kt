@@ -44,7 +44,7 @@ class BrowserAccess(
     @Synchronized fun isReady(): Boolean = credentials != null
 
     @Synchronized fun regenerate(): String {
-        val replacement = Credentials(buildString { repeat(16) { append(ALPHABET[random.nextInt(32)]) } },
+        val replacement = Credentials(buildString { repeat(CODE_LENGTH) { append(ALPHABET[random.nextInt(32)]) } },
             ByteArray(32).also(random::nextBytes))
         save(replacement)
         credentials = replacement
@@ -98,7 +98,7 @@ class BrowserAccess(
             if (saved.getInt("version") != 1) throw IOException("Invalid browser access version")
             val code = saved.getString("code")
             val key = decode(saved.getString("key"))
-            if (code.length != 16 || code.any { it !in ALPHABET } || key?.size != 32) {
+            if (code.length != CODE_LENGTH && code.length != 16 || code.any { it !in ALPHABET } || key?.size != 32) {
                 throw IOException("Invalid browser access credentials")
             }
             return Credentials(code, key)
@@ -134,12 +134,13 @@ class BrowserAccess(
 
     companion object {
         const val SESSION_SECONDS = 90L * 24 * 60 * 60
+        private const val CODE_LENGTH = 12
         private const val ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
         private val random = SecureRandom()
         private val TOKEN = Regex("1\\.[0-9]{1,12}\\.[0-9]{1,12}\\.[A-Za-z0-9_-]{32}\\.[A-Za-z0-9_-]{43}")
 
         private fun normalize(given: String): String? {
-            if (given.length !in 16..64) return null
+            if (given.length !in CODE_LENGTH..64) return null
             val normalized = buildString {
                 for (character in given) {
                     if (character == '-' || character == ' ' || character == '\t' ||
@@ -147,7 +148,8 @@ class BrowserAccess(
                     append(if (character in 'a'..'z') character - 32 else character)
                 }
             }
-            return normalized.takeIf { it.length == 16 && it.all { character -> character in ALPHABET } }
+            return normalized.takeIf { (it.length == CODE_LENGTH || it.length == 16) &&
+                it.all { character -> character in ALPHABET } }
         }
 
         private fun sign(key: ByteArray, payload: String): ByteArray {
