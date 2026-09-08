@@ -11,3 +11,5 @@ local.properties
 captures/
 .kotlin/
 AGENTS.md
+
+.cursor/
