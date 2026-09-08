@@ -407,14 +407,8 @@
         });
     }
 
-    function veil() {
-        document.getElementById('stage').className = 'stage';
-    }
-
     paintSpots();
     load();
     window.addEventListener('resize', fitShot);
-    window.addEventListener('pagehide', veil);
-    document.querySelector('.nav').addEventListener('click', veil);
     Strike.shell.start(render, forget);
 }());

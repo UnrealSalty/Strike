@@ -439,13 +439,13 @@
         }
 
         function close() {
+            document.getElementById('player').hidden = true;
+            document.getElementById('playerFrame').className = 'player__frame';
             expand(false);
             var video = document.getElementById('playerVideo');
             video.pause();
             video.removeAttribute('src');
             video.load();
-            document.getElementById('playerFrame').className = 'player__frame';
-            document.getElementById('player').hidden = true;
             document.getElementById('playerMarks').innerHTML = '';
             stamped = '';
             playing = null;

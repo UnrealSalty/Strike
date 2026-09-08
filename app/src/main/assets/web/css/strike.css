@@ -645,6 +645,10 @@ main {
     transition: transform var(--quick) var(--ease);
 }
 
+.pick__btn .sk--line {
+    width: var(--key);
+}
+
 .pick__btn[aria-expanded="true"] > svg {
     transform: rotate(180deg);
 }
@@ -1646,6 +1650,20 @@ main {
 }
 
 /* The platform draws its own play glyph on a video with no controls. */
+.is-leaving video {
+    visibility: hidden !important;
+}
+
+.player__video,
+.stage__video {
+    visibility: hidden;
+}
+
+.player__frame.is-on > .player__video,
+.stage.is-on .stage__video {
+    visibility: visible;
+}
+
 .player__video::-webkit-media-controls,
 .player__video::-webkit-media-controls-start-playback-button,
 .player__video::-webkit-media-controls-overlay-play-button,

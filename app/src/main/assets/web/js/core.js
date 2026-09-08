@@ -252,6 +252,15 @@ Strike.pick = function (id, onChange) {
     var HOLDS = ['nav__link', 'action', 'row--link'];
     var NAV_HOLD_MS = 130;
 
+    function leaving() {
+        document.documentElement.classList.add('is-leaving');
+    }
+
+    window.addEventListener('pagehide', leaving);
+    window.addEventListener('pageshow', function () {
+        document.documentElement.classList.remove('is-leaving');
+    });
+
     // Whole-word match: a substring test lets `row` hit `choice__row`, which
     // makes every list row a ripple host.
     function hasClass(node, name) {
@@ -334,6 +343,7 @@ Strike.pick = function (id, onChange) {
         if (link.getAttribute('aria-current') === 'page') {
             return;
         }
+        leaving();
         var href = link.href;
         setTimeout(function () {
             location.href = href;
