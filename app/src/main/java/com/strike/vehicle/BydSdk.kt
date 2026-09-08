@@ -17,20 +17,26 @@ object BydSdk {
 
     private var loader: ClassLoader? = null
     private var searched = false
+    private val classes = HashMap<String, Class<*>?>()
 
+    @Synchronized
     fun deviceClass(name: String, context: Context): Class<*>? {
-        try {
-            return Class.forName(name)
+        if (classes.containsKey(name)) return classes[name]
+        val found = try {
+            Class.forName(name)
         } catch (e: ClassNotFoundException) {
             Logs.d(TAG, "$name is not on the app classpath, trying the OEM apk")
+            oemLoader(context)?.let { oem ->
+                try {
+                    Class.forName(name, true, oem)
+                } catch (e: ClassNotFoundException) {
+                    Logs.w(TAG, "$name is not in the OEM apk either")
+                    null
+                }
+            }
         }
-        val oem = oemLoader(context) ?: return null
-        return try {
-            Class.forName(name, true, oem)
-        } catch (e: ClassNotFoundException) {
-            Logs.w(TAG, "$name is not in the OEM apk either")
-            null
-        }
+        classes[name] = found
+        return found
     }
 
     private fun oemLoader(context: Context): ClassLoader? {

@@ -18,19 +18,39 @@ object DaemonFonts {
     )
 
     private var face: Typeface? = null
+    private var installed = false
 
+    @Synchronized
     fun install() {
-        if (face != null) return
+        if (installed) return
+        installed = true
+        var failure: String? = null
+        // Android 12 app_process skips the application bind that initializes the font map.
+        if (Typeface.DEFAULT == null) {
+            try {
+                Typeface::class.java.getDeclaredMethod("loadPreinstalledSystemFontMap").invoke(null)
+            } catch (e: ReflectiveOperationException) {
+                failure = e.javaClass.simpleName
+            } catch (e: RuntimeException) {
+                failure = e.javaClass.simpleName
+            }
+        }
         for (path in files) {
             val file = File(path)
             if (!file.isFile) continue
-            val loaded = Typeface.createFromFile(file) ?: continue
+            val loaded = try {
+                Typeface.createFromFile(file)
+            } catch (e: RuntimeException) {
+                failure = e.javaClass.simpleName
+                null
+            } ?: continue
             face = loaded
             seedDefault(loaded)
             DaemonLog.d(TAG, "text from $path")
             return
         }
-        DaemonLog.w(TAG, "no system font, so the deterrent will be a red field only")
+        DaemonLog.w(TAG, "system fonts unavailable${failure?.let { " ($it)" } ?: ""}; " +
+            "recording continues, deterrent text is disabled")
     }
 
     fun apply(paint: Paint) {
