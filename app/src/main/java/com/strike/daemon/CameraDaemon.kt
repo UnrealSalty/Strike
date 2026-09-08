@@ -302,7 +302,7 @@ object CameraDaemon {
                 }
                 val trouble = try {
                     acc.poll()
-                    if (soc.poll()) DaemonLog.d("Soc", socLine(soc.percent))
+                    if (soc.poll()) DaemonLog.d("Soc", socLine(soc.percent, acc.snapshot()?.accOn))
                     null
                 } catch (e: RuntimeException) {
                     e

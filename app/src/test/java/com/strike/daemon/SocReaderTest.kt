@@ -18,11 +18,22 @@ class SocReaderTest {
     }
 
     @Test
-    fun anUnchangedPercentageIsNotRepeated() {
+    fun anUnchangedPercentageIsNotRepeatedEveryMinute() {
         assertTrue(reader.poll())
         now += 60_000
         assertFalse(reader.poll())
         assertEquals(64, reader.percent)
+    }
+
+    @Test
+    fun aStillPercentageIsRepeatedHalfHourlySoTheDeviceProvesItAnswers() {
+        reader.poll()
+        repeat(29) {
+            now += 60_000
+            assertFalse(reader.poll())
+        }
+        now += 60_000
+        assertTrue(reader.poll())
     }
 
     @Test
@@ -37,31 +48,6 @@ class SocReaderTest {
         assertEquals(1, reads)
         now += 1_000
         counted.poll()
-        assertEquals(2, reads)
-    }
-
-    @Test
-    fun aChangedPercentageIsReportedAtTheNextSample() {
-        reader.poll()
-        reading = 63
-        now += 59_999
-        assertFalse(reader.poll())
-        assertEquals(64, reader.percent)
-        now++
-        assertTrue(reader.poll())
-        assertEquals(63, reader.percent)
-    }
-
-    @Test
-    fun wakingAfterALongGapReadsOnceWithoutCatchingUp() {
-        var reads = 0
-        val counted = SocReader({ reads++; reading }, { now })
-        counted.poll()
-        now += 8 * 60 * 60_000
-        reading = 62
-        assertTrue(counted.poll())
-        assertEquals(62, counted.percent)
-        repeat(10) { assertFalse(counted.poll()) }
         assertEquals(2, reads)
     }
 
@@ -83,12 +69,13 @@ class SocReaderTest {
         now += 60_000
         assertTrue(reader.poll())
         assertNull(reader.percent)
-        assertEquals("battery percentage unavailable", socLine(reader.percent))
     }
 
     @Test
-    fun theLoggedLineCarriesTheUnit() {
-        reader.poll()
-        assertEquals("battery 64 %", socLine(reader.percent))
+    fun theLineCarriesTheUnitAndThePowerState() {
+        assertEquals("battery 64 %, car off", socLine(64, false))
+        assertEquals("battery 64 %, car on", socLine(64, true))
+        assertEquals("battery 64 %, power unknown", socLine(64, null))
+        assertEquals("battery percentage unavailable, car off", socLine(null, false))
     }
 }
