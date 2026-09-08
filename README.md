@@ -45,6 +45,17 @@ and vehicle detection.
   </tr>
 </table>
 
+## Built lean
+
+- **One APK, about 14 MB.** No companion app, no Play services, no installer.
+- **Four dependencies.** core-ktx, coroutines, `dadb` for the local ADB
+  connection, and TensorFlow Lite for detection.
+- **An interface of about 230 KB.** Plain HTML, CSS, and JavaScript. No
+  framework, no bundler, no build step, no CDN, and no remote fonts, so every
+  screen loads with the car offline.
+- **No telemetry, analytics, or crash reporting.** The only address Strike calls
+  on its own is GitHub's release API, at most once a day.
+
 ## Get started
 
 1. Download **Strike.apk** from the [latest release](https://github.com/UnrealSalty/Strike/releases/latest)
