@@ -146,8 +146,8 @@
         token.placeholder = payload.hasToken ? 'Saved. Leave blank to keep it' : 'Paste from Cloudflare';
         toggle.setAttribute('aria-pressed', payload.enabled ? 'true' : 'false');
         document.getElementById('tunnelStatus').textContent = payload.status;
-        document.getElementById('tunnelSchedule').textContent = !payload.hasToken ? Strike.core.dash :
-            payload.mode === 'always' ? 'Always' :
+        document.getElementById('tunnelSchedule').textContent = !payload.hasToken ? 'Not set up yet' :
+            payload.mode === 'always' ? 'Always on' :
             payload.mode === 'lock' ? 'Starts when the car locks' : 'Starts when the car is off';
         var dot = document.getElementById('tunnelDot');
         dot.setAttribute('data-state', payload.state === 'running' ? 'ok' :
@@ -199,6 +199,7 @@
                 } else {
                     fresh = false;
                     document.getElementById('tunnelStatus').textContent = 'Cannot reach Strike';
+                    document.getElementById('tunnelSchedule').textContent = Strike.core.dash;
                     document.getElementById('tunnelDot').removeAttribute('data-state');
                     controls();
                     if (!toggle.parentNode) control.textContent = Strike.core.dash;

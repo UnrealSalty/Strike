@@ -239,12 +239,6 @@ body {
     color: var(--bad);
 }
 
-.online button:focus,
-.online input:focus {
-    outline: 2px solid var(--accent-text);
-    outline-offset: calc(var(--gap) / 4);
-}
-
 .online__message[data-error="true"] {
     color: var(--bad);
 }
@@ -271,12 +265,6 @@ body {
 
 .access__code {
     font-family: var(--mono);
-}
-
-.access__form button:focus,
-.access__code:focus {
-    outline: 2px solid var(--accent-text);
-    outline-offset: calc(var(--gap) / 4);
 }
 
 .access__code[aria-invalid="true"] {
@@ -1268,7 +1256,7 @@ main {
 }
 
 .daemon__detail {
-    padding: 12px var(--pad) 14px 20px;
+    padding: var(--gap) var(--pad) var(--gap) 20px;
     background: var(--surface-2);
     border-top: 1px solid var(--line);
 }
@@ -1281,7 +1269,10 @@ main {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    min-height: 30px;
+}
+
+.fact + .fact {
+    margin-top: 10px;
 }
 
 .fact__label {
@@ -2322,10 +2313,11 @@ main {
     opacity: 0.4;
 }
 
+/* Skeletons sit on both --surface and --surface-2, so they pulse above both. */
 .sk {
     display: block;
     border-radius: 4px;
-    background: var(--surface-2);
+    background: var(--line);
     animation: sk 1.2s ease-in-out infinite;
 }
 
@@ -2336,9 +2328,21 @@ main {
     vertical-align: middle;
 }
 
+.sk--line {
+    display: inline-block;
+    width: calc(2 * var(--key));
+    height: 14px;
+    vertical-align: middle;
+}
+
+.online__when > .sk--line {
+    width: calc(2.5 * var(--key));
+    height: 12px;
+}
+
 @keyframes sk {
-    0%, 100% { background: var(--surface-2); }
-    50% { background: var(--line); }
+    0%, 100% { background: var(--line); }
+    50% { background: var(--elevated); }
 }
 
 @media (max-width: 920px) {
