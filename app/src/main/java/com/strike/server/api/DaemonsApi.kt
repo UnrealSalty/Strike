@@ -345,6 +345,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         if (camera != null) {
             return "Open, ${camera.optInt("width")} x ${camera.optInt("height")}"
         }
+        val reason = status?.optString("camerasReason").orEmpty()
+        if (reason.isNotEmpty()) return reason
         val factoryDashcam = bydApps.state(BydApps.DASHCAM) == BydApps.ENABLED ||
             processes.isRunning(BydApps.DASHCAM) == true
         return if (factoryDashcam) "Held by the factory dashcam" else DASH

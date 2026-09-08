@@ -115,10 +115,10 @@ fun cameraStack(): String {
 }
 
 // Reuse discovery results: probing again during camera startup can wedge the HAL.
-fun roadCamera(found: List<CameraChoice>): CameraChoice =
-    TAGS.firstNotNullOfOrNull { tag -> found.firstOrNull { it.tag == tag } }
-        ?: found.firstOrNull()
-        ?: RAW_STRIP
+fun roadCamera(found: List<CameraChoice>): CameraChoice? {
+    if (found.isEmpty() || found.singleOrNull() === RAW_STRIP) return RAW_STRIP
+    return TAGS.firstNotNullOfOrNull { tag -> found.firstOrNull { it.tag == tag } }
+}
 
 fun cameras(): CameraInventory {
     val bmm = classOrNull(BMM_CAMERA_INFO)

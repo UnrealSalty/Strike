@@ -399,7 +399,7 @@ object CameraDaemon {
     private fun cameraUp(): FrameBus? {
         if (!alive) return null
         bus?.let { return it }
-        val strip = roadCamera(inventoryNow())
+        val strip = roadCamera(inventoryNow()) ?: return null
         AvcHal.warmAndWait()
         if (!alive) return null
         val fresh = FrameBus(strip.width, strip.height)
@@ -569,7 +569,8 @@ object CameraDaemon {
             }
             known = probed.cameras.ifEmpty { listOf(RAW_STRIP) }
             inventory = known
-            camerasReason = ""
+            camerasReason = if (roadCamera(known) == null) "No supported road camera was found" else ""
+            if (camerasReason.isNotEmpty()) DaemonLog.e(TAG, camerasReason)
             DaemonLog.d(TAG, "cameras: " + known.joinToString(", ") { "${it.tag} ${it.width}x${it.height}" })
         }
         return known
