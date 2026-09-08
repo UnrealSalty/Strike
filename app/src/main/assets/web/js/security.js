@@ -15,7 +15,44 @@
     var at = null;
     var current = '';
     var chosen = '';
-    var pad = Strike.keypad(document.getElementById('securityPad'), MIN, MAX, submitted);
+    var pad = null;
+    var isSet = null;
+    var open = document.getElementById('securityOpen');
+
+    function pinState(set) {
+        isSet = set;
+        document.getElementById('pinState').textContent = set ? 'PIN set' : 'Off';
+        open.textContent = set ? 'Change PIN' : 'Set PIN';
+        open.disabled = false;
+    }
+
+    function load() {
+        open.disabled = true;
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', SECURITY, true);
+        xhr.timeout = 8000;
+        xhr.onloadend = function () {
+            if (xhr.status === 401) { location.replace('/access'); return; }
+            if (xhr.status === 403) {
+                document.getElementById('securityCard').hidden = true;
+                return;
+            }
+            var payload = null;
+            if (xhr.status === 200) {
+                try { payload = JSON.parse(xhr.responseText); } catch (e) { payload = null; }
+            }
+            document.getElementById('securityCard').hidden = false;
+            if (payload && typeof payload.set === 'boolean') {
+                pinState(payload.set);
+            } else {
+                isSet = null;
+                document.getElementById('pinState').textContent = 'Cannot load security';
+                open.textContent = 'Retry';
+                open.disabled = false;
+            }
+        };
+        xhr.send();
+    }
 
     function say(text) {
         document.getElementById('securitySub').textContent = text;
@@ -23,7 +60,7 @@
 
     function closed(set) {
         document.getElementById('security').hidden = true;
-        document.getElementById('pinState').textContent = set ? 'PIN set' : 'Off';
+        pinState(set);
     }
 
     function ask(step) {
@@ -33,6 +70,7 @@
     }
 
     function start(next) {
+        if (!pad) pad = Strike.keypad(document.getElementById('securityPad'), MIN, MAX, submitted);
         flow = next;
         current = '';
         chosen = '';
@@ -112,9 +150,9 @@
         send();
     }
 
-    document.getElementById('securityOpen').onclick = function () {
-        var set = document.getElementById('pinState').textContent === 'PIN set';
-        start(set ? 'change' : 'set');
+    open.onclick = function () {
+        if (isSet === null) { load(); return; }
+        start(isSet ? 'change' : 'set');
     };
 
     document.getElementById('securityClose').onclick = function () {
@@ -124,4 +162,6 @@
     document.getElementById('pinClear').onclick = function () {
         start('clear');
     };
+
+    load();
 }());

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Settings &middot; Strike</title>
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/favicon.png">
+    <style>html,body,button,a,input{background:#0b0b0d;color:#f2f2f5;border:0}button{-webkit-appearance:none;appearance:none}</style>
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/strike.css">
+</head>
+<body>
+
+    <header class="topbar">
+        <img class="topbar__brand" src="img/wordmark.webp" alt="Strike" width="144" height="20">
+        <nav class="nav">
+            <a class="nav__link" href="/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Dashboard
+            </a>
+            <a class="nav__link" href="/live">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="13" height="12" rx="2"/><path d="M15 11l6-4v10l-6-4z"/></svg>Live
+            </a>
+            <a class="nav__link" href="/recordings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M16 4v16"/></svg>Recordings
+            </a>
+            <a class="nav__link" href="/surveillance">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>Surveillance
+            </a>
+            <a class="nav__link" href="/daemons">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>Daemons
+            </a>
+            <a class="nav__link" href="/online">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a18 18 0 010 18 18 18 0 010-18z"/></svg>Online
+            </a>
+        </nav>
+        <a class="nav__link nav__link--icon" href="/settings" aria-label="Settings" aria-current="page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h8.5M17.5 8H20M4 16h2.5M11.5 16H20"/><circle cx="15" cy="8" r="2.5"/><circle cx="9" cy="16" r="2.5"/></svg>
+        </a>
+    </header>
+
+    <main class="page">
+        <div class="hero">
+            <h1 class="hero__title">Settings</h1>
+            <p class="hero__sub">Updates and the screen PIN.</p>
+        </div>
+        <div class="columns">
+            <section class="card columns__wide" id="updates">
+                <h2 class="card__name">Updates</h2>
+                <div class="boxes">
+                    <div class="box">
+                        <span class="box__label">Installed</span>
+                        <span class="box__value"><span id="updateCurrent"><span class="sk sk--value"></span></span></span>
+                    </div>
+                    <div class="box">
+                        <span class="box__label">Latest release</span>
+                        <span class="box__value"><span id="updateLatest"><span class="sk sk--value"></span></span></span>
+                    </div>
+                </div>
+                <div class="updates__panel">
+                    <p class="updates__status" id="updateMessage" role="status" aria-live="polite">&mdash;</p>
+                    <p class="updates__checked">Last checked <span id="updateChecked">&mdash;</span></p>
+                    <div class="updates__progress" id="updateProgress" hidden>
+                        <span class="meter" role="progressbar" id="updateMeter" aria-label="APK download" aria-valuemin="0" aria-valuemax="100"><span class="meter__fill" id="updateFill"></span></span>
+                        <span class="note" id="updateBytes"></span>
+                    </div>
+                </div>
+                <p class="note">Checks once a day when Strike opens. Downloads start when you choose.</p>
+                <div class="updates__notes" id="updateNotesBox" hidden>
+                    <h3 class="head">Release notes</h3>
+                    <p id="updateNotes"></p>
+                </div>
+                <div class="updates__buttons">
+                    <button class="btn" id="updateCheck" type="button" disabled>Check now</button>
+                    <button class="btn btn--primary" id="updateApply" type="button" hidden disabled>Download</button>
+                </div>
+            </section>
+            <div class="columns__narrow">
+                <section class="card" id="securityCard" hidden>
+                    <h2 class="card__name">Security</h2>
+                    <p class="note">Protect the app on the car's screen with a PIN.</p>
+                    <div class="row row--control">
+                        <span class="row__label" id="pinState">&mdash;</span>
+                        <button class="btn" id="securityOpen" type="button" disabled>Set PIN</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="security" hidden>
+        <div class="modal__panel modal__panel--narrow">
+            <div class="modal__head">
+                <span class="modal__title" id="securityTitle">Set PIN</span>
+                <span class="modal__tools">
+                    <button class="btn btn--danger" id="pinClear" type="button" hidden>Turn off</button>
+                    <button class="btn" id="securityClose" type="button">Close</button>
+                </span>
+            </div>
+            <div class="modal__body">
+                <div class="entry">
+                    <p class="entry__sub" id="securitySub">Enter a new PIN.</p>
+                    <div id="securityPad"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/core.js"></script>
+    <script src="js/keypad.js"></script>
+    <script src="js/security.js"></script>
+    <script src="js/updates.js"></script>
+</body>
+</html>

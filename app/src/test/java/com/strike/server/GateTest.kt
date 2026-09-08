@@ -22,7 +22,7 @@ class GateTest {
     @Test
     fun pagesBecomeTheLockScreenWhenLocked() {
         assertTrue(rewriteToLock("/", true))
-        for (page in listOf("live", "recordings", "surveillance", "daemons", "online")) {
+        for (page in listOf("live", "recordings", "surveillance", "daemons", "online", "settings")) {
             assertTrue(page, rewriteToLock("/$page", true))
             assertTrue(page, rewriteToLock("/$page.html", true))
             assertFalse(page, rewriteToLock("/$page", false))

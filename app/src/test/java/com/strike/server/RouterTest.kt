@@ -14,7 +14,7 @@ class RouterTest {
 
     @Test
     fun pagesWorkWithCleanPathsAndExistingBookmarks() {
-        for (page in listOf("live", "recordings", "surveillance", "daemons", "online", "access", "lock")) {
+        for (page in listOf("live", "recordings", "surveillance", "daemons", "online", "settings", "access", "lock")) {
             assertEquals("web/$page.html", resolveAssetPath("/$page"))
             assertEquals("web/$page.html", resolveAssetPath("/$page.html"))
         }

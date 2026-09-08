@@ -2,9 +2,6 @@
     'use strict';
 
     var API = '/api/updates';
-    var modal = document.getElementById('updates');
-    var open = document.getElementById('updatesOpen');
-    var close = document.getElementById('updatesClose');
     var check = document.getElementById('updateCheck');
     var apply = document.getElementById('updateApply');
     var message = document.getElementById('updateMessage');
@@ -38,10 +35,6 @@
         return payload.latest ? 'Up to date' : Strike.core.dash;
     }
 
-    function fingerprint(payload) {
-        return [payload.phase, payload.checkedAtMs, payload.latest, payload.ready, payload.message].join('|');
-    }
-
     function controls() {
         check.disabled = pending || !fresh || !state || state.busy || state.checkAfterMs > 0;
         check.textContent = state && state.phase === 'installing' && !state.busy ? 'Retry' : 'Check now';
@@ -69,21 +62,14 @@
         document.getElementById('updateMeter').setAttribute('aria-valuenow', Math.floor(share * 100));
         document.getElementById('updateBytes').textContent = Strike.core.size(payload.receivedBytes) + ' / ' + Strike.core.size(payload.totalBytes);
         controls();
-        summary(payload);
-    }
-
-    function summary(payload) {
-        if (!payload) return;
-        document.getElementById('updateSummary').textContent = payload.available ?
-            (payload.ready ? 'Ready to install' : 'Update available') : version(payload.current);
-        if (!modal.hidden && !pending && !polling && state && fingerprint(payload) !== fingerprint(state)) load();
     }
 
     function schedule() {
         clearTimeout(timer);
-        if (modal.hidden || document.hidden) return;
+        if (document.hidden) return;
         if (!fresh || state && state.busy) timer = setTimeout(load, 1000);
-        else if (state && state.checkAfterMs > 0) timer = setTimeout(load, state.checkAfterMs + 100);
+        else if (state && state.checkAfterMs > 0) timer = setTimeout(load, Math.min(30000, state.checkAfterMs + 100));
+        else timer = setTimeout(load, 30000);
     }
 
     function reply(xhr) {
@@ -107,7 +93,7 @@
     }
 
     function load() {
-        if (polling || pending || modal.hidden || document.hidden) return;
+        if (polling || pending || document.hidden) return;
         polling = true;
         var before = revision;
         var xhr = new XMLHttpRequest();
@@ -149,32 +135,6 @@
         controls();
     }
 
-    function hide() {
-        modal.hidden = true;
-        clearTimeout(timer);
-        cancelConfirmation();
-        open.focus();
-    }
-
-    open.onclick = function () {
-        modal.hidden = false;
-        fresh = false;
-        controls();
-        close.focus();
-        load();
-    };
-    close.onclick = hide;
-    modal.onclick = function (event) { if (event.target === modal) hide(); };
-    document.addEventListener('keydown', function (event) {
-        if (modal.hidden) return;
-        if (event.key === 'Escape') { hide(); return; }
-        if (event.key !== 'Tab') return;
-        var buttons = modal.querySelectorAll('button:not([disabled]):not([hidden])');
-        var first = buttons[0], last = buttons[buttons.length - 1];
-        if (!modal.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
-        else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    });
     check.onclick = function () { cancelConfirmation(); post('check'); };
     apply.onclick = function () {
         if (!state.ready) { post('download'); return; }
@@ -189,5 +149,5 @@
         cancelConfirmation();
         if (!document.hidden) load();
     });
-    Strike.updates = { summary: summary };
+    load();
 }());

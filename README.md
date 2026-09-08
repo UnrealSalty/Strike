@@ -136,7 +136,7 @@ being written unplayable.
 
 ## Updates
 
-Open **Dashboard → Updates** to check, download, and install a release. Strike
+Open **Settings → Updates** to check, download, and install a release. Strike
 checks GitHub when opened or resumed, at most once a day. You choose when to
 download and install.
 
@@ -157,7 +157,7 @@ a computer with an authorized ADB connection to the head unit, run:
 adb shell touch /data/local/tmp/.strike_pin_reset
 ```
 
-Reopen or refresh Strike, then set a new PIN under **Dashboard → Security**.
+Reopen or refresh Strike, then set a new PIN under **Settings → Security**.
 This clears the PIN and failed-attempt lockout. Recordings and other settings
 are kept.
 

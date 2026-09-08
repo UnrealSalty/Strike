@@ -59,7 +59,7 @@ class BrowserGateTest {
         val gate = gate()
         Socket().use { socket ->
             for (path in listOf("/", "/index.html", "/live", "/recordings", "/surveillance",
-                    "/daemons", "/online", "/online.html", LOCK_PAGE, "/lock.html")) {
+                    "/daemons", "/online", "/online.html", "/settings", "/settings.html", LOCK_PAGE, "/lock.html")) {
                 val response = guard(gate, socket, "GET", path)!!
                 assertEquals(path, 200, response.status)
                 assertEquals(path, ACCESS_PAGE, String(response.body))
@@ -95,7 +95,7 @@ class BrowserGateTest {
         val cookie = "$ACCESS_COOKIE=${gate.access.login(gate.access.code()!!).token}"
         Socket().use { socket ->
             for (path in listOf("/live", "/recordings", "/surveillance", "/daemons", "/online",
-                    "/online.html", "/api/status", "/api/online", "/clips/drive.mp4", "/events/event.mp4",
+                    "/online.html", "/settings", "/settings.html", "/api/status", "/api/online", "/clips/drive.mp4", "/events/event.mp4",
                     "/thumbs/drive.jpg", "/heroes/event.jpg", LIVE_STREAM_PATH)) {
                 assertNull(path, guard(gate, socket, "GET", path, cookie = cookie))
             }

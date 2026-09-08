@@ -316,6 +316,17 @@ body {
     margin-right: 8px;
 }
 
+.nav__link.nav__link--icon {
+    flex: none;
+    justify-content: center;
+    width: var(--touch);
+    padding: 0;
+}
+
+.nav__link--icon > svg {
+    margin-right: 0;
+}
+
 .nav__link[aria-current="page"] {
     background: var(--surface-2);
     color: var(--accent-text);
@@ -914,7 +925,8 @@ main {
     display: flex;
     justify-content: flex-end;
     flex: none;
-    padding: var(--pad);
+    margin-top: var(--pad);
+    padding-top: var(--pad);
     border-top: 1px solid var(--line);
 }
 
@@ -2353,10 +2365,15 @@ main {
     }
 
     .nav {
+        order: 1;
         flex-wrap: wrap;
         width: 100%;
         margin-left: 0;
         margin-top: 4px;
+    }
+
+    .topbar > .nav__link--icon {
+        margin-left: auto;
     }
 
     .nav__link {

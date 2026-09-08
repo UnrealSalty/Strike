@@ -4,7 +4,7 @@
     window.Strike = window.Strike || {};
 
     var VALUE_IDS = ['soc', 'range', 'kwh'];
-    var TEXT_IDS = ['vehicleState', 'usedSub', 'clipCount', 'daemonCount', 'clipsToday', 'pinState'];
+    var TEXT_IDS = ['vehicleState', 'usedSub', 'clipCount', 'daemonCount', 'clipsToday'];
     var LOCATION = { internal: 'Internal storage', sd: 'SD card', usb: 'USB storage' };
     var EVENTS = { person: 'Person', vehicle: 'Vehicle', watch: 'Continuous', event: 'Movement' };
 
@@ -40,10 +40,6 @@
         Strike.core.value('kwh', kwh === null ? null : kwh.toFixed(1) + ' kWh');
         Strike.core.meter('socFill', soc, soc === null ? null : socState(soc));
         say('vehicleState', vehicle ? 'Vehicle connected' : 'Vehicle data unavailable');
-    }
-
-    function pin(set) {
-        say('pinState', set ? 'PIN set' : 'Off');
     }
 
     function footage(storage) {
@@ -83,12 +79,12 @@
 
     Strike.dashboard = {
         render: function (status) {
-            Strike.updates.summary(status.updates);
-            document.getElementById('securityOpen').hidden = status.inCar !== true;
+            var update = status.updates;
+            document.getElementById('updateLink').hidden = !update || !update.available;
+            say('updateSummary', update && update.latest ? 'v' + update.latest.replace(/^v/, '') : null);
             battery(status.vehicle);
             footage(status.storage);
             daemons(status.daemons);
-            pin(status.pinSet === true);
             activity(status.lastEvent);
         },
 

@@ -148,7 +148,7 @@ internal fun methodNotAllowed(): Response = Response(405, TEXT, "Method not allo
 
 internal fun pagePath(path: String): String? = when (val page = path.removeSuffix(".html")) {
     "/", "/index" -> "/"
-    "/live", "/recordings", "/surveillance", "/daemons", "/online", LOCK_PAGE, ACCESS_PAGE -> page
+    "/live", "/recordings", "/surveillance", "/daemons", "/online", "/settings", LOCK_PAGE, ACCESS_PAGE -> page
     else -> null
 }
 
