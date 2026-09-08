@@ -14,16 +14,16 @@ phone.
 
 ## Features
 
-- **Dashcam.** Record whenever the car is on, or only while driving. Choose clip
+- 🎥 **Dashcam.** Record whenever the car is on, or only while driving. Choose clip
   length, quality, frame rate, and optional cabin audio.
-- **Parked surveillance.** Save activity around the car in Smart mode, or keep
+- 👁️ **Parked surveillance.** Save activity around the car in Smart mode, or keep
   recording while parked in Continuous mode. Arm on ignition off or locking, with
   an optional red screen deterrent.
-- **Live and playback.** View all four cameras together or pick an individual
+- ▶️ **Live and playback.** View all four cameras together or pick an individual
   angle. Browse recordings and surveillance events in separate libraries.
-- **Your storage.** Save to internal storage, SD, or USB. Give recordings and
+- 💾 **Your storage.** Save to internal storage, SD, or USB. Give recordings and
   surveillance their own space limits; the oldest finished clips rotate out.
-- **Access from your phone.** Open the dashboard on your local network, or use
+- 📱 **Access from your phone.** Open the dashboard on your local network, or use
   your own domain with an optional Cloudflare tunnel.
 
 Footage is stored on the car, and detection runs on the head unit. Remote access
@@ -47,13 +47,13 @@ and vehicle detection.
 
 ## Built lean
 
-- **One APK, about 14 MB.** No companion app, no Play services, no installer.
-- **Four dependencies.** core-ktx, coroutines, `dadb` for the local ADB
+- 📦 **One APK, about 14 MB.** No companion app, no Play services, no installer.
+- 🧩 **Four dependencies.** core-ktx, coroutines, `dadb` for the local ADB
   connection, and TensorFlow Lite for detection.
-- **An interface of about 230 KB.** Plain HTML, CSS, and JavaScript. No
+- ⚡ **An interface of about 230 KB.** Plain HTML, CSS, and JavaScript. No
   framework, no bundler, no build step, no CDN, and no remote fonts, so every
   screen loads with the car offline.
-- **No telemetry, analytics, or crash reporting.** The only address Strike calls
+- 🔒 **No telemetry, analytics, or crash reporting.** The only address Strike calls
   on its own is GitHub's release API, at most once a day.
 
 ## Get started
