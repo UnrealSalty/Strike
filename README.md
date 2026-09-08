@@ -89,7 +89,7 @@ computer that can reach the car's network. Enter the **Browser access** code
 shown in the car. The browser remembers the session for 90 days.
 
 This code protects both local and remote access. Regenerating it signs out all
-browsers. The optional in-car PIN is separate. Local addresses use HTTP, so use a
+browsers. The optional in-car PIN in **Settings → Security** is separate. Local addresses use HTTP, so use a
 trusted network.
 
 ![Online page with Cloudflare tunnel controls, local address, and masked browser access code](art/screenshots/online.png)
@@ -144,6 +144,8 @@ The updater finishes the current clip before installation and restores recording
 afterward if it was running. If the clip cannot finish, installation is cancelled.
 Settings and saved footage are kept. In-app installation needs authorized ADB
 access and an APK signed with the same key as the installed version.
+
+![Settings page with installed and latest versions, release notes, and the in-car PIN control](art/screenshots/settings.png)
 
 ## PIN recovery
 
