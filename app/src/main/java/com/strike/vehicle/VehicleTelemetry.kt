@@ -51,11 +51,9 @@ class VehicleTelemetry(
         return VehicleSnapshot(
             soc = soc,
             rangeKm = rangeOf(read(statistic, "getElecDrivingRangeValue")?.toInt()),
-            batteryKwh = batteryKwhOf(
-                read(power, "getBatteryRemainPowerEV")?.toDouble(),
-                read(statistic, "getRemainingBatteryPower")?.toInt(),
-                soc
-            ),
+            batteryKwh = batteryKwhOf(read(power, "getBatteryRemainPowerEV")?.toDouble(), soc) {
+                read(statistic, "getRemainingBatteryPower")?.toInt()
+            },
             gear = gear,
             accOn = accOnOf(read(bodywork, "getPowerLevel")?.toInt()),
             locked = lockOf(read(ota, "getLFDoorLockState")?.toInt())
@@ -113,24 +111,25 @@ class VehicleTelemetry(
 
 // The head unit answers 0 for a signal it has not received yet.
 internal fun socOf(percent: Double?): Int? {
-    if (percent == null || percent <= 0.0 || percent > 100.0) return null
+    if (percent == null || !percent.isFinite() || percent <= 0.0 || percent > 100.0) return null
     return Math.round(percent).toInt()
 }
 
 internal fun rangeOf(km: Int?): Int? = if (km != null && km in 1..999) km else null
 
-internal fun batteryKwhOf(directKwh: Double?, tenthsKwh: Int?, soc: Int?): Double? {
+internal inline fun batteryKwhOf(directKwh: Double?, soc: Int?, fallbackTenthsKwh: () -> Int?): Double? {
     if (plausibleKwh(directKwh, soc)) return directKwh
-    val derived = if (tenthsKwh == null) null else tenthsKwh / 10.0
+    val derived = fallbackTenthsKwh()?.div(10.0)
     return if (plausibleKwh(derived, soc)) derived else null
 }
 
-// Reject energy readings whose implied pack capacity is outside the supported range.
 internal fun plausibleKwh(kwh: Double?, soc: Int?): Boolean {
-    if (kwh == null || kwh <= 1.0 || kwh >= 90.0) return false
-    if (soc == null || soc <= 5) return true
+    if (kwh == null || !kwh.isFinite() || kwh <= 1.0 || kwh >= 120.0) return false
+    if (soc == null || soc <= 5) return kwh < 90.0
     val capacity = kwh / (soc / 100.0)
-    return capacity >= 20.0 && capacity <= 90.0
+    if (capacity < 20.0 || capacity > 130.0) return false
+    // SOC echoes imply a pack near 100 kWh. Smaller packs can have similar numbers at low SOC.
+    return capacity <= 90.0 || kotlin.math.abs(kwh - soc) >= 5.0
 }
 
 internal fun gearOf(mode: Int?): String? =

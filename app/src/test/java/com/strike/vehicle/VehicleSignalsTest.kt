@@ -15,6 +15,13 @@ class VehicleSignalsTest {
     }
 
     @Test
+    fun socRejectsNonFiniteReadings() {
+        for (percent in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            assertNull(socOf(percent))
+        }
+    }
+
+    @Test
     fun rangeRejectsZeroAndImpossibleDistances() {
         assertNull(rangeOf(0))
         assertNull(rangeOf(1000))
@@ -23,22 +30,74 @@ class VehicleSignalsTest {
 
     @Test
     fun batteryEnergyPrefersTheDirectReading() {
-        assertEquals(20.7, batteryKwhOf(20.7, 205, 46)!!, 0.001)
+        assertEquals(20.7, batteryKwhOf(20.7, 46) { error("The primary energy reading is valid") }!!, 0.001)
     }
 
     @Test
     fun batteryEnergyFallsBackToTenthsOfAKilowattHour() {
-        assertEquals(20.5, batteryKwhOf(null, 205, 46)!!, 0.001)
+        assertEquals(20.5, batteryKwhOf(null, 46) { 205 }!!, 0.001)
     }
 
     @Test
     fun batteryEnergyRejectsTheReadingThatIsActuallyThePercentage() {
-        assertNull(batteryKwhOf(46.0, null, 46))
+        assertNull(batteryKwhOf(46.0, 46) { null })
     }
 
     @Test
     fun batteryEnergyIsUnknownWhenNeitherSourceAnswers() {
-        assertNull(batteryKwhOf(null, 0, 46))
+        assertNull(batteryKwhOf(null, 46) { 0 })
+    }
+
+    @Test
+    fun invalidPrimaryEnergyCanUseAValidFallback() {
+        for (direct in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0.0, 46.1)) {
+            assertEquals(20.5, batteryKwhOf(direct, 46) { 205 }!!, 0.001)
+        }
+    }
+
+    @Test
+    fun nonFiniteEnergyNeverReachesTheDisplayWithoutSoc() {
+        for (direct in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            assertNull(batteryKwhOf(direct, null) { null })
+            assertNull(batteryKwhOf(direct, 3) { null })
+        }
+    }
+
+    @Test
+    fun largerPackReadingsNeedEnoughSocToValidate() {
+        assertEquals(108.0, batteryKwhOf(108.0, 90) { error("Valid 120 kWh pack") }!!, 0.001)
+        assertEquals(99.0, batteryKwhOf(null, 90) { 990 }!!, 0.001)
+        assertNull(batteryKwhOf(108.0, null) { null })
+        assertNull(batteryKwhOf(108.0, 3) { null })
+        assertNull(batteryKwhOf(108.0, 50) { null })
+        assertNull(batteryKwhOf(120.0, 100) { null })
+    }
+
+    @Test
+    fun percentageEchoesAreRejectedFromEitherEnergyGetter() {
+        for (soc in listOf(20, 46, 84, 100)) {
+            assertNull(batteryKwhOf(soc + 0.1, soc) { null })
+            assertNull(batteryKwhOf(null, soc) { soc * 10 + 1 })
+        }
+    }
+
+    @Test
+    fun lowSocOnTheCurrentPackIsNotMistakenForAPercentageEcho() {
+        assertEquals(2.7, batteryKwhOf(2.7, 6) { null }!!, 0.001)
+        assertEquals(4.5, batteryKwhOf(4.5, 10) { null }!!, 0.001)
+        assertEquals(20.7, batteryKwhOf(20.7, null) { null }!!, 0.001)
+    }
+
+    @Test
+    fun anUnverifiedHalfScaleHybridReadingDoesNotHideAValidFallback() {
+        assertEquals(16.5, batteryKwhOf(8.25, 77) { 165 }!!, 0.001)
+        assertNull(batteryKwhOf(9.1, 100) { 91 })
+    }
+
+    @Test
+    fun fullScaleHybridReadingsAreNeverDoubled() {
+        assertEquals(16.5, batteryKwhOf(16.5, 77) { error("Primary is already in kWh") }!!, 0.001)
+        assertEquals(16.5, batteryKwhOf(null, 77) { 165 }!!, 0.001)
     }
 
     @Test
