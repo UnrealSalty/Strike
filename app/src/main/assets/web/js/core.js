@@ -224,6 +224,7 @@ Strike.pick = function (id, onChange) {
         close: function () {
             open(false);
         },
+        select: select,
         fill: function (options) {
             menu.innerHTML = '';
             for (var i = 0; i < options.length; i++) {

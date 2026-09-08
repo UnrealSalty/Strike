@@ -49,6 +49,13 @@
             <div class="stage__idle" id="idle"></div>
             <div class="stage__top">
                 <span class="badge" id="badge" hidden><span class="dot" id="badgeDot"></span><span id="badgeText">Live</span></span>
+                <span class="pick pick--onstage" id="liveQuality" hidden>
+                    <button class="pick__btn" type="button" aria-expanded="false" aria-label="Stream quality">
+                        <span>High</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    <div class="pick__menu" hidden></div>
+                </span>
             </div>
             <span class="stage__label" id="viewName" hidden></span>
         </div>
@@ -59,15 +66,6 @@
                 <span class="card__name">Cameras</span>
                 <div class="car" id="spots">
                     <img class="car__image" src="img/car.webp" alt="" aria-hidden="true">
-                </div>
-                <div id="liveQualityRow" hidden>
-                    <h2 class="head">Stream quality</h2>
-                    <div class="seg" id="liveQuality" aria-label="Stream quality">
-                        <button class="seg__btn" type="button" data-value="low" aria-pressed="false">Low data</button>
-                        <button class="seg__btn" type="button" data-value="balanced" aria-pressed="false">Balanced</button>
-                        <button class="seg__btn" type="button" data-value="high" aria-pressed="true">High</button>
-                    </div>
-                    <p class="note">Recording quality stays the same. Multiple viewers share the lowest selected stream quality.</p>
                 </div>
             </div>
 
