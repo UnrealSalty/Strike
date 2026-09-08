@@ -10,6 +10,7 @@ private const val POWER = "android.hardware.bydauto.power.BYDAutoPowerDevice"
 private const val BODYWORK = "android.hardware.bydauto.bodywork.BYDAutoBodyworkDevice"
 private const val GEARBOX = "android.hardware.bydauto.gearbox.BYDAutoGearboxDevice"
 private const val OTA = "android.hardware.bydauto.ota.BYDAutoOtaDevice"
+private const val CAR_ADAPTER = "com.ts.lib.caradapter.CarAdapterManager"
 
 private const val RETRY_MS = 30_000L
 
@@ -24,6 +25,17 @@ class VehicleTelemetry(
     private val lock = Any()
     private val devices = HashMap<String, Any>()
     private val triedAtMs = HashMap<String, Long>()
+    private val gears = GearReader(adapter = { device(CAR_ADAPTER) })
+    private val adapterType by lazy {
+        try {
+            Class.forName(CAR_ADAPTER)
+        } catch (e: ClassNotFoundException) {
+            null
+        } catch (e: LinkageError) {
+            warn("The alternate gear reader could not load")
+            null
+        }
+    }
 
     fun snapshot(): VehicleSnapshot? {
         val statistic = device(STATISTIC)
@@ -31,7 +43,8 @@ class VehicleTelemetry(
         val gearbox = device(GEARBOX)
         val power = device(POWER)
         val ota = device(OTA)
-        if (statistic == null && bodywork == null && gearbox == null && power == null && ota == null) {
+        val gear = gear(gearbox)
+        if (statistic == null && bodywork == null && gearbox == null && power == null && ota == null && gear == null) {
             return null
         }
         val soc = socOf(read(statistic, "getElecPercentageValue")?.toDouble())
@@ -43,7 +56,7 @@ class VehicleTelemetry(
                 read(statistic, "getRemainingBatteryPower")?.toInt(),
                 soc
             ),
-            gear = gearOf(read(gearbox, "getGearboxAutoModeType")?.toInt()),
+            gear = gear,
             accOn = accOnOf(read(bodywork, "getPowerLevel")?.toInt()),
             locked = lockOf(read(ota, "getLFDoorLockState")?.toInt())
         )
@@ -55,10 +68,13 @@ class VehicleTelemetry(
         soc = null,
         rangeKm = null,
         batteryKwh = null,
-        gear = gearOf(read(device(GEARBOX), "getGearboxAutoModeType")?.toInt()),
+        gear = gear(device(GEARBOX)),
         accOn = polledAccOnOf(read(device(BODYWORK), "getPowerLevel")?.toInt()),
         locked = lockOf(read(device(OTA), "getLFDoorLockState")?.toInt())
     )
+
+    private fun gear(gearbox: Any?): String? =
+        gears.read(read(gearbox, "getGearboxAutoModeType")?.toInt())
 
     private fun read(device: Any?, getter: String): Number? {
         if (device == null) return null
@@ -83,7 +99,8 @@ class VehicleTelemetry(
     private fun resolve(className: String): Any? {
         // getInstance builds handlers, so the calling thread needs a looper.
         if (Looper.myLooper() == null) Looper.prepare()
-        val device = BydSdk.deviceClass(className, context) ?: return null
+        val device = (if (className == CAR_ADAPTER) adapterType else BydSdk.deviceClass(className, context))
+            ?: return null
         return try {
             device.getMethod("getInstance", Context::class.java)
                 .invoke(null, BydPermissions(context))
