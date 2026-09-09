@@ -12,6 +12,7 @@ import java.io.File
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.createTempDirectory
@@ -68,6 +69,75 @@ class OnlineTest {
         assertEquals(0, fixture.launched.size)
     }
 
+    @Test fun aNetworkChangeRecoversAnExhaustedTunnelWithoutManualRetry() {
+        val fixture = Fixture()
+        try {
+            fixture.online.enable(true)
+            repeat(5) { attempt ->
+                fixture.launched.poll(5, TimeUnit.SECONDS)!!.crash()
+                fixture.online.vehicle(car(true))
+                fixture.await(if (attempt == 4) "Tunnel exited with 7. Press Retry"
+                    else "Tunnel exited with 7. Retrying shortly")
+                fixture.now.addAndGet(60_000L)
+                fixture.online.vehicle(car(true))
+            }
+            fixture.internet = false
+            fixture.online.vehicle(car(true))
+            fixture.await("Waiting for internet")
+            fixture.internet = true
+            fixture.online.vehicle(car(true))
+            assertNotNull(fixture.launched.poll(5, TimeUnit.SECONDS))
+            fixture.online.start()
+            assertEquals(0, fixture.launched.size)
+        } finally { fixture.close() }
+    }
+
+    @Test fun theTunnelHoldsPowerOnlyWhileItCanRun() {
+        val fixture = Fixture(mode = "off")
+        try {
+            fixture.online.enable(true)
+            fixture.await("Waiting for ignition status")
+            assertFalse(fixture.awake)
+            fixture.online.acc(false)
+            assertNotNull(fixture.launched.poll(5, TimeUnit.SECONDS))
+            assertTrue(fixture.awake)
+            fixture.internet = false
+            fixture.online.vehicle(car(false))
+            fixture.await("Waiting for internet")
+            assertFalse(fixture.awake)
+            fixture.internet = true
+            fixture.online.vehicle(car(false))
+            assertNotNull(fixture.launched.poll(5, TimeUnit.SECONDS))
+            assertTrue(fixture.awake)
+            fixture.online.acc(true)
+            fixture.await("Standing by until the car switches off")
+            assertFalse(fixture.awake)
+        } finally { fixture.close() }
+        assertFalse(fixture.awake)
+    }
+
+    @Test fun anOffBroadcastIsNotLostIfTheNextReadingIsMissingBeforeSetupFinishes() {
+        val preparing = CountDownLatch(1)
+        val proceed = CountDownLatch(1)
+        val fixture = Fixture(mode = "off", prepare = {
+            preparing.countDown()
+            check(proceed.await(5, TimeUnit.SECONDS))
+            true
+        })
+        try {
+            fixture.online.enable(true)
+            assertTrue(preparing.await(5, TimeUnit.SECONDS))
+            fixture.online.acc(false)
+            fixture.online.vehicle(null)
+            proceed.countDown()
+            val process = fixture.launched.poll(5, TimeUnit.SECONDS)!!
+            assertTrue(process.isAlive)
+            fixture.online.acc(true)
+            fixture.await("Standing by until the car switches off")
+            assertFalse(process.isAlive)
+        } finally { proceed.countDown(); fixture.close() }
+    }
+
     @Test fun disabledStartupCreatesNoTunnelAndEnablingDoesNotNeedTheCarPin() {
         val fixture = Fixture(pinSet = false)
         try {
@@ -83,6 +153,25 @@ class OnlineTest {
         fixture.accessReady = false
         try { fixture.online.enable(true); fail() }
         catch (e: IllegalStateException) { assertFalse(fixture.online.enabled) }
+    }
+
+    @Test fun ignitionOnDuringANetworkCheckCancelsThePendingLaunch() {
+        val checking = CountDownLatch(1)
+        val proceed = CountDownLatch(1)
+        val fixture = Fixture(mode = "off", networkRead = {
+            checking.countDown()
+            check(proceed.await(5, TimeUnit.SECONDS))
+        })
+        try {
+            fixture.online.acc(false)
+            fixture.online.enable(true)
+            assertTrue(checking.await(5, TimeUnit.SECONDS))
+            fixture.online.acc(true)
+            proceed.countDown()
+            fixture.await("Standing by until the car switches off")
+            assertEquals(0, fixture.launched.size)
+            assertFalse(fixture.awake)
+        } finally { proceed.countDown(); fixture.close() }
     }
 
     @Test fun stopTerminatesTheProcessAndPreventsVehicleUpdatesRestartingIt() {
@@ -133,15 +222,19 @@ class OnlineTest {
         } finally { fixture.close() }
     }
 
-    @Test fun staleIgnitionStopsTheParkedTunnel() {
+    @Test fun anEstablishedParkedTunnelSurvivesSleepingTelemetryUntilIgnitionOn() {
         val fixture = Fixture(mode = "off")
         try {
             fixture.online.enable(true)
             fixture.online.acc(false)
             val process = fixture.launched.poll(5, TimeUnit.SECONDS)!!
             fixture.now.addAndGet(21_000L)
-            fixture.online.retry()
-            fixture.await("Waiting for ignition status")
+            fixture.ready = true
+            fixture.online.vehicle(null)
+            fixture.await("Connected")
+            assertTrue(process.isAlive)
+            fixture.online.acc(true)
+            fixture.await("Standing by until the car switches off")
             assertFalse(process.isAlive)
         } finally { fixture.close() }
     }
@@ -255,7 +348,8 @@ class OnlineTest {
         assertFalse(fixture.browsers.access.allows(token))
     }
 
-    private class Fixture(pinSet: Boolean = true, mode: String = "always") {
+    private class Fixture(pinSet: Boolean = true, mode: String = "always", prepare: () -> Boolean = { true },
+                          networkRead: () -> Unit = {}) {
         private val directory = createTempDirectory().toFile()
         val pin = Pin(File(directory, "pin.json"), File(directory, "reset"))
         val browsers = BrowserGate(BrowserAccess(File(directory, "browser-access.json")))
@@ -266,6 +360,7 @@ class OnlineTest {
         @Volatile var internet = true
         @Volatile var network = "wifi"
         @Volatile var accessReady = true
+        @Volatile var awake = false
         val online: Online
 
         init {
@@ -274,7 +369,8 @@ class OnlineTest {
             saved.configure("car.example.com", sampleTunnelToken(), mode)
             online = Online(saved, { accessReady }, {
                 Child().also { child -> launched.offer(child) }
-            }, { ready }, { if (internet) network else null }, { now.get() }, { _, text -> states.offer(text) })
+            }, { ready }, { networkRead(); if (internet) network else null }, { now.get() }, { _, text -> states.offer(text) },
+                prepare = prepare, keepAwake = { awake = it })
         }
 
         fun await(wanted: String) {

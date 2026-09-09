@@ -174,7 +174,7 @@ object CameraDaemon {
                 if (command.has("locked")) command.optBoolean("locked") else null
             ))
             updateVehicle()
-            ok()
+            vehicleReply(acc.snapshot())
         }
         "acc" -> {
             acc.edge(command.optBoolean("on"))

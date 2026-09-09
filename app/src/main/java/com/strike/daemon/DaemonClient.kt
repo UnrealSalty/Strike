@@ -26,13 +26,22 @@ class DaemonClient {
 
     fun liveStop(): Boolean = accepted(send("live.stop"))
 
-    fun vehicle(snapshot: VehicleSnapshot?): Boolean {
+    fun vehicle(snapshot: VehicleSnapshot?, observed: (VehicleSnapshot?) -> Unit = {}): Boolean {
         val request = JSONObject()
         request.put("cmd", "vehicle")
         if (snapshot?.accOn != null) request.put("on", snapshot.accOn)
         if (snapshot?.gear != null) request.put("gear", snapshot.gear)
         if (snapshot?.locked != null) request.put("locked", snapshot.locked)
-        return accepted(exchange(request))
+        val reply = exchange(request)
+        observed(if (accepted(reply) && reply!!.has("vehicle")) {
+            reply.optJSONObject("vehicle")?.let {
+                VehicleSnapshot(null, null, null,
+                    if (it.has("gear")) it.getString("gear") else null,
+                    if (it.has("on")) it.getBoolean("on") else null,
+                    if (it.has("locked")) it.getBoolean("locked") else null)
+            }
+        } else snapshot)
+        return accepted(reply)
     }
 
     /** A broadcast edge, distinct from a possibly stale power-state poll. */

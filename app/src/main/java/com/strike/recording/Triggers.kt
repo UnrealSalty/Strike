@@ -17,7 +17,7 @@ private const val OFF = "off"
 class Triggers(
     context: Context,
     private val shell: Shell,
-    private val onVehicle: (VehicleSnapshot) -> Unit = {}
+    private val onVehicle: (VehicleSnapshot?) -> Unit = {}
 ) {
 
     private val vehicle = VehicleTelemetry(context)
@@ -33,8 +33,7 @@ class Triggers(
     private fun watch() {
         while (true) {
             val snapshot = vehicle.parkingSnapshot()
-            onVehicle(snapshot)
-            val connected = daemon.vehicle(snapshot)
+            val connected = daemon.vehicle(snapshot, onVehicle)
             superviseAudio(connected && shouldRecord(mode(), snapshot), snapshot)
             if (snapshot.accOn != true) {
                 if (snapshot.accOn == false) remountCards()

@@ -2,18 +2,20 @@ package com.strike.online
 
 import com.strike.vehicle.VehicleSnapshot
 
-internal fun tunnelWaiting(mode: String, vehicle: VehicleSnapshot?): String? {
+internal fun tunnelWaiting(mode: String, vehicle: VehicleSnapshot?, wasAllowed: Boolean = false): String? {
     if (mode == "always") return null
     if (vehicle?.accOn == true || (vehicle?.gear != null && vehicle.gear != "P")) {
         return "Standing by until the car switches off"
     }
-    if (vehicle?.accOn != false) return "Waiting for ignition status"
+    if (mode == "lock" && vehicle?.locked == false) return "Standing by until the doors lock"
+    // A sleeping SDK must not end an already confirmed parked session.
+    if (vehicle?.accOn != false && !wasAllowed) return "Waiting for ignition status"
     return when (mode) {
         "off" -> null
-        "lock" -> when (vehicle.locked) {
+        "lock" -> when (vehicle?.locked) {
             true -> null
             false -> "Standing by until the doors lock"
-            null -> "Waiting for lock status"
+            null -> if (wasAllowed) null else "Waiting for lock status"
         }
         else -> "Choose when the tunnel should run"
     }

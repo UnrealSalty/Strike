@@ -16,11 +16,13 @@ class CommandServerTest {
 
     private val seen = ArrayList<String>()
     private var vehicle: JSONObject? = null
+    private var observed: VehicleSnapshot? = null
+    private var legacy = false
     private val server = CommandServer { command ->
         when (command.optString("cmd")) {
             "status" -> ok().put("recording", true)
             "acc" -> ok()
-            "vehicle" -> { vehicle = command; ok() }
+            "vehicle" -> { vehicle = command; if (legacy) ok() else vehicleReply(observed) }
             else -> failed("no command named ${command.optString("cmd")}")
         }.also { seen.add(command.optString("cmd")) }
     }
@@ -50,6 +52,46 @@ class CommandServerTest {
     @Test
     fun aDaemonThatIsNotThereAnswersNothing() {
         assertNull(DaemonClient().status())
+    }
+
+    @Test
+    fun theAppReceivesTheDaemonsParkedReadingWhenItsOwnReadingIsUnavailable() {
+        observed = VehicleSnapshot(null, null, null, "P", false, true)
+        serving.start()
+        val client = DaemonClient()
+        awaitAnswer(client)
+        assertTrue(client.vehicle(VehicleSnapshot(null, null, null, null, null, null)) {
+            assertEquals(false, it!!.accOn)
+            assertEquals("P", it.gear)
+            assertEquals(true, it.locked)
+        })
+    }
+
+    @Test
+    fun unknownDaemonReadingsStayUnknown() {
+        serving.start()
+        val client = DaemonClient()
+        awaitAnswer(client)
+        assertTrue(client.vehicle(VehicleSnapshot(null, null, null, "P", false, true)) {
+            assertNull(it)
+        })
+        observed = VehicleSnapshot(null, null, null, "P", null, null)
+        assertTrue(client.vehicle(null) {
+            assertEquals("P", it!!.gear)
+            assertNull(it.accOn)
+            assertNull(it.locked)
+        })
+    }
+
+    @Test
+    fun anOlderDaemonOrMissingDaemonLeavesTheAppReadingAvailable() {
+        val snapshot = VehicleSnapshot(null, null, null, "P", false, true)
+        val client = DaemonClient()
+        client.vehicle(snapshot) { assertEquals(snapshot, it) }
+        legacy = true
+        serving.start()
+        awaitAnswer(client)
+        assertTrue(client.vehicle(snapshot) { assertEquals(snapshot, it) })
     }
 
     @Test

@@ -19,7 +19,9 @@ class Online(
     private val report: (String, String) -> Unit = { state, message ->
         if (state == "broken") Logs.w("Online", message) else Logs.d("Online", message)
     },
-    private val keepAlive: (Boolean) -> Unit = {}
+    private val keepAlive: (Boolean) -> Unit = {},
+    private val prepare: () -> Boolean = { true },
+    private val keepAwake: (Boolean) -> Unit = {}
 ) {
     private val lock = Object()
     private val ignition = AccMonitor({ null }, nowMs)
@@ -32,6 +34,7 @@ class Online(
     private var message = "Off"
     private var failureHint: String? = null
     private var revision = 0L
+    private var wasAllowed = false
 
     val enabled: Boolean get() = synchronized(lock) { settings.enabled }
 
@@ -53,13 +56,19 @@ class Online(
 
     fun vehicle(snapshot: VehicleSnapshot?) {
         if (!enabled) return
-        ignition.fromApp(snapshot)
-        synchronized(lock) { wake() }
+        synchronized(lock) {
+            ignition.fromApp(snapshot)
+            waiting()
+            wake()
+        }
     }
 
     fun acc(on: Boolean) {
-        ignition.edge(on)
-        synchronized(lock) { wake() }
+        synchronized(lock) {
+            ignition.edge(on)
+            waiting()
+            wake()
+        }
     }
 
     fun configure(hostname: String, token: String, mode: String) = synchronized(lock) {
@@ -76,10 +85,12 @@ class Online(
             }
         }
         settings.enable(enabled)
+        if (!enabled) wasAllowed = false
         try {
             keepAlive(enabled)
         } catch (e: RuntimeException) {
             settings.enable(false)
+            wasAllowed = false
             wake()
             throw IllegalStateException("Android could not keep remote access running")
         }
@@ -119,29 +130,44 @@ class Online(
     private fun watch() {
         var failed = false
         var lastNetwork: String? = null
+        var prepared = false
         try {
             while (true) {
-                val before = synchronized(lock) { revision }
+                val before = synchronized(lock) {
+                    if (!settings.enabled) return
+                    revision
+                }
+                if (!prepared) prepared = prepare()
                 val waitFor = synchronized(lock) {
                     if (!settings.enabled) return
                     when {
                         !accessReady() -> "Generate a browser access code in Online"
-                        else -> tunnelWaiting(settings.mode, ignition.snapshot())
+                        else -> waiting()
                     }
                 }
-                val activeNetwork = if (waitFor == null) network() else null
+                val activeNetwork = network()
+                if (activeNetwork != lastNetwork) {
+                    if (!stopChild()) { failed = true; return }
+                    synchronized(lock) { retry.reset() }
+                }
+                val changed = synchronized(lock) {
+                    if (!settings.enabled) return
+                    revision != before
+                }
+                if (changed) continue
+                keepAwake(waitFor == null && activeNetwork != null &&
+                    synchronized(lock) { !retry.exhausted })
                 if (waitFor != null || activeNetwork == null) {
                     if (!stopChild()) { failed = true; return }
                     synchronized(lock) {
                         change("waiting", waitFor ?: "Waiting for internet")
                     }
                 } else {
-                    if (activeNetwork != lastNetwork && !stopChild()) { failed = true; return }
                     supervise()
                 }
                 lastNetwork = activeNetwork
                 synchronized(lock) {
-                    if (!settings.enabled || retry.exhausted) return
+                    if (!settings.enabled) return
                     if (revision == before) lock.wait(EVERY_MS)
                 }
             }
@@ -152,6 +178,7 @@ class Online(
             synchronized(lock) { change("broken", "Tunnel stopped unexpectedly. Turn it off and on to retry") }
         } finally {
             stopChild()
+            keepAwake(false)
             synchronized(lock) {
                 worker = null
                 if (!settings.enabled && child == null) change("off", "Off")
@@ -176,7 +203,8 @@ class Online(
         }
         if (process == null) {
             synchronized(lock) {
-                if (!settings.enabled || nowMs() < retry.atMs || retry.exhausted) return
+                if (!settings.enabled || waiting() != null || !accessReady() ||
+                    nowMs() < retry.atMs || retry.exhausted) return
                 failureHint = null
                 try {
                     val opened = launch(settings.token)
@@ -242,6 +270,12 @@ class Online(
         this.state = state
         this.message = message
         report(state, message)
+    }
+
+    private fun waiting(): String? {
+        val reason = tunnelWaiting(settings.mode, ignition.snapshot(), wasAllowed)
+        wasAllowed = settings.enabled && reason == null
+        return reason
     }
 
     private fun wake() {

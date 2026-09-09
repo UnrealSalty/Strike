@@ -29,6 +29,16 @@ class TunnelPolicyTest {
         assertNull(tunnelWaiting("off", car(false, false)))
     }
 
+    @Test fun anEstablishedParkedSessionSurvivesUnavailableReadingsButStopsWhenDriving() {
+        for (mode in listOf("off", "lock")) {
+            assertNull(tunnelWaiting(mode, null, wasAllowed = true))
+            assertNull(tunnelWaiting(mode, car(null, null), wasAllowed = true))
+            assertNotNull(tunnelWaiting(mode, car(true), wasAllowed = true))
+            assertNotNull(tunnelWaiting(mode, car(null, true, "D"), wasAllowed = true))
+        }
+        assertNotNull(tunnelWaiting("lock", car(null, false), wasAllowed = true))
+    }
+
     @Test fun shortCrashesBackOffAndStopAfterFiveAttempts() {
         val retry = TunnelRetry()
         val delays = listOf(5_000L, 10_000L, 20_000L, 40_000L, 60_000L)

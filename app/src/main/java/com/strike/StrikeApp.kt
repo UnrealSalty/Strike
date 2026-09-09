@@ -11,6 +11,7 @@ import com.strike.recording.Triggers
 import com.strike.online.Online
 import com.strike.online.BrowserAccess
 import com.strike.online.OnlineService
+import com.strike.online.OnlinePower
 import com.strike.online.TunnelSettings
 import com.strike.online.cloudflared
 import com.strike.online.tunnelNetwork
@@ -55,9 +56,11 @@ class StrikeApp : Application() {
                 if (!started) Logs.w("Shell", "Setup is complete. Close and reopen Strike")
             }, "setup-restart").start()
         }
+        val onlinePower = OnlinePower(this, shell)
         online = Online(TunnelSettings(File(filesDir, "online.json")), browsers.access::isReady,
             { cloudflared(this, it) }, ::tunnelReady, { tunnelNetwork(this) },
-            keepAlive = { OnlineService.keepAlive(this, it) })
+            keepAlive = { OnlineService.keepAlive(this, it) },
+            prepare = onlinePower::prepare, keepAwake = onlinePower::hold)
         val daemons = DaemonsApi(this, shell, online)
         updates = Updates(this, shell, daemons::pauseForUpdate, daemons::resumeAfterUpdate)
         HttpServer(HttpServer.PORT, Router(this, pin, shell, online, browsers, daemons, updates), browsers).start()

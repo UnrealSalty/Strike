@@ -1,5 +1,6 @@
 package com.strike.daemon
 
+import com.strike.vehicle.VehicleSnapshot
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.IOException
@@ -81,3 +82,8 @@ internal fun ok(): JSONObject {
     payload.put("status", "ok")
     return payload
 }
+
+internal fun vehicleReply(snapshot: VehicleSnapshot?): JSONObject = ok().put("vehicle",
+    snapshot?.let {
+        JSONObject().put("on", it.accOn).put("gear", it.gear).put("locked", it.locked)
+    } ?: JSONObject.NULL)
