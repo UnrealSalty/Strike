@@ -16,6 +16,8 @@ $compilerTarget = if ($Abi -eq 'x86_64') { 'x86_64' } else { 'aarch64' }
 $compiler = Join-Path $AndroidSdk "ndk\27.0.12077973\toolchains\llvm\prebuilt\windows-x86_64\bin\$compilerTarget-linux-android28-clang.cmd"
 if (-not (Test-Path -LiteralPath $compiler)) { throw 'Install Android NDK 27.0.12077973 first' }
 New-Item -ItemType Directory -Path $cache -Force | Out-Null
+go test -count=1 (Join-Path $PSScriptRoot 'cloudflared\dns_android.go') (Join-Path $PSScriptRoot 'cloudflared\dns_android_test.go')
+if ($LASTEXITCODE -ne 0) { throw 'Cloudflared DNS tests failed' }
 if (-not (Test-Path -LiteralPath $archive)) {
     Invoke-WebRequest -UseBasicParsing -Uri "https://codeload.github.com/cloudflare/cloudflared/tar.gz/refs/tags/$version" -OutFile $archive
 }
