@@ -6,6 +6,8 @@ import android.os.PowerManager
 import android.os.SystemClock
 import com.strike.vehicle.BydPermissions
 import com.strike.vehicle.BydSdk
+import java.io.File
+import java.io.IOException
 
 private const val TAG = "Rails"
 
@@ -44,23 +46,41 @@ object ParkedRails {
     private var activityAtMs = 0L
     private var voteAtMs = 0L
     private var wakeAtMs = 0L
+    private var lease: ParkedLease? = null
+    private var cameraOwner = true
+    private var leaseFailed = false
 
     @Synchronized
-    fun hold(stillWanted: () -> Boolean = { true }) {
+    fun hold(camera: Boolean = true, stillWanted: () -> Boolean = { true }) {
         if (isHeld) return
-        wakeMcu()
+        val claim = claim(camera)
         try {
-            Thread.sleep(SETTLE_MS)
-        } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
+            if (!claim.acquire()) return
+            leaseFailed = false
+        } catch (e: IOException) {
+            if (!leaseFailed) DaemonLog.w(TAG, "Could not claim parked power")
+            leaseFailed = true
+            return
         }
-        if (!stillWanted()) return
-        val landed = vote()
-        wakeAp()
-        userActivity()
-        takeWakeLock()
+        cameraOwner = camera
         isHeld = true
-        DaemonLog.d(TAG, "holding the parked rails, $landed rail writes landed")
+        try {
+            wakeMcu()
+            try {
+                Thread.sleep(SETTLE_MS)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+            if (!stillWanted()) { release(); return }
+            val landed = vote()
+            if (cameraOwner) wakeAp()
+            userActivity()
+            if (cameraOwner) takeWakeLock()
+            DaemonLog.d(TAG, "holding parked power for ${if (cameraOwner) "surveillance" else "Online"}, $landed rail writes landed")
+        } catch (e: Exception) {
+            release()
+            throw e
+        }
     }
 
     @Synchronized
@@ -85,7 +105,7 @@ object ParkedRails {
         if (now - wakeAtMs >= WAKE_MS) {
             wakeAtMs = now
             wakeMcu()
-            wakeAp()
+            if (cameraOwner) wakeAp()
             return true
         }
         return false
@@ -94,7 +114,35 @@ object ParkedRails {
     @Synchronized
     fun release() {
         if (!isHeld) return
-        isHeld = false
+        val claim = checkNotNull(lease)
+        try {
+            claim.release { releaseVotes() }
+        } catch (e: IOException) {
+            if (!leaseFailed) DaemonLog.w(TAG, "Could not release the parked power claim")
+            leaseFailed = true
+        } finally {
+            if (!claim.isHeld) {
+                isHeld = false
+                wakeLock?.let { if (it.isHeld) it.release() }
+                wakeLock = null
+                DaemonLog.d(TAG, "parked power released for ${if (cameraOwner) "surveillance" else "Online"}")
+            }
+        }
+    }
+
+    @Synchronized
+    internal fun onlineHeld(): Boolean = try {
+        claim(camera = true).otherHeld
+    } catch (e: IOException) {
+        if (!leaseFailed) DaemonLog.w(TAG, "Could not read the Online parked power claim")
+        leaseFailed = true
+        false
+    }
+
+    private fun claim(camera: Boolean): ParkedLease = lease ?:
+        ParkedLease(File("$STRIKE_DIR/parked-power.lock"), if (camera) 1 else 2).also { lease = it }
+
+    private fun releaseVotes() {
         writeSpecial(SENTRY_ENTER, 0)
         writeSpecial(SENTRY_STATE, 2)
         writeSpecial(OEM_KEY_1, 0)
@@ -102,9 +150,6 @@ object ParkedRails {
         writeSpecial(ISP_NEED, 0)
         writeSpecial(ISP_WORK, 0)
         writePower(MCU_HOLD, 0)
-        wakeLock?.let { if (it.isHeld) it.release() }
-        wakeLock = null
-        DaemonLog.d(TAG, "parked rails released")
     }
 
     private fun vote(): Int {
@@ -130,14 +175,14 @@ object ParkedRails {
         wakeLock = lock
     }
 
-    private fun wakeAp() {
-        val pm = powerManager() ?: return
+    internal fun wakeAp(): Boolean {
+        val pm = powerManager() ?: return false
         val whenMs = SystemClock.uptimeMillis()
         val reason = accOffReason()
         if (invoke(pm, "wakeUp", arrayOf(Long::class.java, Int::class.java, String::class.java), whenMs, reason, "ACC_ON")) {
-            return
+            return true
         }
-        invoke(pm, "wakeUp", arrayOf(Long::class.java), whenMs)
+        return invoke(pm, "wakeUp", arrayOf(Long::class.java), whenMs)
     }
 
     private fun userActivity() {

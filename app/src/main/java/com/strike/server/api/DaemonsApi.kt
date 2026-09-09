@@ -26,6 +26,7 @@ import com.strike.server.formValue
 import com.strike.server.notFound
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 private const val RUNNING = "running"
 private const val STARTING = "starting"
@@ -65,6 +66,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     private val processes = Processes(shell)
     private val storage = Storage(context, shell)
     private val events = EventStorage(context, shell)
+    private val dashboardLog = File(context.filesDir, "daemon.log").absolutePath
     private val recorder = RecorderDaemon(shell, Daemon(context, shell), DaemonClient()) {
         storage.publish(shell)
         events.publish(shell)
@@ -75,6 +77,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
 
     fun daemons(inCar: Boolean): Response {
         val response = JSONObject(payload().toString())
+        response.remove("recording")
         val cards = response.getJSONArray("cards")
         if (!inCar) for (i in 0 until cards.length()) {
             val card = cards.getJSONObject(i)
@@ -90,13 +93,13 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         forget()
     }
 
-    fun count(): JSONObject {
+    fun dashboard(): JSONObject {
         val payload = payload()
         val count = JSONObject()
         count.put("running", payload.getInt("running"))
         count.put("total", payload.getInt("total"))
         count.put("health", payload.getString("health"))
-        return count
+        return JSONObject().put("daemons", count).put("recording", payload.getJSONObject("recording"))
     }
 
     // Share shell-backed card reads across dashboard requests.
@@ -106,15 +109,16 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         if (held != null && now - cardsAtMs < CARDS_CACHE_MS) return held
         val built = buildCards()
         cards = built
-        cardsAtMs = now
+        cardsAtMs = System.currentTimeMillis()
         built
     }
 
     private fun buildCards(): JSONObject {
+        val status = recorder.status()
         val cards = JSONArray()
         cards.put(shellCard())
-        cards.put(recorderCard())
-        cards.put(surveillanceCard())
+        cards.put(recorderCard(status))
+        cards.put(surveillanceCard(status))
         val tunnel = online.status()
         cards.put(tunnelCard(tunnel))
 
@@ -127,6 +131,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         payload.put("total", cards.length())
         payload.put("health", health(running, cards.length()))
         payload.put("cards", cards)
+        payload.put("recording", recording(status))
         return payload
     }
 
@@ -139,7 +144,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
 
     fun logs(): Response {
         val merged = ArrayList<LogLine>(Logs.recent())
-        val tail = shell.read("tail -n $LOG_TAIL_LINES $CAM_LOG_PATH")
+        val tail = shell.read("tail -n $LOG_TAIL_LINES $CAM_LOG_PATH 2>/dev/null; " +
+            "if [ -f '$dashboardLog' ]; then tail -n $LOG_TAIL_LINES '$dashboardLog'; fi")
         if (tail != null) merged.addAll(parseDaemonLog(tail))
         merged.sortBy { it.atMs }
 
@@ -232,8 +238,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         return card
     }
 
-    private fun recorderCard(): JSONObject {
-        val status = recorder.status()
+    private fun recorderCard(status: JSONObject?): JSONObject {
         val phase = recorder.phase
         val recovering = status == null && phase == Phase.OFF && processes.isRunning(CAM_SCRIPT_PATH) == true
         val uptimeMs = status?.optLong("uptimeMs")
@@ -277,9 +282,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     }
 
     // Surveillance runs inside CameraDaemon; it has no separate process.
-    private fun surveillanceCard(): JSONObject {
+    private fun surveillanceCard(status: JSONObject?): JSONObject {
         val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)
-        val status = recorder.status()
         val card = card(
             "surveillance", "Surveillance",
             when {
@@ -360,8 +364,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         return if (factoryDashcam) "Held by the factory dashcam" else DASH
     }
 
-    fun recording(): JSONObject {
-        val status = recorder.status()
+    private fun recording(status: JSONObject?): JSONObject {
         val state = JSONObject()
         state.put("on", status != null && status.optBoolean("recording"))
         state.put("clip", status?.opt("clip") ?: JSONObject.NULL)

@@ -8,6 +8,7 @@ import com.strike.daemon.Shell
 import java.io.File
 
 internal const val MB = 1024L * 1024L
+internal const val LIST_VOLUMES = "timeout -s KILL 3 sm list-volumes all"
 
 internal const val INTERNAL = "internal"
 private const val SD = "sd"
@@ -65,7 +66,7 @@ class Volumes(private val context: Context, private val shell: Shell) {
     fun rootFor(location: String): File? {
         mounted()[location]?.dir?.let { return it }
         if (location == INTERNAL) return Environment.getExternalStorageDirectory()
-        val listing = shell.read("sm list-volumes all") ?: return null
+        val listing = shell.read(LIST_VOLUMES) ?: return null
         val path = volumePathFor(location, listing, systemProperty(SD_UUID_PROP)) ?: return null
         return File(path)
     }
@@ -86,18 +87,18 @@ class Volumes(private val context: Context, private val shell: Shell) {
     }
 
     private fun removable(): List<Mount> {
-        val listing = shell.read("sm list-volumes all") ?: return emptyList()
+        val listing = shell.read(LIST_VOLUMES) ?: return emptyList()
         return parseVolumes(listing, systemProperty(SD_UUID_PROP))
     }
 
     private fun room(path: String): Room? {
-        val output = shell.read("df -k $path") ?: return null
+        val output = shell.read("timeout -s KILL 3 df -k $path") ?: return null
         return parseDf(output)
     }
 
     private fun writable(path: String): Boolean {
         val probe = "$path/.strike-probe"
-        return shell.check("touch $probe && rm -f $probe")
+        return shell.check("timeout -s KILL 3 touch $probe && timeout -s KILL 3 rm -f $probe")
     }
 }
 
@@ -186,13 +187,17 @@ internal fun remountUntil(dir: File): Boolean {
 }
 
 private fun exec(vararg command: String): String? = try {
-    val process = ProcessBuilder(*command).redirectErrorStream(true).start()
-    val printed = process.inputStream.bufferedReader().use { it.readText() }
-    process.waitFor()
-    printed
+    val process = ProcessBuilder("timeout", "-s", "KILL", "3", *command).redirectErrorStream(true).start()
+    try {
+        val printed = process.inputStream.bufferedReader().use { it.readText() }
+        if (process.waitFor() == 0) printed else null
+    } finally {
+        if (process.isAlive) process.destroyForcibly()
+    }
 } catch (e: java.io.IOException) {
     null
 } catch (e: InterruptedException) {
+    Thread.currentThread().interrupt()
     null
 }
 

@@ -20,6 +20,10 @@ internal fun tunnelError(line: String, token: String = ""): String? {
     if (text.isEmpty() || text.contains("Initiating shutdown", true) ||
         text.contains("context canceled", true)) return null
     return when {
+        text.contains("127.0.0.1:8090") && text.contains("connection refused", true) ->
+            "Strike's dashboard refused the tunnel connection"
+        text.contains("127.0.0.1:8090") && text.contains("timeout", true) ->
+            "Strike's dashboard did not answer the tunnel"
         text.contains("Unauthorized", true) || text.contains("token", true) ||
             text.contains("secret", true) -> "Cloudflare rejected the token. Update the setup"
         text.contains("x509:", true) -> "Cloudflare certificate check failed. Check the car's date and time"

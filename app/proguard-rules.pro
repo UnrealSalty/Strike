@@ -3,7 +3,11 @@
     public static void main(java.lang.String[]);
 }
 
--keep class com.strike.online.ParkedAccess {
+-keep class com.strike.server.DashboardDaemon {
+    public static void main(java.lang.String[]);
+}
+
+-keep class com.strike.server.DashboardControl {
     public static void main(java.lang.String[]);
 }
 

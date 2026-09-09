@@ -20,11 +20,13 @@ class UpdatesTest {
     private var downloads = 0
     private var installs = 0
     private var pending = false
+    private var currentApk = true
     private var success: Boolean? = true
     private var fetchError: Exception? = null
     private var verifyError: Exception? = null
     private var onDownload: () -> Unit = {}
     private var onVerify: () -> Unit = {}
+    private var onWait: () -> Unit = {}
     private var lastEtag = ""
     private val apk get() = File(folder.root, "update.apk")
 
@@ -45,11 +47,29 @@ class UpdatesTest {
         { _, _ -> onVerify(); verifyError?.let { throw it } },
         { _, _ -> verifyError?.let { throw it }; installs++; pending = true }, { pending },
         { success.also { if (it != null) pending = false } },
-        Executor { tasks.addLast(it) }, { now }, { now += it })
+        Executor { tasks.addLast(it) }, { now }, { now += it; onWait() }, { currentApk })
 
     private fun run() { tasks.removeFirst().run() }
 
     private fun available(updates: Updates) { assertTrue(updates.check()); run() }
+
+    @Test
+    fun handoverWaitsForAnUpdateCheckToFinishWritingItsState() {
+        val updates = updates()
+        assertTrue(updates.awaitIdle(0))
+        updates.check()
+        assertFalse(updates.awaitIdle(0))
+        run()
+        assertTrue(updates.awaitIdle(0))
+        assertTrue(File(folder.root, "updates.json").isFile)
+        now += 86_400_000L
+        fetchError = IOException("Disconnected")
+        updates.check()
+        assertFalse(updates.awaitIdle(0))
+        run()
+        assertTrue(updates.awaitIdle(0))
+        assertTrue(updates.status().getBoolean("failed"))
+    }
 
     @Test
     fun startupChecksOnceADayAcrossAppRestartsWithoutDownloading() {
@@ -232,6 +252,31 @@ class UpdatesTest {
         assertEquals(0, installs)
         assertTrue(updates.status().getBoolean("failed"))
         assertEquals("Android could not install the update", updates.status().getString("message"))
+    }
+
+    @Test
+    fun theReplacedBackendLeavesRecorderRecoveryForTheNewApk() {
+        pending = true
+        success = null
+        val old = updates()
+        old.resume()
+        onWait = { currentApk = false; success = true }
+        val started = now
+        run()
+        assertEquals(started + 1000, now)
+        assertTrue(pending)
+        assertTrue(old.awaitIdle(0))
+        assertTrue(old.isInstalling())
+        assertFalse(old.status().getBoolean("failed"))
+        currentApk = true
+        val replacement = updates("0.2")
+        replacement.resume()
+        run()
+        assertFalse(pending)
+        assertFalse(replacement.isInstalling())
+        assertEquals("Update installed", replacement.status().getString("message"))
+        assertEquals(0, installs)
+        assertEquals(0, fetches)
     }
 
     @Test

@@ -20,7 +20,10 @@ internal class UpdateInstall(
     private val resumeRecorder: () -> Unit
 ) {
     private val journal = File(context.filesDir, "update-install.json")
+    private val sourceApk = context.applicationInfo.sourceDir
     val pending: Boolean get() = journal.isFile
+    val isCurrentApk: Boolean get() =
+        context.packageManager.getApplicationInfo(context.packageName, 0).sourceDir == sourceApk
 
     fun start(apk: File, release: Release) {
         check(shell.isAuthorised()) { "Connect shell access in Daemons before installing" }
@@ -55,6 +58,7 @@ internal class UpdateInstall(
     }
 
     fun outcome(): Boolean? {
+        if (!isCurrentApk) return null
         if (!journal.isFile) return false
         if (!shell.isAuthorised()) return null
         val plan = JSONObject(journal.readText())
@@ -63,6 +67,7 @@ internal class UpdateInstall(
         val receipt = File(RECEIPT).let { if (it.isFile) it.readText().trim() else "" }
         if (receipt.startsWith("$id:")) {
             val installed = context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode
+            if (!isCurrentApk) return null
             val success = receipt == "$id:0" && installed >= plan.getLong("versionCode")
             finish(plan)
             return success

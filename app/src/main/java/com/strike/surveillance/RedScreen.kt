@@ -1,6 +1,5 @@
 package com.strike.surveillance
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -9,14 +8,11 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.graphics.Rect
-import android.os.Binder
-import android.os.IBinder
-import android.os.SystemClock
 import android.view.Surface
 import com.strike.daemon.AccGate
-import com.strike.daemon.DaemonContext
 import com.strike.daemon.DaemonFonts
 import com.strike.daemon.DaemonLog
+import com.strike.daemon.ParkedPanel
 import com.strike.daemon.ParkedRails
 import java.io.IOException
 import java.util.zip.ZipFile
@@ -36,25 +32,27 @@ private const val HOLD_POLL_MS = 200L
 private val RED = Color.rgb(190, 20, 20)
 
 // Parked display output requires a shell-owned SurfaceControl layer.
-class RedScreen {
+class RedScreen(
+    private val panel: ParkedPanel = ParkedPanel(),
+    private val keepDark: () -> Boolean = { ParkedRails.isHeld }
+) {
 
     /** app_process has no AssetManager, so the wordmark is read out of the apk. */
     var apkPath: String? = null
 
     private var control: Any? = null
     private var surface: Surface? = null
-    private var power: Any? = null
     private var wordmark: Bitmap? = null
     private var readWordmark = false
     private var untilMs = 0L
     private var wokeAtMs = 0L
-    private var offLockHeld = false
-    private val offToken = Binder()
+    private var closed = false
 
     val isShowing: Boolean get() = control != null
 
     @Synchronized
     fun show(message: String, seconds: Int, forced: Boolean = false) {
+        if (closed) return
         if (!forced && AccGate.isUnsafe) return
         untilMs = System.currentTimeMillis() + seconds * 1_000L
         if (control != null) return
@@ -93,7 +91,7 @@ class RedScreen {
         if (control == null) return false
         val now = System.currentTimeMillis()
         if (now >= untilMs || (!forced && AccGate.isUnsafe)) {
-            hide(darken = ParkedRails.isHeld)
+            hide(darken = keepDark())
             return false
         }
         if (now - wokeAtMs >= WAKE_REASSERT_MS) wakePanel()
@@ -108,16 +106,41 @@ class RedScreen {
         val held = control
         control = null
         if (held != null) releaseLayer(held)
-        if (darken) sleepPanel() else releaseOffLock()
+        if (darken) sleepPanel() else panel.release()
     }
 
     /** After the warning, or after rails wake the AP. ACC on must not call this. */
     @Synchronized
     fun sleepPanel() {
-        if (control != null || AccGate.isUnsafe) return
-        val manager = powerManager() ?: return
-        turnBacklightOff(manager)
-        if (!offLockHeld) turnBacklightOffWithLock(manager)
+        if (closed || control != null || AccGate.isUnsafe) return
+        panel.darken()
+    }
+
+    @Synchronized
+    fun close(): Boolean {
+        closed = true
+        hide()
+        return panel.release()
+    }
+
+    @Synchronized
+    fun releasePanel(): Boolean = panel.release()
+
+    @Synchronized
+    fun parkedWake(stillWanted: () -> Boolean): Boolean {
+        if (closed || !stillWanted() || AccGate.isUnsafe) return false
+        if (control != null) return true
+        val woke = ParkedRails.wakeAp()
+        if (!stillWanted() || AccGate.isUnsafe) {
+            panel.wake()
+            return false
+        }
+        sleepPanel()
+        if (!stillWanted() || AccGate.isUnsafe) {
+            panel.wake()
+            return false
+        }
+        return woke
     }
 
     private fun paint(onto: Surface, message: String, size: Rect): Boolean {
@@ -197,149 +220,9 @@ class RedScreen {
         return Rect(0, 0, match.groupValues[1].toInt(), match.groupValues[2].toInt())
     }
 
-    // Wake the panel, then release the vendor Off lock through PowerManager's service.
     private fun wakePanel() {
         wokeAtMs = System.currentTimeMillis()
-        offLockHeld = false
-        val manager = powerManager()
-        if (manager != null) {
-            turnBacklightOn(manager)
-            turnBacklightOnWithLock(manager)
-            val status = screenStatus(manager)
-            if (status == 0) {
-                turnBacklightOnWithLock(manager)
-                DaemonLog.w(TAG, "panel still dark after WithLock, status=$status")
-            }
-        } else {
-            powerService()?.let { turnBacklightOn(it) }
-        }
-    }
-
-    private fun releaseOffLock() {
-        if (!offLockHeld) return
-        val manager = powerManager() ?: return
-        turnBacklightOnWithLock(manager)
-        offLockHeld = false
-    }
-
-    private fun powerManager(): Any? {
-        val ctx = DaemonContext.get() ?: return null
-        return try {
-            ctx.getSystemService(Context.POWER_SERVICE)
-        } catch (e: RuntimeException) {
-            null
-        }
-    }
-
-    private fun powerService(): Any? {
-        power?.let { return it }
-        return try {
-            val binder = Class.forName("android.os.ServiceManager")
-                .getMethod("getService", String::class.java)
-                .invoke(null, "power") as? IBinder ?: return null
-            Class.forName("android.os.IPowerManager\$Stub")
-                .getMethod("asInterface", IBinder::class.java)
-                .invoke(null, binder)
-                .also { power = it }
-        } catch (e: ReflectiveOperationException) {
-            DaemonLog.e(TAG, "this firmware has no power service: ${e.message}")
-            null
-        }
-    }
-
-    private fun screenStatus(power: Any): Int = try {
-        val method = power.javaClass.methods.firstOrNull {
-            it.name == "getPowerScreenStatus" && it.parameterTypes.isEmpty()
-        } ?: return -1
-        method.invoke(power) as? Int ?: -1
-    } catch (e: ReflectiveOperationException) {
-        -1
-    }
-
-    private fun turnBacklightOn(power: Any): Boolean {
-        for (name in arrayOf("TurnBacklightOn", "turnBacklightOn")) {
-            val method = power.javaClass.methods.firstOrNull { it.name == name } ?: continue
-            try {
-                when (method.parameterTypes.size) {
-                    0 -> method.invoke(power)
-                    1 -> method.invoke(power, SystemClock.uptimeMillis())
-                    else -> continue
-                }
-            } catch (e: ReflectiveOperationException) {
-                continue
-            }
-            return true
-        }
-        return false
-    }
-
-    private fun turnBacklightOnWithLock(manager: Any): Boolean {
-        val service = managerService(manager) ?: return false
-        val method = try {
-            service.javaClass.getMethod(
-                "TurnBacklightOnWithLock",
-                IBinder::class.java,
-                String::class.java
-            )
-        } catch (e: NoSuchMethodException) {
-            return false
-        }
-        for (token in arrayOf<IBinder?>(offToken, null)) {
-            try {
-                method.invoke(service, token, LAYER)
-                offLockHeld = false
-                return true
-            } catch (e: ReflectiveOperationException) {
-                continue
-            }
-        }
-        return false
-    }
-
-    private fun turnBacklightOff(power: Any): Boolean {
-        for (name in arrayOf("TurnBacklightOff", "turnBacklightOff")) {
-            val method = power.javaClass.methods.firstOrNull { it.name == name } ?: continue
-            try {
-                when (method.parameterTypes.size) {
-                    0 -> method.invoke(power)
-                    1 -> method.invoke(power, SystemClock.uptimeMillis())
-                    else -> continue
-                }
-            } catch (e: ReflectiveOperationException) {
-                continue
-            }
-            return true
-        }
-        return false
-    }
-
-    private fun turnBacklightOffWithLock(manager: Any): Boolean {
-        val service = managerService(manager) ?: return false
-        val method = service.javaClass.methods.firstOrNull { it.name == "TurnBacklightOffWithLock" }
-            ?: return false
-        val types = method.parameterTypes
-        for (token in arrayOf<IBinder?>(offToken, null)) {
-            try {
-                when (types.size) {
-                    1 -> method.invoke(service, token)
-                    2 -> method.invoke(service, token, LAYER)
-                    else -> return false
-                }
-                offLockHeld = true
-                return true
-            } catch (e: ReflectiveOperationException) {
-                continue
-            }
-        }
-        return false
-    }
-
-    private fun managerService(manager: Any): Any? = try {
-        val field = manager.javaClass.getDeclaredField("mService")
-        field.isAccessible = true
-        field.get(manager)
-    } catch (e: ReflectiveOperationException) {
-        null
+        panel.wake()
     }
 
     private fun read(vararg command: String): String? = try {

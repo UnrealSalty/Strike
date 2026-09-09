@@ -92,6 +92,21 @@ class ShellTest {
     }
 
     @Test
+    fun aRetryDuringTheOldHandshakeRunsOnceWhenThatHandshakeFails() {
+        open = { null }
+        assertFalse(shell.isAuthorised())
+        repeat(3) { assertFalse(shell.retry()) }
+        assertEquals(1, tasks.size)
+        tasks.removeFirst().run()
+        assertEquals(1, tasks.size)
+        open = { transport }
+        tasks.removeFirst().run()
+        assertTrue(shell.isAuthorised())
+        assertEquals(1, authorisations)
+        assertTrue(tasks.isEmpty())
+    }
+
+    @Test
     fun repeatedFailuresStopUntilConnectIsPressed() {
         open = { null }
         repeat(5) {

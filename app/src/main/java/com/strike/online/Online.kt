@@ -19,12 +19,11 @@ class Online(
     private val report: (String, String) -> Unit = { state, message ->
         if (state == "broken") Logs.w("Online", message) else Logs.d("Online", message)
     },
-    private val keepAlive: (Boolean) -> Unit = {},
-    private val prepare: () -> Boolean = { true },
-    private val keepAwake: (Boolean) -> Unit = {}
+    private val keepAwake: (Boolean, Boolean, () -> Boolean) -> Boolean = { _, _, _ -> true },
+    private val readVehicle: (() -> VehicleSnapshot?)? = null
 ) {
     private val lock = Object()
-    private val ignition = AccMonitor({ null }, nowMs)
+    private val ignition = AccMonitor(readVehicle ?: { null }, nowMs)
     private val retry = TunnelRetry()
     private var worker: Thread? = null
     private var child: Process? = null
@@ -35,6 +34,7 @@ class Online(
     private var failureHint: String? = null
     private var revision = 0L
     private var wasAllowed = false
+    private var closed = false
 
     val enabled: Boolean get() = synchronized(lock) { settings.enabled }
 
@@ -50,7 +50,7 @@ class Online(
     }
 
     fun start() = synchronized(lock) {
-        if ((!settings.enabled && child == null) || worker != null || retry.exhausted) return@synchronized
+        if (closed || (!settings.enabled && child == null) || worker != null || retry.exhausted) return@synchronized
         worker = Thread({ watch() }, "strike-online").also { it.isDaemon = true; it.start() }
     }
 
@@ -86,14 +86,6 @@ class Online(
         }
         settings.enable(enabled)
         if (!enabled) wasAllowed = false
-        try {
-            keepAlive(enabled)
-        } catch (e: RuntimeException) {
-            settings.enable(false)
-            wasAllowed = false
-            wake()
-            throw IllegalStateException("Android could not keep remote access running")
-        }
         retry.reset()
         if (enabled) {
             change("starting", "Starting")
@@ -107,7 +99,6 @@ class Online(
 
     fun retry() = synchronized(lock) {
         check(settings.enabled || child != null) { "Turn on the tunnel first" }
-        if (settings.enabled) keepAlive(true)
         retry.reset()
         start()
         wake()
@@ -127,17 +118,27 @@ class Online(
             .put("canRetry", state == "broken" && (settings.enabled || child != null))
     }
 
+    fun close() {
+        val thread = synchronized(lock) {
+            closed = true
+            wake()
+            worker
+        }
+        thread?.join(15_000L)
+        check(thread?.isAlive != true) { "The tunnel is still stopping" }
+    }
+
     private fun watch() {
         var failed = false
         var lastNetwork: String? = null
-        var prepared = false
+        var parked = false
         try {
             while (true) {
                 val before = synchronized(lock) {
-                    if (!settings.enabled) return
+                    if (closed || !settings.enabled) return
                     revision
                 }
-                if (!prepared) prepared = prepare()
+                if (readVehicle != null) ignition.poll()
                 val waitFor = synchronized(lock) {
                     if (!settings.enabled) return
                     when {
@@ -155,8 +156,20 @@ class Online(
                     revision != before
                 }
                 if (changed) continue
-                keepAwake(waitFor == null && activeNetwork != null &&
-                    synchronized(lock) { !retry.exhausted })
+                val snapshot = ignition.snapshot()
+                parked = when {
+                    snapshot?.accOn == true || (snapshot?.gear != null && snapshot.gear != "P") -> false
+                    snapshot?.accOn == false -> true
+                    else -> parked
+                }
+                val allowed = waitFor == null && synchronized(lock) { !retry.exhausted }
+                keepAwake(allowed, allowed && parked) {
+                    synchronized(lock) {
+                        val current = ignition.snapshot()
+                        !closed && settings.enabled && revision == before && (!parked ||
+                            (current?.accOn == false && (current.gear == null || current.gear == "P")))
+                    }
+                }
                 if (waitFor != null || activeNetwork == null) {
                     if (!stopChild()) { failed = true; return }
                     synchronized(lock) {
@@ -165,6 +178,7 @@ class Online(
                 } else {
                     supervise()
                 }
+                if (allowed && synchronized(lock) { retry.exhausted }) keepAwake(false, false) { false }
                 lastNetwork = activeNetwork
                 synchronized(lock) {
                     if (!settings.enabled) return
@@ -178,7 +192,14 @@ class Online(
             synchronized(lock) { change("broken", "Tunnel stopped unexpectedly. Turn it off and on to retry") }
         } finally {
             stopChild()
-            keepAwake(false)
+            while (true) {
+                val beforeRelease = synchronized(lock) { revision }
+                if (keepAwake(false, false) { false }) break
+                synchronized(lock) {
+                    change("stopping", "Releasing the parked display")
+                    if (revision == beforeRelease) lock.wait(EVERY_MS)
+                }
+            }
             synchronized(lock) {
                 worker = null
                 if (!settings.enabled && child == null) change("off", "Off")
@@ -239,7 +260,12 @@ class Online(
             process.inputStream.bufferedReader().useLines { lines ->
                 lines.forEach { line ->
                     val hint = tunnelError(line, token) ?: return@forEach
-                    synchronized(lock) { if (child === process) failureHint = hint }
+                    synchronized(lock) {
+                        if (child === process && failureHint != hint) {
+                            failureHint = hint
+                            report("broken", hint)
+                        }
+                    }
                 }
             }
         } catch (e: IOException) {

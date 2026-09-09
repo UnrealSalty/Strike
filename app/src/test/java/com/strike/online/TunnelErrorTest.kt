@@ -6,6 +6,15 @@ import org.junit.Test
 import java.util.Base64
 
 class TunnelErrorTest {
+    @Test fun dashboardFailuresAreDistinguishedFromCloudflareFailures() {
+        assertEquals("Strike's dashboard refused the tunnel connection", tunnelError(error(
+            "Unable to reach the origin service: dial tcp 127.0.0.1:8090: connect: connection refused")))
+        assertEquals("Strike's dashboard did not answer the tunnel", tunnelError(error(
+            "dial tcp 127.0.0.1:8090: i/o timeout")))
+        assertEquals("The connection to Cloudflare timed out", tunnelError(error(
+            "dial tcp 198.41.192.167:7844: i/o timeout")))
+    }
+
     @Test fun fatalDetailsSurviveJsonOutput() {
         assertEquals("The tunnel's local port is already in use", tunnelError(error(
             "listen tcp 127.0.0.1:19889: bind: address already in use")))

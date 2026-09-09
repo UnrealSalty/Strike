@@ -25,11 +25,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        (application as StrikeApp).updates.resume()
-        if ((application as StrikeApp).pin.isSet()) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        (application as StrikeApp).dashboard.resume { pinSet ->
+            if (pinSet) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 

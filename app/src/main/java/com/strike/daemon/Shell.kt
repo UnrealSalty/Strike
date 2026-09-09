@@ -2,6 +2,7 @@ package com.strike.daemon
 
 import android.content.Context
 import android.provider.Settings
+import android.os.Process
 import com.strike.core.Logs
 import dadb.AdbKeyPair
 import dadb.AdbShellResponse
@@ -10,6 +11,8 @@ import java.io.File
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -39,13 +42,15 @@ class Shell internal constructor(
     private val commands = Any()
     private var dadb: Dadb? = null
     private var connecting = false
+    private var retryAfterConnect = false
     private var failures = 0
     private var retryAtMs = 0L
+    private val local = Process.myUid() == 2000
 
     val isPending: Boolean
         get() = synchronized(lock) { connecting || failures in 1 until AUTH_ATTEMPTS }
 
-    fun isAuthorised(): Boolean = connect() != null
+    fun isAuthorised(): Boolean = local || connect() != null
 
     /** The exit code, or null when there is no shell at all. */
     fun run(command: String): Int? = synchronized(commands) {
@@ -69,6 +74,13 @@ class Shell internal constructor(
     }
 
     fun push(file: File, path: String): Boolean = synchronized(commands) {
+        if (local) return@synchronized try {
+            Files.copy(file.toPath(), File(path).toPath(), StandardCopyOption.REPLACE_EXISTING)
+            true
+        } catch (e: IOException) {
+            Logs.w(TAG, "Could not transfer the update to the installer")
+            false
+        }
         val connection = connect() ?: return false
         try {
             connection.push(file, path)
@@ -81,6 +93,7 @@ class Shell internal constructor(
     }
 
     private fun exec(command: String): AdbShellResponse? {
+        if (local) return localCommand(command)
         val connection = connect() ?: return null
         return try {
             connection.shell(command)
@@ -91,11 +104,30 @@ class Shell internal constructor(
         }
     }
 
-    fun retry(): Boolean = connect(force = true) != null
+    fun retry(): Boolean = local || connect(force = true) != null
+
+    fun exchangeLocal(apk: String, request: ByteArray, maxBytes: Int): ByteArray? = synchronized(commands) {
+        val connection = connect() ?: return null
+        try {
+            val quoted = apk.replace("'", "'\"'\"'")
+            connection.open("exec:CLASSPATH='$quoted' app_process /system/bin " +
+                "com.strike.server.DashboardControl").use { stream ->
+                stream.sink.writeInt(request.size).write(request).flush()
+                val length = stream.source.readInt()
+                if (length !in 1..maxBytes) throw IOException("Invalid dashboard response")
+                stream.source.readByteArray(length.toLong())
+            }
+        } catch (e: IOException) {
+            null
+        }
+    }
 
     private fun connect(force: Boolean = false): Dadb? = synchronized(lock) {
         dadb?.let { return it }
-        if (connecting) return null
+        if (connecting) {
+            if (force) retryAfterConnect = true
+            return null
+        }
         if (force) {
             failures = 0
             retryAtMs = 0L
@@ -110,24 +142,27 @@ class Shell internal constructor(
                 Logs.d(TAG, "adb connection failed: ${e.message}")
                 null
             }
-            synchronized(lock) {
+            val retryRequested = synchronized(lock) {
                 connecting = false
                 dadb = opened
+                val again = opened == null && retryAfterConnect
+                retryAfterConnect = false
                 if (opened != null) {
                     failures = 0
                     retryAtMs = 0L
                 } else {
                     failures++
                     retryAtMs = nowMs() + minOf(RETRY_MS * (1L shl (failures - 1)), MAX_RETRY_MS)
-                    if (failures == AUTH_ATTEMPTS) {
+                    if (failures == AUTH_ATTEMPTS && !again) {
                         Logs.w(TAG, "shell unavailable; accept the debugging prompt and press Connect to retry")
                     }
                 }
+                again
             }
             if (opened != null) {
                 Logs.d(TAG, "shell authorised")
                 onAuthorised()
-            }
+            } else if (retryRequested) connect(force = true)
         }
         null
     }
@@ -144,6 +179,23 @@ class Shell internal constructor(
             retryAtMs = 0L
         }
     }
+}
+
+private fun localCommand(command: String): AdbShellResponse? = try {
+    val child = ProcessBuilder("timeout", "-s", "KILL", "45", "sh", "-c", "umask 022; $command")
+        .redirectErrorStream(true).start()
+    try {
+        val output = child.inputStream.bufferedReader().use { it.readText() }
+        AdbShellResponse(output, "", child.waitFor())
+    } finally {
+        if (child.isAlive) child.destroyForcibly()
+    }
+} catch (e: IOException) {
+    Logs.w(TAG, "Could not run the shell command")
+    null
+} catch (e: InterruptedException) {
+    Thread.currentThread().interrupt()
+    null
 }
 
 private fun adbOpener(context: Context): () -> Dadb? {

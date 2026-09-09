@@ -17,7 +17,7 @@ private const val TAG = "AccOff"
 class AccOff : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        (context.applicationContext as StrikeApp).online.acc(false)
+        (context.applicationContext as StrikeApp).dashboard.acc(false)
         PinSession.lock()
         WebUi.cover()
         val watching = Config.getBool(SurveillanceSettings.ENABLED, false)

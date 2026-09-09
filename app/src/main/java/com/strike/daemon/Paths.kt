@@ -9,6 +9,7 @@ const val CAM_LOCK_PATH = "$STRIKE_DIR/cam.lock"
 const val CAM_SENTINEL_PATH = "$STRIKE_DIR/cam.disabled"
 const val CAM_SCRIPT_PATH = "$STRIKE_DIR/start_cam.sh"
 const val CAM_WATCHDOG_PID_PATH = "$STRIKE_DIR/cam_watchdog.pid"
+internal const val PANEL_LOCK_PATH = "$STRIKE_DIR/parked-panel.lock"
 
 /** Overdrive holds 19876 on this same head unit and both may be installed. */
 const val COMMAND_PORT = 19886

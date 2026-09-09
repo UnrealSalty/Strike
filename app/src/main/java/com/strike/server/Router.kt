@@ -20,6 +20,7 @@ import com.strike.server.api.SurveillanceApi
 import com.strike.server.api.UpdatesApi
 import com.strike.online.Online
 import com.strike.update.Updates
+import com.strike.vehicle.VehicleTelemetry
 import java.io.File
 import java.io.IOException
 
@@ -36,12 +37,13 @@ internal const val LIVE_STREAM_PATH = "/live/stream"
 internal const val FAVICON_PATH = "/favicon.png"
 
 class Router(context: Context, private val pin: Pin, shell: Shell, online: Online, browsers: BrowserGate,
-             private val daemons: DaemonsApi, private val updates: Updates) {
+             private val daemons: DaemonsApi, private val updates: Updates,
+             vehicle: VehicleTelemetry = VehicleTelemetry(context)) {
 
     private val assets = context.assets
     private val recordings = RecordingsApi(context, shell)
     private val surveillance = SurveillanceApi(context, shell)
-    private val dashboard = DashboardApi(context, shell, daemons, pin, updates)
+    private val dashboard = DashboardApi(context, shell, daemons, pin, updates, vehicle)
     private val security = SecurityApi(pin)
     private val remote = OnlineApi(online, browsers)
     private val updater = UpdatesApi(updates)

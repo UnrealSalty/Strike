@@ -159,4 +159,30 @@ class SetupRestartTest {
         setup.foreground(true)
         assertEquals(1, restarts)
     }
+
+    @Test fun returningFromUsbApprovalBeforeTheOldHandshakeFinishesStillRestarts() {
+        val tasks = ArrayDeque<Runnable>()
+        var attempts = 0
+        val transport = Proxy.newProxyInstance(
+            Dadb::class.java.classLoader, arrayOf(Dadb::class.java)
+        ) { _, method, _ -> throw AssertionError("Unexpected ADB call: ${method.name}") } as Dadb
+        lateinit var setup: SetupRestart
+        val shell = Shell(
+            open = { if (++attempts == 1) null else transport },
+            connector = Executor { tasks.addLast(it) },
+            onAuthorised = { setup.shellAuthorised() }
+        )
+        setup = SetupRestart(pending, true, { shell.retry() }) { restarts++ }
+        setup.permissionsRequested()
+        setup.foreground(true)
+        setup.foreground(false)
+        setup.permissionsFinished()
+        setup.foreground(true)
+        tasks.removeFirst().run()
+        assertEquals(1, tasks.size)
+        tasks.removeFirst().run()
+        assertEquals(1, restarts)
+        assertFalse(pending.exists())
+        assertTrue(tasks.isEmpty())
+    }
 }

@@ -9,7 +9,7 @@ import com.strike.StrikeApp
 class AccOn : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        (context.applicationContext as StrikeApp).online.acc(true)
+        (context.applicationContext as StrikeApp).dashboard.acc(true)
         val pending = goAsync()
         Thread({
             try {

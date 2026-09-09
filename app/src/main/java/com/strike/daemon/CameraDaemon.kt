@@ -49,6 +49,7 @@ import com.strike.surveillance.Sentry
 import com.strike.surveillance.SurveillanceSettings
 import com.strike.surveillance.eventInProgress
 import com.strike.surveillance.surveillanceReason
+import com.strike.server.DashboardControl
 import com.strike.vehicle.VehicleSnapshot
 import com.strike.vehicle.VehicleTelemetry
 import org.json.JSONArray
@@ -112,7 +113,13 @@ object CameraDaemon {
     private val audio = AudioIngest()
     private val streamer = LiveStreamer(relay)
     private val camera = CameraSource()
-    private val screen = RedScreen()
+    private val panel = ParkedPanel()
+    private val panelLease = PanelLease(File(PANEL_LOCK_PATH), camera = true)
+    private val screen = RedScreen(panel) {
+        ParkedRails.isHeld || (onlinePanelHeld && ParkedRails.onlineHeld())
+    }
+    @Volatile private var panelReady = false
+    @Volatile private var onlinePanelHeld = false
     private var sentry: Sentry? = null
     private var bus: FrameBus? = null
     private var server: CommandServer? = null
@@ -146,6 +153,7 @@ object CameraDaemon {
         loadCameraLibraries()
         CameraTexture.load(args.firstOrNull())
         screen.apkPath = args.getOrNull(1)
+        panelReady = panelLease.acquire()
         sentry = Sentry(args.getOrNull(1), screen)
         vehicle = DaemonContext.get()?.let { context ->
             VehicleTelemetry(context) { DaemonLog.w("ACC", it) }
@@ -182,10 +190,18 @@ object CameraDaemon {
             ok()
         }
         "screen.preview" -> {
-            val message = command.optString("message")
-            val seconds = command.optInt("seconds", 5)
-            Thread({ screen.show(message, seconds, forced = true) }, "deterrent").start()
-            ok()
+            if (!panelReady || !alive) failed("The parked display is starting")
+            else {
+                val message = command.optString("message")
+                val seconds = command.optInt("seconds", 5)
+                Thread({ screen.show(message, seconds, forced = true) }, "deterrent").start()
+                ok()
+            }
+        }
+        "power.parked" -> {
+            if (panelReady && ParkedRails.onlineHeld()) onlinePanelHeld = true
+            if (panelReady && screen.parkedWake { alive && panelReady && ParkedRails.onlineHeld() }) ok()
+            else failed("The parked display is not ready")
         }
         "live.start" -> {
             liveView = CameraView.of(command.optString("view"))
@@ -242,11 +258,27 @@ object CameraDaemon {
     private fun supervise() {
         while (alive) {
             updateVehicle()
+            if (onlinePanelHeld && !ParkedRails.onlineHeld() &&
+                (sentryMode != SentryMode.OFF || screen.releasePanel())) onlinePanelHeld = false
+            if (!panelReady) {
+                if (!panelLease.acquire()) {
+                    screen.apkPath?.let { DashboardControl.releasePanel(it) }
+                    if (!panelLease.acquire()) {
+                        Thread.sleep(SUPERVISE_EVERY_MS)
+                        continue
+                    }
+                }
+                panelReady = true
+            }
             val now = System.currentTimeMillis()
             if (sentryMode != SentryMode.OFF) {
                 if (!ParkedRails.isHeld) {
                     ParkedRails.hold { sentryMode != SentryMode.OFF }
                     if (ParkedRails.isHeld) screen.sleepPanel()
+                }
+                if (sentryMode != SentryMode.OFF && !ParkedRails.isHeld) {
+                    Thread.sleep(SUPERVISE_EVERY_MS)
+                    continue
                 }
                 bringUp(eventsDir() ?: clipsDir())
             } else {
@@ -301,6 +333,8 @@ object CameraDaemon {
         ParkedRails.release()
         stopRecording()
         cameraDown()
+        panelReady = false
+        if (screen.close()) panelLease.close()
     }
 
     private fun watchVehicle() {

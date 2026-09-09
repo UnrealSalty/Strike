@@ -14,6 +14,7 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "HttpServer"
 private const val READ_TIMEOUT_MS = 15_000
@@ -27,16 +28,29 @@ private const val COPY_BUFFER = 64 * 1024
 class HttpServer(private val port: Int, private val router: Router, private val browsers: BrowserGate) {
 
     private val workers = ThreadPoolExecutor(8, 8, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue(16))
+    private val clients = ConcurrentHashMap.newKeySet<Socket>()
+    private var listener: ServerSocket? = null
 
-    fun start() {
+    fun start(): Boolean {
         val socket = try {
             ServerSocket(port, 16, InetAddress.getByName("0.0.0.0"))
         } catch (e: IOException) {
             Logs.e(TAG, "port $port is taken, the UI has nothing to load", e)
-            return
+            return false
         }
         socket.reuseAddress = true
+        listener = socket
         Thread({ accept(socket) }, "strike-http").start()
+        return true
+    }
+
+    fun close(): Boolean {
+        listener?.close()
+        for (client in clients) try { client.close() } catch (e: IOException) {
+            // A browser can disconnect during the handover.
+        }
+        workers.shutdown()
+        return workers.awaitTermination(30, TimeUnit.SECONDS)
     }
 
     private fun accept(socket: ServerSocket) {
@@ -44,12 +58,14 @@ class HttpServer(private val port: Int, private val router: Router, private val 
             val client = try {
                 socket.accept()
             } catch (e: IOException) {
-                Logs.e(TAG, "stopped accepting connections", e)
+                if (!socket.isClosed) Logs.e(TAG, "stopped accepting connections", e)
                 return
             }
+            clients.add(client)
             try {
                 workers.execute { serve(client) }
             } catch (e: RejectedExecutionException) {
+                clients.remove(client)
                 try { client.close() } catch (e: IOException) {
                     // The rejected client may already have disconnected.
                 }
@@ -141,6 +157,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
         } finally {
             // The Live thread owns this socket after upgrade.
             if (!streaming) {
+                clients.remove(client)
                 browsers.leave(client)
                 try {
                     client.close()
@@ -165,6 +182,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
             } catch (e: IOException) {
                 Logs.d(TAG, "the live viewer's connection ended: ${e.message}")
             } finally {
+                clients.remove(client)
                 browsers.leave(client)
                 try {
                     client.close()

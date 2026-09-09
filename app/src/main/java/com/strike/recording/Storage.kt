@@ -73,7 +73,7 @@ internal fun keepWritePath(ready: Boolean, path: String): String? {
 internal fun prepareDir(dir: File, shell: Shell?): Boolean {
     if (storageUuid(dir.path) != null) remount(dir)
     if (!dir.exists() && !dir.mkdirs()) {
-        shell?.check("mkdir -p \"${dir.absolutePath}\"")
+        shell?.check("timeout -s KILL 3 mkdir -p \"${dir.absolutePath}\"")
     }
     if (!dir.exists()) return false
     openForDaemon(dir)

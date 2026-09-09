@@ -11,6 +11,8 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.Executor
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 private const val DAY_MS = 86_400_000L
 private const val MANUAL_WAIT_MS = 15_000L
@@ -28,7 +30,8 @@ class Updates internal constructor(
     private val installOutcome: () -> Boolean?,
     private val worker: Executor = Executor { Thread(it, "updates").start() },
     private val nowMs: () -> Long = System::currentTimeMillis,
-    private val pause: (Long) -> Unit = Thread::sleep
+    private val pause: (Long) -> Unit = Thread::sleep,
+    private val isCurrentApk: () -> Boolean = { true }
 ) {
     constructor(context: Context, shell: Shell, pauseRecorder: ((Boolean) -> Unit) -> Unit,
                 resumeRecorder: () -> Unit) : this(context, UpdateInstall(context, shell, pauseRecorder, resumeRecorder))
@@ -38,7 +41,7 @@ class Updates internal constructor(
         File(context.filesDir, "updates.json"), File(context.cacheDir, "update.apk"),
         { hasInternet(context) }, ::fetchRelease, ::downloadRelease,
         { apk, release -> verifyUpdateApk(context, apk, release); Unit },
-        installer::start, { installer.pending }, installer::outcome
+        installer::start, { installer.pending }, installer::outcome, isCurrentApk = { installer.isCurrentApk }
     )
 
     private var release: Release? = null
@@ -47,6 +50,7 @@ class Updates internal constructor(
     private var checkedAtMs = 0L
     private var phase = "idle"
     private var working = false
+    private var idle = CountDownLatch(0)
     private var ready = false
     private var received = 0L
     private var message = ""
@@ -151,6 +155,8 @@ class Updates internal constructor(
     @Synchronized
     fun isInstalling(): Boolean = phase == "installing" || installPending()
 
+    fun awaitIdle(timeoutMs: Long): Boolean = synchronized(this) { idle }.await(timeoutMs, TimeUnit.MILLISECONDS)
+
     @Synchronized
     fun status(full: Boolean = true): JSONObject {
         val offered = release
@@ -167,6 +173,8 @@ class Updates internal constructor(
     }
 
     private fun work(next: String, action: () -> Unit) {
+        val finished = CountDownLatch(1)
+        idle = finished
         working = true
         phase = next
         message = ""
@@ -195,6 +203,7 @@ class Updates internal constructor(
                     working = false
                     phase = if (installPending()) "installing" else "idle"
                 }
+                finished.countDown()
             }
         }
     }
@@ -202,6 +211,7 @@ class Updates internal constructor(
     private fun awaitInstall() {
         val deadline = nowMs() + 180_000
         while (nowMs() < deadline) {
+            if (!isCurrentApk()) return
             val success = installOutcome()
             if (success != null) {
                 synchronized(this) {

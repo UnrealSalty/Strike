@@ -17,10 +17,9 @@ import java.util.Date
 import java.util.Locale
 
 class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsApi, private val pin: Pin,
-                   private val updates: Updates) {
+                   private val updates: Updates, private val vehicle: VehicleTelemetry) {
 
     private val storage = Storage(context, shell)
-    private val vehicle = VehicleTelemetry(context)
     private val events = EventStorage(context, shell)
 
     fun status(inCar: Boolean): Response {
@@ -41,8 +40,9 @@ class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsA
             room.put("clipsToday", clips.count { it.date == today })
             payload.put("storage", room)
         }
-        payload.put("daemons", daemons.count())
-        payload.put("recording", daemons.recording())
+        val daemonStatus = daemons.dashboard()
+        payload.put("daemons", daemonStatus.getJSONObject("daemons"))
+        payload.put("recording", daemonStatus.getJSONObject("recording"))
         val summary = events.store().summary()
         payload.put("eventCount", if (events.selected() == null) JSONObject.NULL else summary.clips)
         val latest = summary.latest
