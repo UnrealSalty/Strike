@@ -12,6 +12,72 @@
     var image = document.getElementById('lastEventImage');
     var picture = document.getElementById('lastEventPicture');
     var empty = document.getElementById('lastEventEmpty');
+    var updateModal = document.getElementById('updateNotice');
+    var updateClose = document.getElementById('updateNoticeClose');
+    var updateAccept = document.getElementById('updateNoticeAccept');
+    var offeredUpdate = null;
+    var requestingUpdate = false;
+    var returnFocus = null;
+    var announced = '';
+    try { announced = sessionStorage.getItem('strike:update-notice') || ''; }
+    catch (e) { announced = ''; }
+
+    function hideUpdateNotice() {
+        if (updateModal.hidden) return;
+        updateModal.hidden = true;
+        if (returnFocus) returnFocus.focus();
+    }
+
+    function updateNotice(update, cached) {
+        if (cached) return;
+        offeredUpdate = update;
+        if (!update || !update.available || !update.latest || update.busy || update.phase === 'installing') {
+            if (!requestingUpdate) hideUpdateNotice();
+            return;
+        }
+        var key = update.current + ':' + update.latest;
+        if (announced === key || document.hidden || Strike.session.leaving) return;
+        announced = key;
+        try { sessionStorage.setItem('strike:update-notice', key); }
+        catch (e) { /* The notice still stays dismissed for this page. */ }
+        document.getElementById('updateNoticeVersion').textContent =
+            'Strike v' + update.latest.replace(/^v/, '') + ' is available.';
+        document.getElementById('updateNoticeHint').textContent = update.ready ?
+            'Downloaded and ready to install from Settings.' : 'Download now, then choose when to install.';
+        returnFocus = document.activeElement;
+        updateModal.hidden = false;
+        updateClose.focus();
+    }
+
+    updateClose.onclick = hideUpdateNotice;
+    updateModal.onclick = function (event) { if (event.target === updateModal) hideUpdateNotice(); };
+    updateModal.onkeydown = function (event) {
+        if (event.key === 'Escape') { event.preventDefault(); hideUpdateNotice(); }
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            if (updateAccept.disabled || document.activeElement !== updateClose) updateClose.focus();
+            else updateAccept.focus();
+        }
+    };
+    updateAccept.onclick = function () {
+        if (requestingUpdate || !offeredUpdate || !offeredUpdate.available) return;
+        if (offeredUpdate.ready) { location.assign('/settings#updates'); return; }
+        requestingUpdate = true;
+        updateAccept.disabled = true;
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/updates', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.timeout = 8000;
+        xhr.onloadend = function () {
+            requestingUpdate = false;
+            updateAccept.disabled = false;
+            if (xhr.status === 200) location.assign('/settings#updates');
+            else if (xhr.status === 401) Strike.session.signIn();
+            else if (xhr.status === 403) location.replace('/lock');
+            else Strike.toast('Could not start the update download. Try again.', true);
+        };
+        xhr.send('action=download');
+    };
 
     image.onload = function () {
         picture.removeAttribute('data-loading');
@@ -112,8 +178,9 @@
     }
 
     Strike.dashboard = {
-        render: function (status) {
+        render: function (status, cached) {
             var update = status.updates;
+            updateNotice(update, cached);
             document.getElementById('updateLink').hidden = !update || !update.available;
             say('updateSummary', update && update.latest ? 'v' + update.latest.replace(/^v/, '') : null);
             battery(status.vehicle);
@@ -124,6 +191,8 @@
         },
 
         clear: function () {
+            offeredUpdate = null;
+            if (!requestingUpdate) hideUpdateNotice();
             for (var i = 0; i < VALUE_IDS.length; i++) {
                 Strike.core.value(VALUE_IDS[i], null);
             }

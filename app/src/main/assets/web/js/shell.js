@@ -5,9 +5,9 @@
 
     Strike.shell = {
         start: function (onStatus, onLost) {
-            Strike.core.poll('/api/status', 2000, function (status) {
+            Strike.core.poll('/api/status', 2000, function (status, cached) {
                 if (onStatus) {
-                    onStatus(status);
+                    onStatus(status, cached);
                 }
             }, function () {
                 if (onLost) {

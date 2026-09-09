@@ -200,7 +200,8 @@ body {
     color: var(--on-accent);
 }
 
-.online__buttons {
+.online__buttons,
+.modal__foot {
     display: flex;
     justify-content: flex-end;
     flex: none;
@@ -208,12 +209,14 @@ body {
     border-top: 1px solid var(--line);
 }
 
-.online__buttons > .btn {
+.online__buttons > .btn,
+.modal__foot > .btn {
     min-width: var(--key);
     white-space: nowrap;
 }
 
-.online__buttons > * + * {
+.online__buttons > * + *,
+.modal__foot > * + * {
     margin-left: var(--gap);
 }
 

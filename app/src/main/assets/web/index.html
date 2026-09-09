@@ -124,6 +124,22 @@
 
     </main>
 
+    <div class="modal" id="updateNotice" hidden>
+        <section class="modal__panel modal__panel--narrow" role="dialog" aria-modal="true" aria-labelledby="updateNoticeTitle" aria-describedby="updateNoticeVersion updateNoticeHint">
+            <div class="modal__head">
+                <h2 class="modal__title" id="updateNoticeTitle">Update available</h2>
+            </div>
+            <div class="modal__body">
+                <p id="updateNoticeVersion"></p>
+                <p class="note" id="updateNoticeHint">Download now, then choose when to install.</p>
+            </div>
+            <div class="modal__foot">
+                <button class="btn" id="updateNoticeClose" type="button">Close</button>
+                <button class="btn btn--primary" id="updateNoticeAccept" type="button">Update</button>
+            </div>
+        </section>
+    </div>
+
     <script src="js/session.js"></script>
     <script src="js/core.js"></script>
     <script src="js/toast.js"></script>

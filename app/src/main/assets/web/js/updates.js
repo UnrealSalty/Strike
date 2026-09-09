@@ -40,7 +40,7 @@
         check.textContent = state && state.phase === 'installing' && !state.busy ? 'Retry' : 'Check now';
         apply.disabled = pending || !fresh || !state || state.busy || state.phase === 'installing';
         apply.hidden = !state || !state.available;
-        apply.textContent = confirming ? 'Confirm install' : state && state.ready ? 'Install update' : 'Download';
+        apply.textContent = confirming ? 'Confirm install' : state && state.ready ? 'Install now' : 'Download';
     }
 
     function paint(payload) {
