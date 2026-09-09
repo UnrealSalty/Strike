@@ -369,6 +369,17 @@ main {
     margin-top: var(--gap);
 }
 
+.camera-profile {
+    display: flex;
+    align-items: center;
+}
+
+.camera-profile > .card__lead {
+    flex: 1;
+    min-width: 0;
+    margin-right: var(--gap);
+}
+
 .card__title {
     display: flex;
     align-items: baseline;

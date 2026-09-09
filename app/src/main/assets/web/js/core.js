@@ -249,8 +249,7 @@ Strike.pick = function (id, onChange) {
 (function () {
     var RIPPLES = ['nav__link', 'action', 'btn', 'seg__btn', 'choice__row', 'pick__btn',
         'pick__item', 'row--clip', 'row--link', 'daemon__open', 'pad__key'];
-    var HOLDS = ['nav__link', 'action', 'row--link'];
-    var NAV_HOLD_MS = 130;
+    var LINKS = ['nav__link', 'action', 'row--link'];
 
     function leaving() {
         document.documentElement.classList.add('is-leaving');
@@ -333,20 +332,16 @@ Strike.pick = function (id, onChange) {
         }
     }, true);
 
-    // Let the press feedback draw before navigation replaces the document.
     document.addEventListener('click', function (event) {
-        var link = anyOf(event.target, HOLDS);
-        if (!link || link.tagName !== 'A') {
+        var link = anyOf(event.target, LINKS);
+        if (!link || link.tagName !== 'A' || event.defaultPrevented ||
+            event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
             return;
         }
-        event.preventDefault();
         if (link.getAttribute('aria-current') === 'page') {
+            event.preventDefault();
             return;
         }
         leaving();
-        var href = link.href;
-        setTimeout(function () {
-            location.href = href;
-        }, NAV_HOLD_MS);
     });
 }());
