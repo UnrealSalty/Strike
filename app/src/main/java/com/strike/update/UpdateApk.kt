@@ -12,7 +12,10 @@ internal fun verifyUpdateApk(context: Context, apk: File, release: Release): Lon
     }
     val packages = context.packageManager
     val current = packages.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-    val next = packages.getPackageArchiveInfo(apk.path, PackageManager.GET_SIGNING_CERTIFICATES)
+    // Android 9 and 10 only collect archive certificates when GET_SIGNATURES is requested.
+    @Suppress("DEPRECATION")
+    val next = packages.getPackageArchiveInfo(apk.path,
+        PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.GET_SIGNATURES)
         ?: throw IllegalArgumentException("Android could not read the APK")
     require(next.packageName == current.packageName) { "This APK is not Strike" }
     require(next.longVersionCode > current.longVersionCode) { "The release needs a higher versionCode" }
@@ -21,8 +24,10 @@ internal fun verifyUpdateApk(context: Context, apk: File, release: Release): Lon
     }
     val trusted = current.signingInfo?.apkContentsSigners?.map { it.toCharsString() }?.toSet()
     val offered = next.signingInfo?.apkContentsSigners?.map { it.toCharsString() }?.toSet()
-    require(!trusted.isNullOrEmpty() && offered == trusted) {
-        "The signing key differs. Install a matching release build manually first"
+    require(!trusted.isNullOrEmpty()) { "Android could not read Strike's signing certificate" }
+    require(!offered.isNullOrEmpty()) { "Android could not read the update's signing certificate" }
+    require(offered == trusted) {
+        "The update uses a different signing key"
     }
     require((next.applicationInfo?.minSdkVersion ?: Int.MAX_VALUE) <= Build.VERSION.SDK_INT) {
         "This APK needs a newer Android version"
