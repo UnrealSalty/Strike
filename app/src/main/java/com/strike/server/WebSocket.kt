@@ -48,11 +48,17 @@ class WebSocket(private val input: InputStream, private val output: OutputStream
                 if (first < 0) break
                 val second = input.read()
                 if (second < 0) break
-                val length = payloadLength(second and 0x7F)
-                val mask = if ((second and MASKED) != 0) readFully(4) else null
+                val opcode = first and 0x0F
+                val length = second and 0x7F
+                // Live viewers send only unfragmented, masked control frames of at most 125 bytes.
+                if (first and 0xF0 != FINAL_FRAME || second and MASKED == 0 || length > SHORT_MAX ||
+                    opcode !in OPCODE_CLOSE..OPCODE_PONG || (opcode == OPCODE_CLOSE && length == 1)) {
+                    throw IOException("Invalid live control frame")
+                }
+                val mask = readFully(4)
                 val body = readFully(length)
-                if (mask != null) unmask(body, mask)
-                when (first and 0x0F) {
+                unmask(body, mask)
+                when (opcode) {
                     OPCODE_CLOSE -> break
                     OPCODE_PING -> pong(body)
                     else -> Unit
@@ -70,20 +76,6 @@ class WebSocket(private val input: InputStream, private val output: OutputStream
             output.write(body)
             output.flush()
         }
-    }
-
-    private fun payloadLength(stated: Int): Int = when (stated) {
-        LENGTH_16_BIT -> {
-            val bytes = readFully(2)
-            ((bytes[0].toInt() and 0xFF) shl 8) or (bytes[1].toInt() and 0xFF)
-        }
-        LENGTH_64_BIT -> {
-            var value = 0L
-            for (byte in readFully(8)) value = (value shl 8) or (byte.toLong() and 0xFF)
-            if (value > Int.MAX_VALUE) throw IOException("frame too large")
-            value.toInt()
-        }
-        else -> stated
     }
 
     private fun readFully(length: Int): ByteArray {

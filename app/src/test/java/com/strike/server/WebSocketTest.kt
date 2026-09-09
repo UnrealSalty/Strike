@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 
 class WebSocketTest {
 
@@ -64,7 +65,7 @@ class WebSocketTest {
 
     @Test
     fun aClientCloseFrameEndsTheStream() {
-        val close = byteArrayOf(0x88.toByte(), 0)
+        val close = byteArrayOf(0x88.toByte(), 0x80.toByte(), 1, 2, 3, 4)
         val socket = WebSocket(ByteArrayInputStream(close), ByteArrayOutputStream())
         socket.awaitClose()
         assertEquals(true, socket.isClosed)
@@ -80,5 +81,25 @@ class WebSocketTest {
         WebSocket(ByteArrayInputStream(ping), out).awaitClose()
 
         assertArrayEquals(byteArrayOf(0x8A.toByte(), 5) + "Hello".toByteArray(), out.toByteArray())
+    }
+
+    @Test
+    fun invalidControlFramesCloseBeforeReadingTheirPayload() {
+        for ((first, second) in listOf(0x89 to 0xFE, 0x89 to 0xFF, 0x09 to 0x80,
+                0xC9 to 0x80, 0x89 to 0x00, 0x82 to 0xFF)) {
+            var read = 0
+            val input = object : InputStream() {
+                override fun read(): Int = when (read++) {
+                    0 -> first
+                    1 -> second
+                    else -> throw AssertionError("Read the payload of an invalid frame")
+                }
+            }
+            val output = ByteArrayOutputStream()
+            val socket = WebSocket(input, output)
+            socket.awaitClose()
+            assertEquals(true, socket.isClosed)
+            assertEquals(0, output.size())
+        }
     }
 }
