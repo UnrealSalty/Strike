@@ -59,6 +59,23 @@ body {
     border-radius: var(--radius);
 }
 
+.online .card__actions {
+    display: flex;
+    align-items: flex-start;
+}
+
+.online .card__actions > .card__lead {
+    flex: 1;
+    min-width: 0;
+    padding-right: 0;
+}
+
+.online .card__tools {
+    position: static;
+    flex: none;
+    margin-left: var(--pad);
+}
+
 .online__panel-text {
     min-width: 0;
     margin-right: var(--pad);
