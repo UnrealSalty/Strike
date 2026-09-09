@@ -73,7 +73,8 @@ internal class DashboardClient(private val context: Context, private val shell: 
             }
             val local = bootstrap
             if (local != null) {
-                if (local.updates.status().optBoolean("busy") || local.updates.isInstalling()) {
+                // The shell dashboard owns recovery of an inherited install record.
+                if (!local.updates.awaitIdle(0L)) {
                     if (force) session?.let { publish(it, force = true) }
                     return true
                 }

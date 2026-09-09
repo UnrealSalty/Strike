@@ -30,6 +30,22 @@ class DashboardStateTest {
         assertEquals(identity, File(daemon, "identity").readText())
     }
 
+    @Test fun handoverPreservesTheInstallRecordAndRecorderRestartIntent() {
+        val app = temporary.newFolder("app")
+        val daemon = temporary.newFolder("daemon")
+        val plan = JSONObject().put("id", "a".repeat(32)).put("versionCode", 3)
+            .put("resume", true).put("startedAtMs", 1_000_000L)
+        File(app, "update-install.json").writeText(plan.toString())
+
+        importDashboard(daemon, identity, dashboardSeed(app))
+
+        val restored = JSONObject(File(daemon, "update-install.json").readText())
+        assertEquals(plan.getString("id"), restored.getString("id"))
+        assertEquals(3L, restored.getLong("versionCode"))
+        assertTrue(restored.getBoolean("resume"))
+        assertEquals(1_000_000L, restored.getLong("startedAtMs"))
+    }
+
     @Test fun aFreshInstallationCannotRestoreThePreviousPinOrBrowserSession() {
         val app = temporary.newFolder("app")
         val daemon = temporary.newFolder("daemon")

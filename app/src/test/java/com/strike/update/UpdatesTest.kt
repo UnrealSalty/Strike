@@ -240,6 +240,29 @@ class UpdatesTest {
     }
 
     @Test
+    fun anIdleInstallRecordCanHandOverAndRecoverWithoutManualRetry() {
+        pending = true
+        val bootstrap = updates("0.3")
+        assertTrue(bootstrap.isInstalling())
+        assertTrue(bootstrap.awaitIdle(0))
+        assertTrue(tasks.isEmpty())
+
+        val daemon = updates("0.3")
+        daemon.resume()
+        assertFalse(daemon.awaitIdle(0))
+        assertTrue(daemon.isInstalling())
+        run()
+
+        assertTrue(daemon.awaitIdle(0))
+        assertFalse(daemon.isInstalling())
+        assertFalse(daemon.status().getBoolean("failed"))
+        assertEquals("Update installed", daemon.status().getString("message"))
+        assertFalse(pending)
+        assertEquals(0, fetches)
+        assertEquals(0, installs)
+    }
+
+    @Test
     fun aPendingInstallationResumesWithoutStartingAnotherInstallerOrGithubCheck() {
         pending = true
         success = false
