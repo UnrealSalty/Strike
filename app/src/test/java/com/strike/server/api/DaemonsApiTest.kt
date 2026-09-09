@@ -2,8 +2,29 @@ package com.strike.server.api
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.json.JSONObject
 
 class DaemonsApiTest {
+
+    @Test
+    fun enabledServicesWaitWithoutClaimingTheyAreRunning() {
+        assertEquals("starting", tunnelDaemonState("waiting"))
+        assertEquals("starting", tunnelDaemonState("stopping"))
+        assertEquals("starting", surveillanceDaemonState(true, JSONObject().put("accOn", true)))
+        assertEquals("starting", surveillanceDaemonState(true, JSONObject().put("accOn", JSONObject.NULL)))
+        assertEquals("starting", surveillanceDaemonState(true, JSONObject().put("accOn", false)))
+    }
+
+    @Test
+    fun activeWorkAndFailuresKeepTheirOwnIndicators() {
+        assertEquals("running", tunnelDaemonState("running"))
+        assertEquals("broken", tunnelDaemonState("broken"))
+        assertEquals("off", tunnelDaemonState("off"))
+        assertEquals("running", surveillanceDaemonState(true, JSONObject().put("armed", true)))
+        assertEquals("running", surveillanceDaemonState(true, JSONObject().put("writing", "watch")))
+        assertEquals("broken", surveillanceDaemonState(true, null))
+        assertEquals("off", surveillanceDaemonState(false, JSONObject().put("armed", true)))
+    }
 
     @Test
     fun theCountIsGreenOnlyWhenEverythingRuns() {

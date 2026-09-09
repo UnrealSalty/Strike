@@ -197,8 +197,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     private fun tunnelCard(status: JSONObject): JSONObject {
         val state = status.getString("state")
         val configured = status.getBoolean("hasToken")
-        val card = card("cloudflare", "Cloudflare tunnel",
-            if (state in setOf(RUNNING, STARTING, BROKEN)) state else OFF)
+        val card = card("cloudflare", "Cloudflare tunnel", tunnelDaemonState(state))
         card.put("status", if (configured) status.getString("status") else "Set up in Online")
         card.put("action", "switch")
         card.put("path", "/api/online")
@@ -286,13 +285,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)
         val card = card(
             "surveillance", "Surveillance",
-            when {
-                !enabled -> OFF
-                status == null -> BROKEN
-                status.isNull("accOn") && !status.optBoolean("armed") &&
-                    status.optString("writing") != "watch" -> STARTING
-                else -> RUNNING
-            }
+            surveillanceDaemonState(enabled, status)
         )
         card.put(
             "status",
@@ -416,6 +409,19 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         row.put("value", value)
         facts.put(row)
     }
+}
+
+internal fun tunnelDaemonState(state: String): String = when (state) {
+    RUNNING, STARTING, BROKEN -> state
+    "waiting", "stopping" -> STARTING
+    else -> OFF
+}
+
+internal fun surveillanceDaemonState(enabled: Boolean, status: JSONObject?): String = when {
+    !enabled -> OFF
+    status == null -> BROKEN
+    status.optBoolean("armed") || status.optString("writing") == "watch" -> RUNNING
+    else -> STARTING
 }
 
 internal fun health(running: Int, total: Int): String = when {

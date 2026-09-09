@@ -149,7 +149,8 @@
             payload.mode === 'lock' ? 'Starts when the car locks' : 'Starts when the car is off';
         var dot = document.getElementById('tunnelDot');
         dot.setAttribute('data-state', payload.state === 'running' ? 'ok' :
-            payload.state === 'broken' ? 'bad' : payload.state === 'starting' ? 'warn' : '');
+            payload.state === 'broken' ? 'bad' :
+            payload.state === 'starting' || payload.state === 'waiting' || payload.state === 'stopping' ? 'warn' : '');
         addressReady('remoteAddress');
         var url = payload.hostname ? 'https://' + payload.hostname + '/' : '';
         document.getElementById('remoteUrl').value = url;
