@@ -11,7 +11,11 @@ Strike.toast = function (message, failed) {
     for (var i = 0; i < items.length; i++) {
         if (items[i].getAttribute('data-message') === message) items[i].dismiss();
     }
-    while (host.children.length >= 4) host.firstChild.dismiss();
+    while (host.children.length >= 4) {
+        var oldest = host.firstChild;
+        oldest.dismiss();
+        host.removeChild(oldest);
+    }
     var item = Strike.core.el('div', 'toast');
     item.setAttribute('data-message', message);
     item.setAttribute('role', failed ? 'alert' : 'status');
@@ -35,5 +39,5 @@ Strike.toast = function (message, failed) {
     close.onclick = item.dismiss;
     item.appendChild(close);
     host.appendChild(item);
-    if (!failed) timer = setTimeout(item.dismiss, 4000);
+    timer = setTimeout(item.dismiss, 4000);
 };
