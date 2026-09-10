@@ -1,0 +1,22 @@
+name: Discord release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: SethCohen/github-releases-to-discord@v1.20.0
+        with:
+          webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
+          color: "12456980"
+          username: Strike
+          avatar_url: https://github.com/UnrealSalty.png
+          footer_title: Strike
+          reduce_headings: true
