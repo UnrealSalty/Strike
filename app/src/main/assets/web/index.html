@@ -48,8 +48,14 @@
             </div>
             <div class="boxes">
                 <div class="box">
+                    <span class="box__swatch box__swatch--ev" id="socSwatch" aria-hidden="true" hidden></span>
                     <span class="box__label">Battery</span>
                     <span class="box__value"><span id="soc"><span class="sk sk--value"></span></span></span>
+                </div>
+                <div class="box" id="fuelBox" hidden>
+                    <span class="box__swatch box__swatch--fuel" aria-hidden="true"></span>
+                    <span class="box__label">Fuel</span>
+                    <span class="box__value"><span id="fuel">&mdash;</span></span>
                 </div>
                 <div class="box">
                     <span class="box__label">Estimated range</span>
@@ -60,7 +66,10 @@
                     <span class="box__value"><span id="kwh"><span class="sk sk--value"></span></span></span>
                 </div>
             </div>
-            <span class="meter card__meter"><span class="meter__fill" id="socFill"></span></span>
+            <span class="meter card__meter" id="vehicleMeter">
+                <span class="meter__fill meter__fill--ev" id="socFill"></span>
+                <span class="meter__fill meter__fill--fuel" id="fuelFill"></span>
+            </span>
         </section>
 
         <div class="columns">

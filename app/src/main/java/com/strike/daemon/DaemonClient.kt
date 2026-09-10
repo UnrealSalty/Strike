@@ -37,7 +37,7 @@ class DaemonClient {
         val reply = exchange(request)
         observed(if (accepted(reply) && reply!!.has("vehicle")) {
             reply.optJSONObject("vehicle")?.let {
-                VehicleSnapshot(null, null, null,
+                VehicleSnapshot(null, null, null, null, null,
                     if (it.has("gear")) it.getString("gear") else null,
                     if (it.has("on")) it.getBoolean("on") else null,
                     if (it.has("locked")) it.getBoolean("locked") else null)

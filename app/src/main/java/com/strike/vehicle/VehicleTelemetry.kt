@@ -48,12 +48,18 @@ class VehicleTelemetry(
             return null
         }
         val soc = socOf(read(statistic, "getElecPercentageValue")?.toDouble())
+        val fuel = fuelOf(read(statistic, "getFuelPercentageValue")?.toInt())
+        val fuelRange = fuelRangeOf(read(statistic, "getFuelDrivingRangeValue")?.toInt())
+        // An electric car answers one fuel getter with a plausible number, never both.
+        val burnsFuel = fuel != null && fuelRange != null
         return VehicleSnapshot(
             soc = soc,
             rangeKm = rangeOf(read(statistic, "getElecDrivingRangeValue")?.toInt()),
             batteryKwh = batteryKwhOf(read(power, "getBatteryRemainPowerEV")?.toDouble(), soc) {
                 read(statistic, "getRemainingBatteryPower")?.toInt()
             },
+            fuelPercent = if (burnsFuel) fuel else null,
+            fuelRangeKm = if (burnsFuel) fuelRange else null,
             gear = gear,
             accOn = accOnOf(read(bodywork, "getPowerLevel")?.toInt()),
             locked = lockOf(read(ota, "getLFDoorLockState")?.toInt())
@@ -66,6 +72,8 @@ class VehicleTelemetry(
         soc = null,
         rangeKm = null,
         batteryKwh = null,
+        fuelPercent = null,
+        fuelRangeKm = null,
         gear = gear(device(GEARBOX)),
         accOn = polledAccOnOf(read(device(BODYWORK), "getPowerLevel")?.toInt()),
         locked = lockOf(read(device(OTA), "getLFDoorLockState")?.toInt())
@@ -116,6 +124,11 @@ internal fun socOf(percent: Double?): Int? {
 }
 
 internal fun rangeOf(km: Int?): Int? = if (km != null && km in 1..999) km else null
+
+// Sensor rails sit above both domains: 254 and up for the gauge, 2046 and up for the range.
+internal fun fuelOf(percent: Int?): Int? = if (percent != null && percent in 1..100) percent else null
+
+internal fun fuelRangeOf(km: Int?): Int? = if (km != null && km in 1..1200) km else null
 
 internal inline fun batteryKwhOf(directKwh: Double?, soc: Int?, fallbackTenthsKwh: () -> Int?): Double? {
     if (plausibleKwh(directKwh, soc)) return directKwh

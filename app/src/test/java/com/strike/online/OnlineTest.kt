@@ -72,7 +72,7 @@ class OnlineTest {
             assertEquals(0, fixture.launched.size)
 
             fixture.powers.clear()
-            reading.set(VehicleSnapshot(null, null, null, "D", null, null))
+            reading.set(VehicleSnapshot(null, null, null, null, null, "D", null, null))
             fixture.online.vehicle(null)
             fixture.awaitPower(true, false)
             assertTrue(replacement.isAlive)

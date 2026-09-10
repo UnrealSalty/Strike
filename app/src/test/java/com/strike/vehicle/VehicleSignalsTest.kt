@@ -29,6 +29,28 @@ class VehicleSignalsTest {
     }
 
     @Test
+    fun fuelGaugeRejectsTheEmptyAnswerAndTheSensorRails() {
+        assertNull(fuelOf(0))
+        assertNull(fuelOf(null))
+        assertNull(fuelOf(101))
+        for (rail in listOf(254, 255, 511, 1023, 2046, 2047, 4095, 65534, 65535)) {
+            assertNull(fuelOf(rail))
+        }
+        assertEquals(28, fuelOf(28))
+    }
+
+    @Test
+    fun fuelRangeRejectsZeroAndKeepsDistancesThatLookLikeGaugeRails() {
+        assertNull(fuelRangeOf(0))
+        assertNull(fuelRangeOf(null))
+        assertNull(fuelRangeOf(1201))
+        assertNull(fuelRangeOf(4095))
+        assertEquals(255, fuelRangeOf(255))
+        assertEquals(1023, fuelRangeOf(1023))
+        assertEquals(320, fuelRangeOf(320))
+    }
+
+    @Test
     fun batteryEnergyPrefersTheDirectReading() {
         assertEquals(20.7, batteryKwhOf(20.7, 46) { error("The primary energy reading is valid") }!!, 0.001)
     }

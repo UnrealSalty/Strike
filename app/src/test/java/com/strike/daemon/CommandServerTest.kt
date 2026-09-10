@@ -42,7 +42,7 @@ class CommandServerTest {
 
         assertEquals(true, status.getBoolean("recording"))
         assertTrue(client.acc(true))
-        assertTrue(client.vehicle(VehicleSnapshot(null, null, null, "P", false, true)))
+        assertTrue(client.vehicle(VehicleSnapshot(null, null, null, null, null, "P", false, true)))
         assertEquals(listOf("status", "acc", "vehicle"), seen)
         assertEquals(false, vehicle!!.getBoolean("on"))
         assertEquals(true, vehicle!!.getBoolean("locked"))
@@ -56,11 +56,11 @@ class CommandServerTest {
 
     @Test
     fun theAppReceivesTheDaemonsParkedReadingWhenItsOwnReadingIsUnavailable() {
-        observed = VehicleSnapshot(null, null, null, "P", false, true)
+        observed = VehicleSnapshot(null, null, null, null, null, "P", false, true)
         serving.start()
         val client = DaemonClient()
         awaitAnswer(client)
-        assertTrue(client.vehicle(VehicleSnapshot(null, null, null, null, null, null)) {
+        assertTrue(client.vehicle(VehicleSnapshot(null, null, null, null, null, null, null, null)) {
             assertEquals(false, it!!.accOn)
             assertEquals("P", it.gear)
             assertEquals(true, it.locked)
@@ -72,10 +72,10 @@ class CommandServerTest {
         serving.start()
         val client = DaemonClient()
         awaitAnswer(client)
-        assertTrue(client.vehicle(VehicleSnapshot(null, null, null, "P", false, true)) {
+        assertTrue(client.vehicle(VehicleSnapshot(null, null, null, null, null, "P", false, true)) {
             assertNull(it)
         })
-        observed = VehicleSnapshot(null, null, null, "P", null, null)
+        observed = VehicleSnapshot(null, null, null, null, null, "P", null, null)
         assertTrue(client.vehicle(null) {
             assertEquals("P", it!!.gear)
             assertNull(it.accOn)
@@ -85,7 +85,7 @@ class CommandServerTest {
 
     @Test
     fun anOlderDaemonOrMissingDaemonLeavesTheAppReadingAvailable() {
-        val snapshot = VehicleSnapshot(null, null, null, "P", false, true)
+        val snapshot = VehicleSnapshot(null, null, null, null, null, "P", false, true)
         val client = DaemonClient()
         client.vehicle(snapshot) { assertEquals(snapshot, it) }
         legacy = true

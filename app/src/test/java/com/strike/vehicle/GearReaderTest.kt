@@ -136,7 +136,7 @@ class GearReaderTest {
         val body = Body(4)
         val reader = GearReader(adapter = { Adapter(body) })
         val monitor = AccMonitor(
-            read = { VehicleSnapshot(null, null, null, reader.read(null), false, true) },
+            read = { VehicleSnapshot(null, null, null, null, null, reader.read(null), false, true) },
             nowMs = { now }
         )
         monitor.poll()
@@ -158,9 +158,9 @@ class GearReaderTest {
     @Test
     fun aFallbackGearDoesNotInventIgnitionState() {
         val reader = GearReader(adapter = { Adapter(Body(1)) })
-        val unknownPower = VehicleSnapshot(null, null, null, reader.read(null), null, true)
+        val unknownPower = VehicleSnapshot(null, null, null, null, null, reader.read(null), null, true)
         assertNull(sentryMode(true, "smart", unknownPower))
-        val ignitionOn = VehicleSnapshot(null, null, null, reader.read(null), true, true)
+        val ignitionOn = VehicleSnapshot(null, null, null, null, null, reader.read(null), true, true)
         assertEquals("off", sentryMode(true, "smart", ignitionOn))
         assertFalse(shouldRecord("driving", ignitionOn))
     }
@@ -168,7 +168,7 @@ class GearReaderTest {
     @Test
     fun primaryDriveOverridesFallbackParkForRecordingAndSurveillance() {
         val reader = GearReader(adapter = { Adapter(Body(1)) })
-        val driving = VehicleSnapshot(null, null, null, reader.read(4), true, false)
+        val driving = VehicleSnapshot(null, null, null, null, null, reader.read(4), true, false)
         assertTrue(shouldRecord("driving", driving))
         assertEquals("off", sentryMode(true, "smart", driving))
     }

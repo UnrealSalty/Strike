@@ -112,5 +112,8 @@ class TriggersTest {
     private fun watching(mode: String?): Boolean = mode != null && mode != "off"
 
     private fun car(accOn: Boolean?, gear: String?, locked: Boolean? = null): VehicleSnapshot =
-        VehicleSnapshot(soc = 62, rangeKm = 210, batteryKwh = 28.0, gear = gear, accOn = accOn, locked = locked)
+        VehicleSnapshot(
+            soc = 62, rangeKm = 210, batteryKwh = 28.0, fuelPercent = null, fuelRangeKm = null,
+            gear = gear, accOn = accOn, locked = locked
+        )
 }

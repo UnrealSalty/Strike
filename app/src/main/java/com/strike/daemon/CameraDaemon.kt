@@ -176,7 +176,7 @@ object CameraDaemon {
         "status" -> status()
         "vehicle" -> {
             acc.fromApp(VehicleSnapshot(
-                null, null, null,
+                null, null, null, null, null,
                 if (command.has("gear")) command.optString("gear") else null,
                 if (command.has("on")) command.optBoolean("on") else null,
                 if (command.has("locked")) command.optBoolean("locked") else null

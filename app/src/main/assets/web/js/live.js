@@ -170,14 +170,33 @@
         return vehicle && typeof vehicle[key] === 'number' ? vehicle[key] : null;
     }
 
+    function range(reading) {
+        var ev = number(reading, 'rangeKm');
+        var fuelKm = number(reading, 'fuelRangeKm');
+        if (ev === null && fuelKm === null) {
+            return null;
+        }
+        return ((ev || 0) + (fuelKm || 0)) + ' km';
+    }
+
+    // A car that burns fuel shows both levels, so the low battery colour would read as a fuel state.
+    function gauge(soc, fuel) {
+        var hybrid = fuel !== null;
+        document.getElementById('fuelBit').hidden = !hybrid;
+        document.getElementById('vehicleMeter').className = hybrid ? 'meter meter--mix' : 'meter';
+        Strike.core.meter('socFill', soc, (hybrid || soc === null) ? null : socState(soc));
+        Strike.core.meter('fuelFill', hybrid ? fuel : null);
+    }
+
     function vehicle(reading) {
         var soc = number(reading, 'soc');
-        var rangeKm = number(reading, 'rangeKm');
         var kwh = number(reading, 'batteryKwh');
+        var fuel = number(reading, 'fuelPercent');
         Strike.core.value('soc', soc === null ? null : soc + ' %');
-        Strike.core.value('range', rangeKm === null ? null : rangeKm + ' km');
+        Strike.core.value('fuel', fuel === null ? null : fuel + ' %');
+        Strike.core.value('range', range(reading));
         Strike.core.value('kwh', kwh === null ? null : kwh.toFixed(1) + ' kWh');
-        Strike.core.meter('socFill', soc, soc === null ? null : socState(soc));
+        gauge(soc, fuel);
     }
 
     function render(status, cached) {
@@ -193,9 +212,10 @@
             return;
         }
         Strike.core.value('soc', null);
+        Strike.core.value('fuel', null);
         Strike.core.value('range', null);
         Strike.core.value('kwh', null);
-        Strike.core.meter('socFill', null);
+        gauge(null, null);
     }
 
     function feed(bytes) {

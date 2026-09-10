@@ -429,6 +429,7 @@ main {
 }
 
 .box {
+    position: relative;
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -440,6 +441,11 @@ main {
     border-radius: var(--radius);
 }
 
+/* display:flex above beats the hidden attribute on its own. */
+.box[hidden] {
+    display: none;
+}
+
 .box + .box {
     margin-left: var(--gap);
 }
@@ -447,6 +453,23 @@ main {
 .box__label {
     color: var(--text-dim);
     font-size: 12px;
+}
+
+.box__swatch {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+}
+
+.box__swatch--ev {
+    background: var(--ev);
+}
+
+.box__swatch--fuel {
+    background: var(--fuel);
 }
 
 .box__value {
@@ -1675,6 +1698,22 @@ main {
     height: 100%;
     background: var(--accent);
     transition: width var(--motion) var(--ease);
+}
+
+.meter--mix {
+    display: flex;
+}
+
+.meter--mix .meter__fill {
+    flex: none;
+}
+
+.meter--mix .meter__fill--ev {
+    background: var(--ev);
+}
+
+.meter__fill--fuel {
+    background: var(--fuel);
 }
 
 .meter__fill[data-state="warn"] {

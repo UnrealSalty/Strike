@@ -60,6 +60,8 @@ class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsA
             if (snapshot.soc != null) car.put("soc", snapshot.soc)
             if (snapshot.rangeKm != null) car.put("rangeKm", snapshot.rangeKm)
             if (snapshot.batteryKwh != null) car.put("batteryKwh", snapshot.batteryKwh)
+            if (snapshot.fuelPercent != null) car.put("fuelPercent", snapshot.fuelPercent)
+            if (snapshot.fuelRangeKm != null) car.put("fuelRangeKm", snapshot.fuelRangeKm)
             payload.put("vehicle", car)
         }
         return Response(200, JSON, payload.toString().toByteArray())

@@ -5,7 +5,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 internal fun car(acc: Boolean?, locked: Boolean? = null, gear: String? = "P") =
-    VehicleSnapshot(null, null, null, gear, acc, locked)
+    VehicleSnapshot(null, null, null, null, null, gear, acc, locked)
 
 class TunnelPolicyTest {
     @Test fun alwaysModeDoesNotNeedVehicleSignals() {

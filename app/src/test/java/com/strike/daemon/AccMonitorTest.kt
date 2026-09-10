@@ -213,5 +213,5 @@ class AccMonitorTest {
         sentryMode(true, "smart", monitor.snapshot(), arm, monitor.parkedForMs())
 
     private fun car(on: Boolean?, gear: String? = "P", locked: Boolean? = null) =
-        VehicleSnapshot(null, null, null, gear, on, locked)
+        VehicleSnapshot(null, null, null, null, null, gear, on, locked)
 }

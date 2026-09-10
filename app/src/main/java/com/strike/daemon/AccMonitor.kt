@@ -68,7 +68,7 @@ class AccMonitor(
         onUntilMs = if (on) now + BOOT_HOLD_MS else 0L
         offSinceMs = null
         app = null
-        accepted = VehicleSnapshot(null, null, null, null, on, null)
+        accepted = VehicleSnapshot(null, null, null, null, null, null, on, null)
         acceptedAtMs = now
         parkedSinceMs = if (on) null else now
     }

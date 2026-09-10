@@ -3,7 +3,7 @@
 
     window.Strike = window.Strike || {};
 
-    var VALUE_IDS = ['soc', 'range', 'kwh'];
+    var VALUE_IDS = ['soc', 'fuel', 'range', 'kwh'];
     var TEXT_IDS = ['vehicleState', 'usedSub', 'clipCount', 'eventCount', 'daemonCount', 'clipsToday'];
     var LOCATION = { internal: 'Internal storage', sd: 'SD card', usb: 'USB storage' };
     var EVENTS = { person: 'Person', vehicle: 'Vehicle', watch: 'Continuous', event: 'Movement' };
@@ -113,14 +113,35 @@
         return soc <= 20 ? 'bad' : 'warn';
     }
 
+    // A car that burns fuel shows both levels, so the low battery colour would read as a fuel state.
+    function gauge(soc, fuel) {
+        var hybrid = fuel !== null;
+        document.getElementById('fuelBox').hidden = !hybrid;
+        document.getElementById('socSwatch').hidden = !hybrid;
+        document.getElementById('vehicleMeter').className =
+            hybrid ? 'meter card__meter meter--mix' : 'meter card__meter';
+        Strike.core.meter('socFill', soc, (hybrid || soc === null) ? null : socState(soc));
+        Strike.core.meter('fuelFill', hybrid ? fuel : null);
+    }
+
+    function range(vehicle) {
+        var ev = number(vehicle, 'rangeKm');
+        var fuelKm = number(vehicle, 'fuelRangeKm');
+        if (ev === null && fuelKm === null) {
+            return null;
+        }
+        return ((ev || 0) + (fuelKm || 0)) + ' km';
+    }
+
     function battery(vehicle) {
         var soc = number(vehicle, 'soc');
-        var rangeKm = number(vehicle, 'rangeKm');
         var kwh = number(vehicle, 'batteryKwh');
+        var fuel = number(vehicle, 'fuelPercent');
         Strike.core.value('soc', soc === null ? null : soc + ' %');
-        Strike.core.value('range', rangeKm === null ? null : rangeKm + ' km');
+        Strike.core.value('fuel', fuel === null ? null : fuel + ' %');
+        Strike.core.value('range', range(vehicle));
         Strike.core.value('kwh', kwh === null ? null : kwh.toFixed(1) + ' kWh');
-        Strike.core.meter('socFill', soc, soc === null ? null : socState(soc));
+        gauge(soc, fuel);
         say('vehicleState', vehicle ? 'Vehicle connected' : 'Vehicle data unavailable');
     }
 
@@ -199,7 +220,7 @@
             for (var j = 0; j < TEXT_IDS.length; j++) {
                 say(TEXT_IDS[j], null);
             }
-            Strike.core.meter('socFill', null);
+            gauge(null, null);
             Strike.core.meter('usedFill', null);
             document.getElementById('daemonDot').removeAttribute('data-state');
             activity(null, null, true);
