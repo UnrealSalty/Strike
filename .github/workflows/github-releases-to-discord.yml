@@ -16,7 +16,5 @@ jobs:
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
           color: "12456980"
-          username: Strike
-          avatar_url: https://github.com/UnrealSalty.png
           footer_title: Strike
           reduce_headings: true
