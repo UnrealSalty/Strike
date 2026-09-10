@@ -11,6 +11,10 @@
 
     var FRAME_TICKS = TIMESCALE / 12;
 
+    // A dropped poll is news about the link, not about the car. Hold the last
+    // reading through a dip, then stop claiming it is current.
+    var STALE_MS = 30000;
+
     var CAMERA = 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z';
 
     var SPOTS = [
@@ -36,6 +40,7 @@
     var shotW = 0;
     var shotH = 0;
     var mediaUrl = null;
+    var readAtMs = 0;
     var quality = Strike.liveQuality(function () {
         if (!socket && !drawn) return;
         reset('Changing stream quality', '');
@@ -175,12 +180,18 @@
         Strike.core.meter('socFill', soc, soc === null ? null : socState(soc));
     }
 
-    function render(status) {
+    function render(status, cached) {
+        if (status.vehicle && !cached) {
+            readAtMs = Date.now();
+        }
         vehicle(status.vehicle);
         quality.inCar(status.inCar);
     }
 
     function forget() {
+        if (Date.now() - readAtMs <= STALE_MS) {
+            return;
+        }
         Strike.core.value('soc', null);
         Strike.core.value('range', null);
         Strike.core.value('kwh', null);
