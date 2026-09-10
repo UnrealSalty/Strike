@@ -16,6 +16,10 @@
     var UNPLAYABLE = 'Cannot play this clip';
     var PRESS_PLAY = 'Press play to start';
 
+    // MediaMuxer writes the index at the end; if the WebView never reaches it the clip
+    // stays at readyState 0 with no error. Give up loading rather than spin forever.
+    var STALL_MS = 12000;
+
     var ANGLES = ['all', 'front', 'right', 'rear', 'left'];
     var UNMOUNTED = {
         internal: 'Internal storage is not available',
@@ -120,6 +124,7 @@
         var asking = {};
         var angle = 'all';
         var scrubbing = false;
+        var stall = null;
         var full = false;
         var stamped = '';
         var canDownload = false;
@@ -515,6 +520,10 @@
             video.setAttribute('webkit-playsinline', 'true');
             document.getElementById('playerFrame').className = 'player__frame';
             waitLayer(LOADING);
+            clearTimeout(stall);
+            stall = setTimeout(function () {
+                if (playing === row && video.readyState === 0) waitLayer(UNPLAYABLE);
+            }, STALL_MS);
             video.src = media;
             document.getElementById('player').hidden = false;
             progress();
@@ -528,6 +537,7 @@
         }
 
         function close() {
+            clearTimeout(stall);
             document.getElementById('player').hidden = true;
             document.getElementById('playerFrame').className = 'player__frame';
             waitLayer(null);
