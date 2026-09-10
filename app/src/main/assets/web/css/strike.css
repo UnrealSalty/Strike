@@ -2137,128 +2137,63 @@ main {
     margin-top: var(--gap);
 }
 
-.car {
+.picker {
     position: relative;
-    width: 88px;
-    height: 180px;
-    margin: 18px auto 22px;
+    width: 216px;
+    height: 216px;
+    margin: 6px auto 2px;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
-.car__image {
-    display: block;
+.picker__disc {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+}
+
+.picker__svg {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    opacity: 0.72;
 }
 
-.car__spot {
+.picker__car {
     position: absolute;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-    z-index: 10;
-}
-
-.car__spot--front {
-    top: -8px;
-    left: 50%;
-    margin-left: -20px;
-}
-
-.car__spot--rear {
-    bottom: -8px;
-    left: 50%;
-    margin-left: -20px;
-}
-
-.car__spot--left {
-    top: 50%;
-    left: -20px;
-    margin-top: -20px;
-}
-
-.car__spot--right {
-    top: 50%;
-    right: -20px;
-    margin-top: -20px;
-}
-
-.car__spot--all {
     top: 50%;
     left: 50%;
-    margin: -20px 0 0 -20px;
+    width: 46px;
+    transform: translate(-50%, -50%);
+    opacity: 0.95;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
-.car__ring {
-    display: block;
-    width: 26px;
-    height: 26px;
-    margin: 7px auto 0;
-    box-sizing: border-box;
-    border: 2px solid var(--text);
-    border-radius: 50%;
-    background: var(--surface);
+.picker__stop {
+    stop-color: var(--ev);
 }
 
-.car__name {
-    position: absolute;
-    padding: 4px 6px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--surface);
-    color: var(--text);
-    font-size: 11px;
-    line-height: 1;
-    letter-spacing: 0.08em;
-    white-space: nowrap;
+.picker__ring {
+    stroke: var(--ev);
 }
 
-.car__spot--front .car__name {
-    bottom: calc(100% + 2px);
-    left: 50%;
-    transform: translateX(-50%);
+.picker__cone,
+.picker__ring {
+    transition: opacity 180ms ease;
 }
 
-.car__spot--rear .car__name {
-    top: calc(100% + 2px);
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.car__spot--left .car__name {
-    top: 50%;
-    right: calc(100% + 4px);
-    transform: translateY(-50%);
-}
-
-.car__spot--right .car__name {
-    top: 50%;
-    left: calc(100% + 4px);
-    transform: translateY(-50%);
-}
-
-.car__spot--all .car__name {
-    top: calc(50% + 16px);
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-.car__spot[aria-pressed="true"] .car__ring {
-    border-color: var(--accent-text);
-    background: var(--accent);
-}
-
-.car__spot[aria-pressed="true"] .car__name {
-    border-color: var(--accent-text);
-    color: var(--accent-text);
-}
-
-.car__spot[disabled] {
-    opacity: 0.32;
+.picker__hit {
+    fill: transparent;
+    cursor: pointer;
 }
 
 .stage {

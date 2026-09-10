@@ -18,12 +18,16 @@
     var CAMERA = 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z';
 
     var SPOTS = [
-        { value: 'front', label: 'FRONT' },
-        { value: 'right', label: 'RIGHT' },
-        { value: 'rear', label: 'REAR' },
-        { value: 'left', label: 'LEFT' },
+        { value: 'front', label: 'FRONT', deg: 0 },
+        { value: 'right', label: 'RIGHT', deg: 90 },
+        { value: 'rear', label: 'REAR', deg: 180 },
+        { value: 'left', label: 'LEFT', deg: 270 },
         { value: 'all', label: 'ALL' }
     ];
+
+    var DISC = 108, CONE_OUTER = 104, CONE_INNER = 54;
+    var HIT_OUTER = 106, HIT_INNER = 44;
+    var CONE_SPAN = 142, TURN_MS = 200;
 
     var socket = null;
     var media = null;
@@ -105,43 +109,122 @@
         return can;
     }
 
+    function conePoint(r, deg) {
+        var a = deg * Math.PI / 180;
+        return (DISC + r * Math.sin(a)) + ',' + (DISC - r * Math.cos(a));
+    }
+
+    function coneSector(ro, ri, from, to) {
+        var large = (to - from) > 180 ? 1 : 0;
+        return 'M' + conePoint(ro, from) + 'A' + ro + ',' + ro + ' 0 ' + large + ' 1 ' + conePoint(ro, to) +
+            'L' + conePoint(ri, to) + 'A' + ri + ',' + ri + ' 0 ' + large + ' 0 ' + conePoint(ri, from) + 'Z';
+    }
+
+    var coneDeg = 0;
+    var coneRaf = 0;
+
+    // The SVG transform attribute is not CSS-animatable on the head unit's WebView, so tween it by hand.
+    function turnCone(target) {
+        var start = coneDeg;
+        var delta = ((target - start + 180) % 360 + 360) % 360 - 180;
+        var begun = 0;
+        if (coneRaf) {
+            cancelAnimationFrame(coneRaf);
+        }
+        function step(now) {
+            if (!begun) {
+                begun = now;
+            }
+            var p = Math.min(1, (now - begun) / TURN_MS);
+            var ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+            coneDeg = start + delta * ease;
+            document.getElementById('coneGlow').setAttribute('transform',
+                'rotate(' + coneDeg + ' ' + DISC + ' ' + DISC + ')');
+            if (p < 1) {
+                coneRaf = requestAnimationFrame(step);
+            } else {
+                coneDeg = start + delta;
+            }
+        }
+        coneRaf = requestAnimationFrame(step);
+    }
+
+    function paintGlow(value) {
+        var cone = document.getElementById('conePath');
+        var ring = document.getElementById('coneRing');
+        var deg = null;
+        for (var i = 0; i < SPOTS.length; i++) {
+            if (SPOTS[i].value === value && typeof SPOTS[i].deg === 'number') {
+                deg = SPOTS[i].deg;
+            }
+        }
+        if (deg === null) {
+            cone.setAttribute('opacity', '0');
+            ring.setAttribute('opacity', '1');
+            return;
+        }
+        cone.setAttribute('opacity', '1');
+        ring.setAttribute('opacity', '0');
+        turnCone(deg);
+    }
+
+    function named(spot) {
+        return spot.value === 'all' ? 'All cameras' :
+            spot.label.charAt(0) + spot.label.slice(1).toLowerCase() + ' camera';
+    }
+
     function paintSpots() {
         var can = offered();
         var host = document.getElementById('spots');
-        var old = host.querySelectorAll('.car__spot');
-        var i;
-        for (i = 0; i < old.length; i++) {
-            host.removeChild(old[i]);
-        }
-        for (i = 0; i < SPOTS.length; i++) {
+        host.innerHTML = '';
+        for (var i = 0; i < SPOTS.length; i++) {
             var spot = SPOTS[i];
-            var usable = can[spot.value] === true;
-            var button = Strike.core.el('button', 'car__spot car__spot--' + spot.value);
-            button.type = 'button';
-            button.disabled = !usable;
-            button.setAttribute('aria-pressed', usable && spot.value === angle ? 'true' : 'false');
-            button.appendChild(Strike.core.el('span', 'car__ring'));
-            button.appendChild(Strike.core.el('span', 'car__name', spot.label));
-            if (usable) {
-                button.onclick = choose(spot.value);
+            if (can[spot.value] !== true) {
+                continue;
             }
-            host.appendChild(button);
+            var svgns = 'http://www.w3.org/2000/svg';
+            var hit = document.createElementNS(svgns, spot.value === 'all' ? 'circle' : 'path');
+            hit.setAttribute('class', 'picker__hit');
+            hit.setAttribute('role', 'button');
+            hit.setAttribute('aria-label', named(spot));
+            hit.setAttribute('data-value', spot.value);
+            hit.setAttribute('aria-pressed', spot.value === angle ? 'true' : 'false');
+            if (spot.value === 'all') {
+                hit.setAttribute('cx', DISC);
+                hit.setAttribute('cy', DISC);
+                hit.setAttribute('r', 40);
+            } else {
+                hit.setAttribute('d', coneSector(HIT_OUTER, HIT_INNER, spot.deg - 45, spot.deg + 45));
+            }
+            hit.onclick = choose(spot.value);
+            host.appendChild(hit);
+        }
+    }
+
+    function pressSpots(value) {
+        var hits = document.getElementById('spots').childNodes;
+        for (var i = 0; i < hits.length; i++) {
+            hits[i].setAttribute('aria-pressed',
+                hits[i].getAttribute('data-value') === value ? 'true' : 'false');
         }
     }
 
     function look(value) {
         angle = value;
         document.getElementById('shot').setAttribute('data-angle', value);
-        paintSpots();
+        paintGlow(value);
+        pressSpots(value);
         paintLabel();
     }
 
     function choose(value) {
         return function () {
+            var target = (value === angle && value !== 'all') ? 'all' : value;
             var dead = !drawn && !socket;
-            look(value);
+            look(target);
             if (dead) {
-                reset('Starting the camera', 'Opening the ' + value + ' view.');
+                reset('Starting the camera',
+                    target === 'all' ? 'Opening all cameras.' : 'Opening the ' + target + ' view.');
                 connect();
             }
         };
@@ -424,6 +507,7 @@
     function load() {
         Strike.core.get(CAMERAS, function (payload) {
             cameras = payload.cameras || [];
+            paintSpots();
             look(first(offered()));
             if (!cameras.length) {
                 idle('No camera yet', payload.reason || 'The camera daemon is not running.');
@@ -438,7 +522,10 @@
         });
     }
 
+    document.getElementById('conePath').setAttribute('d',
+        coneSector(CONE_OUTER, CONE_INNER, -CONE_SPAN / 2, CONE_SPAN / 2));
     paintSpots();
+    paintGlow(angle);
     load();
     window.addEventListener('resize', fitShot);
     Strike.shell.start(render, forget);

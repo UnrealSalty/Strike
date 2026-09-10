@@ -64,8 +64,26 @@
 
             <div class="card">
                 <span class="card__name">Cameras</span>
-                <div class="car" id="spots">
-                    <img class="car__image" src="img/car.webp" alt="" aria-hidden="true">
+                <div class="picker">
+                    <span class="picker__disc"></span>
+                    <svg class="picker__svg" viewBox="0 0 216 216" aria-hidden="true">
+                        <defs>
+                            <radialGradient id="coneFill" gradientUnits="userSpaceOnUse" cx="108" cy="108" r="104">
+                                <stop class="picker__stop" offset="52%" stop-opacity="0"></stop>
+                                <stop class="picker__stop" offset="86%" stop-opacity="0.5"></stop>
+                                <stop class="picker__stop" offset="100%" stop-opacity="0.92"></stop>
+                            </radialGradient>
+                            <filter id="coneSoft" x="-30%" y="-30%" width="160%" height="160%">
+                                <feGaussianBlur stdDeviation="3.2"></feGaussianBlur>
+                            </filter>
+                        </defs>
+                        <g id="coneGlow" filter="url(#coneSoft)">
+                            <path class="picker__cone" id="conePath" fill="url(#coneFill)" opacity="0"></path>
+                            <circle class="picker__ring" id="coneRing" cx="108" cy="108" r="90" fill="none" stroke-width="22" stroke-opacity="0.24" opacity="0"></circle>
+                        </g>
+                    </svg>
+                    <img class="picker__car" src="img/car.webp" alt="" aria-hidden="true">
+                    <svg class="picker__svg" viewBox="0 0 216 216" id="spots"></svg>
                 </div>
             </div>
 
