@@ -1,8 +1,4 @@
-<p>
-  <a href="https://strikebyd.com">
-    <img src="app/src/main/assets/web/img/wordmark.webp" alt="Strike" width="288" height="40">
-  </a>
-</p>
+![Strike](app/src/main/assets/web/img/wordmark.webp)
 
 Lightweight dashcam, parked surveillance, and live cameras for BYD head units.
 Built around recording, with a small web interface for the car's screen and your
@@ -17,16 +13,16 @@ phone.
 ## Features
 
 - 🎥 **Dashcam.** Record whenever the car is on, or only while driving. Choose clip
-  length, quality, frame rate, and optional cabin audio.
+length, quality, frame rate, and optional cabin audio.
 - 👁️ **Parked surveillance.** Save activity around the car in Smart mode, or keep
-  recording while parked in Continuous mode. Arm on ignition off or locking, with
-  an optional red screen deterrent.
+recording while parked in Continuous mode. Arm on ignition off or locking, with
+an optional red screen deterrent.
 - ▶️ **Live and playback.** View all four cameras together or pick an individual
-  angle. Browse recordings and surveillance events in separate libraries.
+angle. Browse recordings and surveillance events in separate libraries.
 - 💾 **Your storage.** Save to internal storage, SD, or USB. Give recordings and
-  surveillance their own space limits; the oldest finished clips rotate out.
+surveillance their own space limits; the oldest finished clips rotate out.
 - 📱 **Access from your phone.** Open the dashboard on your local network, or use
-  your own domain with an optional Cloudflare tunnel.
+your own domain with an optional Cloudflare tunnel.
 
 Footage is stored on the car, and detection runs on the head unit. Remote access
 is optional. Strike has no account or subscription of its own.
@@ -36,42 +32,43 @@ video encoding on supported head units and only runs the live encoder while
 someone is watching. Motion checks limit how often Smart surveillance runs person
 and vehicle detection.
 
-<table>
-  <tr>
-    <th>Recording</th>
-    <th>Surveillance</th>
-  </tr>
-  <tr>
-    <td width="50%"><a href="art/screenshots/recording-settings.png"><img src="art/screenshots/recording-settings.png" alt="Recording settings with clip length, quality, audio, and storage controls"></a></td>
-    <td width="50%"><a href="art/screenshots/surveillance-settings.png"><img src="art/screenshots/surveillance-settings.png" alt="Surveillance settings with Smart mode, arming, proximity, and screen deterrent controls"></a></td>
-  </tr>
-</table>
+
+| Recording                                                                                                            | Surveillance                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Recording settings with clip length, quality, audio, and storage controls](art/screenshots/recording-settings.png) | ![Surveillance settings with Smart mode, arming, proximity, and screen deterrent controls](art/screenshots/surveillance-settings.png) |
+
+
+
 
 ## Built lean
 
 - 📦 **One APK, about 14 MB.** No companion app, no Play services, no installer.
 - 🧩 **Four dependencies.** core-ktx, coroutines, `dadb` for the local ADB
-  connection, and TensorFlow Lite for detection.
+connection, and TensorFlow Lite for detection.
 - ⚡ **An interface of about 230 KB.** Plain HTML, CSS, and JavaScript. No
-  framework, no bundler, no build step, no CDN, and no remote fonts, so every
-  screen loads with the car offline.
+framework, no bundler, no build step, no CDN, and no remote fonts, so every
+screen loads with the car offline.
 - 🔒 **No telemetry, analytics, or crash reporting.** The only address Strike calls
-  on its own is GitHub's release API, at most once a day.
+on its own is GitHub's release API, at most once a day.
+
+
 
 ## Get started
 
 1. Download **Strike.apk** from the [latest release](https://github.com/UnrealSalty/Strike/releases/latest)
-   and install it on the head unit.
+  and install it on the head unit.
 2. Open Strike and grant storage and microphone permissions. Audio is recorded
-   only when you enable cabin audio.
+  only when you enable cabin audio.
 3. Enable the head unit's ADB access, then select **Daemons → Connect** if needed
-   and accept the debugging prompt. Strike restarts once after initial access and
+  and accept the debugging prompt. Strike restarts once after initial access and
    permissions are ready.
 4. Open **Recordings → Settings**. Choose a recording mode, storage location,
-   space limit, and clip length. Recording starts out switched off.
+  space limit, and clip length. Recording starts out switched off.
 5. Turn on **Recorder** in **Daemons**.
 6. For parked recording, open **Surveillance → Settings**, enable **Watch the car
-   when it is off**, and choose Smart or Continuous mode.
+  when it is off**, and choose Smart or Continuous mode.
+
+
 
 ## Compatibility
 
@@ -94,8 +91,7 @@ still need testing on each head unit.
 Selecting **Atto 2** keeps camera 0 without waiting for automatic recovery, even
 when the head unit identifies itself only as "BYD AUTO".
 
-<details>
-<summary>Hardware details</summary>
+Hardware details
 
 The current camera path uses BYD's `AVMCamera` interface with a horizontal strip
 of four views. Different layouts need additional handling. The AIS/QCarCam path
@@ -105,7 +101,7 @@ interface but cannot provide the car's cameras.
 Automatic parked operation requires working ignition readings. Local ADB must be
 available on port 5555 and authorized on the head unit.
 
-</details>
+
 
 ## Access from your phone
 
@@ -123,17 +119,16 @@ the lowest selected quality applies to the shared live stream.
 
 ![Online page with Cloudflare tunnel controls, local address, and masked browser access code](art/screenshots/online.png)
 
-<details>
-<summary>Set up Cloudflare with your own domain</summary>
+Set up Cloudflare with your own domain
 
 1. Add your domain to Cloudflare and create a dedicated Cloudflare Tunnel.
 2. Copy the tunnel token from the connector installation command.
 3. Add a published application route for a hostname such as `car.example.com`,
-   with **HTTP** service `127.0.0.1:8090`.
+  with **HTTP** service `127.0.0.1:8090`.
 4. In **Online → Cloudflare tunnel → Settings**, enter the hostname and token,
-   choose when it should run, and select **Save**.
+  choose when it should run, and select **Save**.
 5. Turn on the tunnel and open `https://car.example.com/`. Enter Strike's browser
-   access code. You can also put Cloudflare Access in front of it.
+  access code. You can also put Cloudflare Access in front of it.
 
 Use a separate tunnel for emulator testing. If two devices run the same tunnel
 token, Cloudflare can send requests to either device.
@@ -149,7 +144,7 @@ the car. Playback depends on upload speed and browser codec support. Review
 [Cloudflare's video delivery policy](https://developers.cloudflare.com/fundamentals/reference/policies-compliances/delivering-videos-with-cloudflare/)
 before using Live or recordings through a public tunnel hostname.
 
-</details>
+
 
 ## Recording while parked
 
@@ -184,8 +179,7 @@ access and an APK signed with the same key as the installed version.
 
 ## PIN recovery
 
-<details>
-<summary>Forgot the in-car PIN?</summary>
+Forgot the in-car PIN?
 
 Select **Forgot PIN?** below the lock-screen keypad for these instructions. From
 a computer with an authorized ADB connection to the head unit, run:
@@ -198,7 +192,7 @@ Reopen or refresh Strike, then set a new PIN under **Settings → Security**.
 This clears the PIN and failed-attempt lockout. Recordings and other settings
 are kept.
 
-</details>
+
 
 ## Build
 
