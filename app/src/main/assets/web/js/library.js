@@ -9,9 +9,12 @@
     var GROW = 'M9 4H4v5M20 9V4h-5M15 20h5v-5M4 15v5h5';
     var SHRINK = 'M4 9h5V4M20 9h-5V4M20 15h-5v5M4 15h5v5';
     var FILM = 'M3 5.5A1.5 1.5 0 014.5 4h15A1.5 1.5 0 0121 5.5v13a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 18.5z';
+    var DOWNLOAD = 'M12 4v9M8.5 10.5L12 14l3.5-3.5M5 19h14';
+    var TRASH = 'M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12';
 
     var LOADING = 'Loading video';
     var UNPLAYABLE = 'Cannot play this clip';
+    var PRESS_PLAY = 'Press play to start';
 
     var ANGLES = ['all', 'front', 'right', 'rear', 'left'];
     var UNMOUNTED = {
@@ -76,6 +79,21 @@
         return svg;
     }
 
+    function glyph(d) {
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', d);
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.appendChild(path);
+        return svg;
+    }
+
     function empty(headline, detail) {
         var host = Strike.core.el('div', 'empty');
         host.appendChild(film());
@@ -96,6 +114,7 @@
         var day = 'all';
         var playing = null;
         var armed = false;
+        var armedRow = null;
         var days = null;
         var shots = {};
         var asking = {};
@@ -133,7 +152,54 @@
             }
         }
 
+        function acts(row) {
+            var host = Strike.core.el('span', 'clip__acts');
+
+            var link = Strike.core.el('a', 'clip__act');
+            link.href = plan.media + encodeURIComponent(row.id);
+            link.setAttribute('download', row.id);
+            link.setAttribute('aria-label', 'Download');
+            link.hidden = !canDownload;
+            link.appendChild(glyph(DOWNLOAD));
+
+            var bin = Strike.core.el('button', 'clip__act');
+            bin.type = 'button';
+            bin.setAttribute('aria-label', 'Delete');
+            bin.appendChild(glyph(TRASH));
+            bin.onclick = function () {
+                arm(row.id, this);
+            };
+
+            host.appendChild(link);
+            host.appendChild(bin);
+            return host;
+        }
+
+        function disarmRow() {
+            if (!armedRow) {
+                return;
+            }
+            armedRow.button.className = 'clip__act';
+            armedRow.button.setAttribute('aria-label', 'Delete');
+            armedRow = null;
+        }
+
+        function arm(id, button) {
+            if (armedRow && armedRow.button !== button) {
+                disarmRow();
+            }
+            if (!armedRow) {
+                armedRow = { id: id, button: button };
+                button.className = 'clip__act clip__act--armed';
+                button.setAttribute('aria-label', 'Delete for good');
+                return;
+            }
+            disarmRow();
+            destroy(id);
+        }
+
         function item(row) {
+            var host = Strike.core.el('div', 'clip');
             var button = Strike.core.el('button', 'row row--clip');
             button.type = 'button';
 
@@ -156,8 +222,11 @@
             button.onclick = function () {
                 open(row);
             };
+
+            host.appendChild(button);
+            host.appendChild(acts(row));
             preview(row.id, { box: box, img: img, len: len });
-            return button;
+            return host;
         }
 
         // Reuse thumbnail requests across list rebuilds and update only the current nodes.
@@ -216,6 +285,7 @@
         }
 
         function paint() {
+            armedRow = null;
             var host = document.getElementById('clips');
             var count = document.getElementById('count');
             host.className = 'clips';
@@ -427,6 +497,7 @@
         function open(row) {
             playing = row;
             disarm();
+            disarmRow();
             look('all');
             document.getElementById('playerTitle').textContent = row.date + ' ' + row.time;
             var meta = document.getElementById('playerMeta');
@@ -449,8 +520,9 @@
             progress();
             var started = video.play();
             if (started && started.catch) {
+                // Closing also rejects this promise, so ignore a clip that is gone.
                 started.catch(function () {
-                    // The WebView can still refuse; the play button is right there.
+                    if (playing === row) waitLayer(PRESS_PLAY);
                 });
             }
         }
@@ -631,6 +703,10 @@
             }
             var id = playing.id;
             close();
+            destroy(id);
+        }
+
+        function destroy(id) {
             if (shots[id]) {
                 URL.revokeObjectURL(shots[id].url);
                 delete shots[id];
@@ -707,9 +783,14 @@
         }
 
         function inCar(state) {
-            canDownload = state === false;
-            if (playing) {
-                document.getElementById('playerDownload').hidden = !canDownload;
+            var next = state === false;
+            if (next === canDownload) {
+                return;
+            }
+            canDownload = next;
+            document.getElementById('playerDownload').hidden = !canDownload;
+            if (payload) {
+                paint();
             }
         }
 

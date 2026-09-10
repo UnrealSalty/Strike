@@ -815,9 +815,13 @@ main {
     margin-top: 4px;
 }
 
+/* Trailing margins keep a wrapped line flush left instead of indented. */
+.modal__sub > * {
+    margin-right: 20px;
+}
+
 /* Keep Delete's width fixed across confirmation states to avoid moving the player. */
 .modal__sub > .btn {
-    margin-left: 20px;
     min-height: 0;
     padding: 0;
 }
@@ -1215,6 +1219,7 @@ main {
 .pick__btn,
 .pick__item,
 .row--clip,
+.clip__act,
 .row--link,
 .daemon__open,
 .nav__link,
@@ -1421,8 +1426,18 @@ main {
 .log__line[data-level="warn"] { color: var(--warn); }
 .log__line[data-level="error"] { color: var(--bad); }
 
+.clip {
+    display: flex;
+    align-items: center;
+}
+
+.clip + .clip {
+    border-top: 1px solid var(--line);
+}
+
 .row--clip {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     min-height: 112px;
     padding: 0;
     border: 0;
@@ -1432,6 +1447,42 @@ main {
     text-align: left;
     cursor: pointer;
     justify-content: flex-start;
+}
+
+.clip__acts {
+    display: flex;
+    align-items: center;
+    flex: none;
+    padding-left: var(--gap);
+}
+
+.clip__act {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+/* display:flex above beats the hidden attribute on its own. */
+.clip__act[hidden] {
+    display: none;
+}
+
+.clip__act > svg {
+    width: 22px;
+    height: 22px;
+}
+
+.clip__act--armed {
+    color: var(--bad);
 }
 
 .clip__shot {
@@ -1490,6 +1541,7 @@ main {
 .clip__line {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     margin-top: 6px;
 }
 

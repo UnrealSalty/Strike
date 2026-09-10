@@ -248,7 +248,7 @@ Strike.pick = function (id, onChange) {
 
 (function () {
     var RIPPLES = ['nav__link', 'action', 'btn', 'seg__btn', 'choice__row', 'pick__btn',
-        'pick__item', 'row--clip', 'row--link', 'daemon__open', 'pad__key'];
+        'pick__item', 'row--clip', 'clip__act', 'row--link', 'daemon__open', 'pad__key'];
     var LINKS = ['nav__link', 'action', 'row--link'];
 
     function leaving() {
