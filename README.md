@@ -1,12 +1,14 @@
 <p>
-  <img src="app/src/main/assets/web/img/wordmark.webp" alt="Strike" width="288" height="40">
+  <a href="https://strikebyd.com">
+    <img src="app/src/main/assets/web/img/wordmark.webp" alt="Strike" width="288" height="40">
+  </a>
 </p>
 
 Lightweight dashcam, parked surveillance, and live cameras for BYD head units.
 Built around recording, with a small web interface for the car's screen and your
 phone.
 
-**[Download the APK](https://github.com/UnrealSalty/Strike/releases/latest)** · [Get started](#get-started) · [Report a bug](https://github.com/UnrealSalty/Strike/issues) · [Official Discord](https://discord.gg/DTBZRgHX3s)
+**[Download the APK](https://github.com/UnrealSalty/Strike/releases/latest)** · [strikebyd.com](https://strikebyd.com) · [Get started](#get-started) · [Report a bug](https://github.com/UnrealSalty/Strike/issues) · [Official Discord](https://discord.gg/DTBZRgHX3s)
 
 ![Strike dashboard with vehicle status, recording storage, and quick actions](art/screenshots/dashboard.png)
 
