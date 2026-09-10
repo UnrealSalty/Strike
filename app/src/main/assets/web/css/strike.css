@@ -811,6 +811,7 @@ main {
 .modal__sub {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     margin-top: 4px;
 }
 
@@ -1680,6 +1681,24 @@ main {
     display: none;
 }
 
+.player__wait {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    justify-content: center;
+    padding: 0 var(--pad);
+    pointer-events: none;
+    text-align: center;
+    z-index: 2;
+}
+
+/* Explicit display rule overrides the browser's default [hidden] style. */
+.player__wait[hidden] {
+    display: none;
+}
+
 /* The platform draws its own play glyph on a video with no controls. */
 .is-leaving video {
     visibility: hidden !important;
@@ -2448,6 +2467,7 @@ main {
     background: var(--surface-2);
     color: var(--text);
     font: inherit;
+    text-decoration: none;
     cursor: pointer;
 }
 

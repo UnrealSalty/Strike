@@ -24,5 +24,7 @@
     });
 
     Strike.list.load();
-    Strike.shell.start();
+    Strike.shell.start(function (status) {
+        Strike.list.inCar(status.inCar);
+    });
 }());

@@ -10,6 +10,9 @@
     var SHRINK = 'M4 9h5V4M20 9h-5V4M20 15h-5v5M4 15h5v5';
     var FILM = 'M3 5.5A1.5 1.5 0 014.5 4h15A1.5 1.5 0 0121 5.5v13a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 18.5z';
 
+    var LOADING = 'Loading video';
+    var UNPLAYABLE = 'Cannot play this clip';
+
     var ANGLES = ['all', 'front', 'right', 'rear', 'left'];
     var UNMOUNTED = {
         internal: 'Internal storage is not available',
@@ -100,6 +103,7 @@
         var scrubbing = false;
         var full = false;
         var stamped = '';
+        var canDownload = false;
         var requested = window.location.hash.slice(1);
 
         function tagOf(row) {
@@ -413,6 +417,13 @@
             button.className = 'btn btn--quiet';
         }
 
+        /** Null hides the layer. The spinner runs for LOADING only. */
+        function waitLayer(copy) {
+            document.getElementById('playerWait').hidden = copy === null;
+            document.getElementById('playerSpin').hidden = copy !== LOADING;
+            document.getElementById('playerWaitCopy').textContent = copy || '';
+        }
+
         function open(row) {
             playing = row;
             disarm();
@@ -422,12 +433,18 @@
             meta.innerHTML = '';
             chips(meta, row);
             meta.appendChild(Strike.core.el('span', 'clip__meta', Strike.core.size(row.bytes)));
+            var media = plan.media + encodeURIComponent(row.id);
+            var link = document.getElementById('playerDownload');
+            link.href = media;
+            link.setAttribute('download', row.id);
+            link.hidden = !canDownload;
             var video = document.getElementById('playerVideo');
             video.controls = false;
             video.setAttribute('playsinline', '');
             video.setAttribute('webkit-playsinline', 'true');
             document.getElementById('playerFrame').className = 'player__frame';
-            video.src = plan.media + encodeURIComponent(row.id);
+            waitLayer(LOADING);
+            video.src = media;
             document.getElementById('player').hidden = false;
             progress();
             var started = video.play();
@@ -441,6 +458,7 @@
         function close() {
             document.getElementById('player').hidden = true;
             document.getElementById('playerFrame').className = 'player__frame';
+            waitLayer(null);
             expand(false);
             var video = document.getElementById('playerVideo');
             video.pause();
@@ -541,6 +559,11 @@
             };
             video.onplaying = function () {
                 document.getElementById('playerFrame').className = 'player__frame is-on';
+                waitLayer(null);
+            };
+            video.onerror = function () {
+                // Clearing the source on close errors too, and leaves currentSrc empty.
+                if (this.currentSrc) waitLayer(UNPLAYABLE);
             };
             video.onpause = function () {
                 icon.setAttribute('d', PLAY);
@@ -683,12 +706,19 @@
             };
         }
 
+        function inCar(state) {
+            canDownload = state === false;
+            if (playing) {
+                document.getElementById('playerDownload').hidden = !canDownload;
+            }
+        }
+
         wire();
         window.addEventListener('hashchange', function () {
             requested = window.location.hash.slice(1);
             if (playing) close();
             if (requested) load();
         });
-        return { load: load };
+        return { load: load, inCar: inCar };
     };
 }());

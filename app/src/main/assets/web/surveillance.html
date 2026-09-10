@@ -183,6 +183,7 @@
                     <span class="modal__title" id="playerTitle">&mdash;</span>
                     <span class="modal__sub">
                         <span id="playerMeta"></span>
+                        <a class="btn btn--quiet" id="playerDownload" download hidden>Download</a>
                         <button class="btn btn--quiet" id="playerDelete" type="button">Delete</button>
                     </span>
                 </span>
@@ -194,6 +195,10 @@
 
                     <div class="player__frame" id="playerFrame" data-angle="all">
                         <video class="player__video" id="playerVideo" preload="metadata" playsinline webkit-playsinline></video>
+                        <div class="wait player__wait" id="playerWait" hidden>
+                            <span class="spin" id="playerSpin" aria-hidden="true"></span>
+                            <p class="wait__copy" id="playerWaitCopy">Loading video</p>
+                        </div>
                     </div>
                     <div class="player__bar">
                         <div class="transport">
