@@ -2,6 +2,7 @@ package com.strike.surveillance
 
 import com.strike.recording.Kept
 import com.strike.recording.Reapable
+import com.strike.recording.keptIn
 import com.strike.recording.readStamp
 import org.json.JSONArray
 import org.json.JSONException
@@ -60,6 +61,8 @@ class EventStore(private val root: File) : Reapable {
         events.sortByDescending { it.startedAt }
         return events
     }
+
+    override fun kept(): List<Kept> = keptIn(root, EVENT_NAME)
 
     // The dashboard needs one sidecar, not the whole event history every poll.
     fun summary(): EventSummary {

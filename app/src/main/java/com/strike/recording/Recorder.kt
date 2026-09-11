@@ -66,7 +66,7 @@ class Recorder(
     var frame: Frame? = null
         private set
 
-    val isRecording: Boolean get() = running
+    val isRecording: Boolean get() = running && encoder?.isDead != true
 
     fun start(options: RecordingOptions, bus: FrameBus): Boolean {
         if (running) return true

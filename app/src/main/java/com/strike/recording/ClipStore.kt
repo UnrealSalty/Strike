@@ -24,6 +24,8 @@ class ClipStore(private val root: File) : Reapable {
         return clips
     }
 
+    override fun kept(): List<Kept> = keptIn(root, CLIP_NAME)
+
     fun file(id: String): File? {
         if (readClip(id, 0) == null) return null
         val file = File(root, id)

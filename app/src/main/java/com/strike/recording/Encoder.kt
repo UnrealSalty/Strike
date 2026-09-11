@@ -39,6 +39,10 @@ class Encoder(
     private var running = false
 
     @Volatile
+    var isDead = false
+        private set
+
+    @Volatile
     private var rotateAskedAtMs = 0L
 
     private var codec: MediaCodec? = null
@@ -206,45 +210,49 @@ class Encoder(
         val startedAtMs = System.currentTimeMillis()
         var outputs = 0L
         var reported = false
-        while (running) {
-            val index = try {
-                codec.dequeueOutputBuffer(info, DEQUEUE_TIMEOUT_US)
-            } catch (e: IllegalStateException) {
-                DaemonLog.e(TAG, "encoder stopped answering")
-                return
-            }
-            if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                format = codec.outputFormat
-                continue
-            }
-            if (index < 0) {
-                if (!reported && outputs == 0L &&
-                    System.currentTimeMillis() - startedAtMs > MUTE_MS
-                ) {
-                    reported = true
-                    DaemonLog.e(
-                        TAG,
-                        "the ${width}x$height encoder has returned nothing in ${MUTE_MS / 1000}s"
-                    )
+        try {
+            while (running) {
+                val index = try {
+                    codec.dequeueOutputBuffer(info, DEQUEUE_TIMEOUT_US)
+                } catch (e: IllegalStateException) {
+                    DaemonLog.e(TAG, "encoder stopped answering")
+                    return
                 }
-                continue
-            }
-            outputs++
+                if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    format = codec.outputFormat
+                    continue
+                }
+                if (index < 0) {
+                    if (!reported && outputs == 0L &&
+                        System.currentTimeMillis() - startedAtMs > MUTE_MS
+                    ) {
+                        reported = true
+                        DaemonLog.e(
+                            TAG,
+                            "the ${width}x$height encoder has returned nothing in ${MUTE_MS / 1000}s"
+                        )
+                    }
+                    continue
+                }
+                outputs++
 
-            // SPS and PPS reach the file through the format handed to addTrack.
-            val skip = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 || info.size == 0
-            if (!skip) {
-                val buffer = codec.getOutputBuffer(index)
-                if (buffer != null) {
-                    val bytes = ByteArray(info.size)
-                    buffer.position(info.offset)
-                    buffer.get(bytes)
-                    val keyFrame = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
-                    onSample(Sample(bytes, info.presentationTimeUs, info.flags, splits(keyFrame)))
+                // SPS and PPS reach the file through the format handed to addTrack.
+                val skip = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 || info.size == 0
+                if (!skip) {
+                    val buffer = codec.getOutputBuffer(index)
+                    if (buffer != null) {
+                        val bytes = ByteArray(info.size)
+                        buffer.position(info.offset)
+                        buffer.get(bytes)
+                        val keyFrame = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
+                        onSample(Sample(bytes, info.presentationTimeUs, info.flags, splits(keyFrame)))
+                    }
                 }
+                codec.releaseOutputBuffer(index, false)
+                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return
             }
-            codec.releaseOutputBuffer(index, false)
-            if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return
+        } finally {
+            if (running) isDead = true
         }
     }
 

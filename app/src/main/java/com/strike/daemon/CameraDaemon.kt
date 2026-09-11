@@ -55,6 +55,7 @@ import com.strike.vehicle.VehicleTelemetry
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.system.exitProcess
 
 private const val TAG = "Daemon"
@@ -137,6 +138,7 @@ object CameraDaemon {
     private var failedAtMs = 0L
     private var remountedAtMs = 0L
     private var reapedAtMs = 0L
+    private val reaping = AtomicBoolean(false)
     private var clips = 0
 
     @JvmStatic
@@ -612,13 +614,19 @@ object CameraDaemon {
         reap()
     }
 
+    // The supervisor and the thread finalising a clip both reap; two at once double-count and over-delete.
     private fun reap() {
-        val inFlight = recorder?.clip
-        clipsDir()?.let {
-            free(ClipStore(it), "clips", budgetMb(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB), inFlight)
-        }
-        eventsDir()?.let {
-            free(EventStore(it), "events", budgetMb(SurveillanceSettings.BUDGET_MB, SurveillanceSettings.BUDGET_FALLBACK_MB), inFlight)
+        if (!reaping.compareAndSet(false, true)) return
+        try {
+            val inFlight = recorder?.clip
+            clipsDir()?.let {
+                free(ClipStore(it), "clips", budgetMb(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB), inFlight)
+            }
+            eventsDir()?.let {
+                free(EventStore(it), "events", budgetMb(SurveillanceSettings.BUDGET_MB, SurveillanceSettings.BUDGET_FALLBACK_MB), inFlight)
+            }
+        } finally {
+            reaping.set(false)
         }
     }
 
