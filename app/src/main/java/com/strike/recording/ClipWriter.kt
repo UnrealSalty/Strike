@@ -8,6 +8,8 @@ import com.strike.daemon.DaemonLog
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -15,6 +17,7 @@ import java.util.Locale
 private const val TAG = "Clip"
 private const val WRITING = ".tmp"
 private const val BROKEN = ".broken"
+private const val FAST = ".fast"
 private const val SWEEP_AGE_MS = 5 * 60_000L
 
 // Keep .tmp until the muxer closes successfully; stores only list finalized clips.
@@ -119,7 +122,33 @@ class ClipWriter(private val dir: File) {
             return false
         }
         finished.setReadable(true, false)
+        indexUpFront(finished, clip)
         return true
+    }
+
+    // The head unit's WebView reads the index out of the first bytes it is given.
+    private fun indexUpFront(finished: File, clip: String) {
+        val scratch = File(out, clip + FAST)
+        if (moovToFront(finished, scratch) && swap(scratch, finished)) return
+        scratch.delete()
+        DaemonLog.w(TAG, "clip $clip keeps its index at the end, the player may not start it")
+    }
+
+    // rename(2) replaces the clip in one step either way, so no reader ever sees a missing file.
+    private fun swap(scratch: File, finished: File): Boolean {
+        if (!moved(scratch, finished) && !scratch.renameTo(finished)) return false
+        finished.setReadable(true, false)
+        return true
+    }
+
+    private fun moved(scratch: File, finished: File): Boolean = try {
+        Files.move(
+            scratch.toPath(), finished.toPath(),
+            StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING
+        )
+        true
+    } catch (e: IOException) {
+        false
     }
 
     private fun release(muxer: MediaMuxer, clip: String?) {
@@ -173,7 +202,8 @@ fun sweepUnfinished(dir: File, nowMs: Long) {
     val files = dir.listFiles() ?: return
     var swept = 0
     for (file in files) {
-        val leftover = file.name.endsWith(WRITING) || file.name.endsWith(BROKEN)
+        val leftover = file.name.endsWith(WRITING) || file.name.endsWith(BROKEN) ||
+            file.name.endsWith(FAST)
         if (leftover && nowMs - file.lastModified() > SWEEP_AGE_MS && file.delete()) swept++
     }
     if (swept > 0) DaemonLog.w(TAG, "$swept clip(s) were cut off mid-write and could not be played")
