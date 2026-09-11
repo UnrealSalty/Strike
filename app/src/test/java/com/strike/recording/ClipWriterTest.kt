@@ -4,6 +4,8 @@ import android.media.MediaFormat
 import com.strike.surveillance.EventStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -45,11 +47,11 @@ class ClipWriterTest {
         val events = EventStore(folder.root)
         assertTrue(events.list().isEmpty())
 
-        assertTrue(writer.close())
+        assertNotNull(writer.close())
 
         assertEquals(listOf(clip), events.list().map { it.id })
         assertFalse(File(folder.root, "$clip.tmp").exists())
-        assertFalse(writer.close())
+        assertNull(writer.close())
     }
 
     @Test
@@ -57,7 +59,7 @@ class ClipWriterTest {
         val writer = ClipWriter(folder.root)
         assertTrue(writer.open(RecordingMode.EVENT, MediaFormat()))
 
-        assertFalse(writer.close())
+        assertNull(writer.close())
         assertTrue(EventStore(folder.root).list().isEmpty())
     }
 

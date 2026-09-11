@@ -93,8 +93,10 @@ class ClipWriter(private val dir: File) {
     }
 
     // Only a successful stop writes the index required to list a playable clip.
-    fun close(): Boolean {
-        val open = muxer ?: return false
+    // Moving the index to the front is left to the caller; it copies the whole file and must
+    // not run on the thread muxing live frames.
+    fun close(): File? {
+        val open = muxer ?: return null
         val file = writing
         muxer = null
         writing = null
@@ -111,44 +113,18 @@ class ClipWriter(private val dir: File) {
         } finally {
             release(open, clip)
         }
-        if (file == null || clip == null) return false
+        if (file == null || clip == null) return null
         if (!stopped) {
             file.renameTo(File(out, clip + BROKEN))
-            return false
+            return null
         }
         val finished = File(out, clip)
         if (!file.renameTo(finished)) {
             DaemonLog.e(TAG, "cannot rename $clip into place")
-            return false
+            return null
         }
         finished.setReadable(true, false)
-        indexUpFront(finished, clip)
-        return true
-    }
-
-    // The head unit's WebView reads the index out of the first bytes it is given.
-    private fun indexUpFront(finished: File, clip: String) {
-        val scratch = File(out, clip + FAST)
-        if (moovToFront(finished, scratch) && swap(scratch, finished)) return
-        scratch.delete()
-        DaemonLog.w(TAG, "clip $clip keeps its index at the end, the player may not start it")
-    }
-
-    // rename(2) replaces the clip in one step either way, so no reader ever sees a missing file.
-    private fun swap(scratch: File, finished: File): Boolean {
-        if (!moved(scratch, finished) && !scratch.renameTo(finished)) return false
-        finished.setReadable(true, false)
-        return true
-    }
-
-    private fun moved(scratch: File, finished: File): Boolean = try {
-        Files.move(
-            scratch.toPath(), finished.toPath(),
-            StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING
-        )
-        true
-    } catch (e: IOException) {
-        false
+        return finished
     }
 
     private fun release(muxer: MediaMuxer, clip: String?) {
@@ -159,6 +135,31 @@ class ClipWriter(private val dir: File) {
         }
     }
 
+}
+
+// The head unit's WebView reads the index out of the first bytes it is given.
+fun indexUpFront(finished: File) {
+    val scratch = File(finished.parentFile, finished.name + FAST)
+    if (moovToFront(finished, scratch) && swap(scratch, finished)) return
+    scratch.delete()
+    DaemonLog.w(TAG, "clip ${finished.name} keeps its index at the end, the player may not start it")
+}
+
+// rename(2) replaces the clip in one step either way, so no reader ever sees a missing file.
+private fun swap(scratch: File, finished: File): Boolean {
+    if (!moved(scratch, finished) && !scratch.renameTo(finished)) return false
+    finished.setReadable(true, false)
+    return true
+}
+
+private fun moved(scratch: File, finished: File): Boolean = try {
+    Files.move(
+        scratch.toPath(), finished.toPath(),
+        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING
+    )
+    true
+} catch (e: IOException) {
+    false
 }
 
 internal fun ensureDir(dir: File): Boolean {

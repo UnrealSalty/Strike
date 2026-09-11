@@ -46,13 +46,18 @@ class Recorder(
     private var encoder: Encoder? = null
     private var writerThread: Thread? = null
     private var closer: Thread? = null
+    private var indexer: Thread? = null
     private val toClose = ArrayBlockingQueue<ClipWriter>(8)
+    private val toIndex = ArrayBlockingQueue<File>(8)
 
     @Volatile
     private var running = false
 
     @Volatile
     private var writerFinished = true
+
+    @Volatile
+    private var closerFinished = true
 
     @Volatile
     var clip: String? = null
@@ -88,6 +93,8 @@ class Recorder(
         this.encoder = encoder
         frame = wanted
         writerFinished = false
+        closerFinished = false
+        indexer = Thread({ indexFinished() }, "faststart").also { it.start() }
         closer = Thread({ closeFinished() }, "finalise").also { it.start() }
         writerThread = Thread({
             try {
@@ -113,6 +120,8 @@ class Recorder(
         writerThread = null
         closer?.join(FINALISE_WAIT_MS)
         closer = null
+        indexer?.join(FINALISE_WAIT_MS)
+        indexer = null
         clip = null
         frame = null
     }
@@ -206,21 +215,45 @@ class Recorder(
 
     private fun elapsed(writer: ClipWriter): Long = System.currentTimeMillis() - writer.startedAtMs
 
-    // Finalize muxers off the writer thread so closing a clip cannot block sample delivery.
+    // Hand the clip to the closer and wait for a slot rather than closing it here; closing copies
+    // the whole file, and doing that on the writer thread stalls live frames.
     private fun finish(writer: ClipWriter) {
-        if (!toClose.offer(writer)) {
-            if (writer.close()) onClipFinished()
+        try {
+            toClose.put(writer)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 
+    // Stop and rename only; the clip is listed and kept the moment this returns. The index move
+    // that makes it start quickly in the car runs on its own thread so it never delays rotation.
     private fun closeFinished() {
+        try {
+            while (true) {
+                val writer = toClose.poll(200, TimeUnit.MILLISECONDS)
+                if (writer != null) {
+                    val finished = writer.close()
+                    if (finished != null) {
+                        toIndex.offer(finished)
+                        onClipFinished()
+                    }
+                    continue
+                }
+                if (writerFinished && toClose.isEmpty()) return
+            }
+        } finally {
+            closerFinished = true
+        }
+    }
+
+    private fun indexFinished() {
         while (true) {
-            val writer = toClose.poll(200, TimeUnit.MILLISECONDS)
-            if (writer != null) {
-                if (writer.close()) onClipFinished()
+            val finished = toIndex.poll(200, TimeUnit.MILLISECONDS)
+            if (finished != null) {
+                indexUpFront(finished)
                 continue
             }
-            if (writerFinished && toClose.isEmpty()) return
+            if (closerFinished && toIndex.isEmpty()) return
         }
     }
 
