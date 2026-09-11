@@ -1,7 +1,9 @@
 package com.strike.daemon
 
+import android.content.AttributionSource
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Process
 
 // app_process needs a shell package context for BYD SDK calls.
@@ -37,6 +39,19 @@ object DaemonContext {
                 val field = target.javaClass.getDeclaredField(name)
                 field.isAccessible = true
                 field.set(target, "com.android.shell")
+            } catch (e: ReflectiveOperationException) {
+                // This firmware has no such field.
+            }
+        }
+        // API 31+ caches an AttributionSource holding the old package. Rebuild it for the
+        // shell package, or system services reject uid 2000 as "android". Nulling it instead
+        // works on API 31 but breaks createPackageContext on API 34+.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val field = target.javaClass.getDeclaredField("mAttributionSource")
+                field.isAccessible = true
+                field.set(target, AttributionSource.Builder(Process.myUid())
+                    .setPackageName("com.android.shell").build())
             } catch (e: ReflectiveOperationException) {
                 // This firmware has no such field.
             }
