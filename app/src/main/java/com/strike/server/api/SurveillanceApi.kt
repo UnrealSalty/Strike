@@ -79,31 +79,27 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         val store = events.store()
         val boxed = store.hero(id)
         val clip = store.file(id) ?: return notFound()
+        val thumb = thumbs.of(clip, id)
         if (boxed != null) {
             val jpeg = try {
                 boxed.readBytes()
             } catch (e: IOException) {
                 return notFound()
             }
-            val durationMs = thumbs.of(clip, id)?.durationMs ?: 0L
-            return Response(
-                200, JPEG, jpeg, headers = mapOf(DURATION_HEADER to durationMs.toString())
-            )
+            return Response(200, JPEG, jpeg, headers = thumbHeaders(thumb))
         }
-        val thumb = thumbs.of(clip, id) ?: return notFound()
-        return Response(
-            200, JPEG, thumb.jpeg, headers = mapOf(DURATION_HEADER to thumb.durationMs.toString())
-        )
+        if (thumb == null) return notFound()
+        return Response(200, JPEG, thumb.jpeg, headers = thumbHeaders(thumb))
     }
 
     fun delete(id: String): Response {
         if (!events.store().delete(id)) return notFound()
         thumbs.forget(id)
+        LibraryScan.forget()
         return Response(200, JSON, "{}".toByteArray())
     }
 
     fun settings(): Response {
-        events.publish(shell)
         val payload = JSONObject()
         payload.put("values", values())
         payload.put("volumes", volumesPayload())
@@ -125,7 +121,10 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         if (!stored) {
             return Response(503, TEXT, "Strike has no shell access, so it cannot save that".toByteArray())
         }
-        if (key == SurveillanceSettings.BUDGET_MB) events.reap()
+        if (key == SurveillanceSettings.BUDGET_MB) {
+            events.reap()
+            LibraryScan.forget()
+        }
         if (key == SurveillanceSettings.LOCATION || key == SurveillanceSettings.ENABLED) {
             events.publish(shell)
         }

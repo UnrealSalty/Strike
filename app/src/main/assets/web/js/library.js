@@ -4,6 +4,7 @@
     window.Strike = window.Strike || {};
 
     var DURATION = 'X-Clip-Duration-Ms';
+    var CODEC = 'X-Clip-Codec';
     var PLAY = 'M8 5l12 7-12 7z';
     var PAUSE = 'M7 5h4v14H7zM13 5h4v14h-4z';
     var GROW = 'M9 4H4v5M20 9V4h-5M15 20h5v-5M4 15v5h5';
@@ -15,6 +16,10 @@
     var LOADING = 'Loading video';
     var UNPLAYABLE = 'Cannot play this clip';
     var PRESS_PLAY = 'Press play to start';
+    // The head unit's WebView has no HEVC decoder for video elements. A browser has one.
+    var HEVC = 'This clip is H.265. It will not play in the car app. Download it or open it in a browser.';
+
+    var CODECS = { h264: 'H.264', h265: 'H.265' };
 
     // MediaMuxer writes the index at the end; if the WebView never reaches it the clip
     // stays at readyState 0 with no error. Give up loading rather than spin forever.
@@ -128,6 +133,7 @@
         var full = false;
         var stamped = '';
         var canDownload = false;
+        var car = false;
         var requested = window.location.hash.slice(1);
 
         function tagOf(row) {
@@ -149,12 +155,32 @@
             return Strike.core.el('span', 'tag tag--' + key, plan.tags[key] || key);
         }
 
+        // The codec is only known once the clip has been read, so the tag lands with the thumbnail.
         function chips(host, row) {
             host.appendChild(chip(tagOf(row)));
             var where = WHERE[place];
             if (where) {
                 host.appendChild(Strike.core.el('span', 'tag tag--' + place, where));
             }
+            var coded = Strike.core.el('span', 'tag');
+            coded.hidden = true;
+            host.appendChild(coded);
+            var shot = shots[row.id];
+            if (shot) {
+                showCodec(coded, shot.codec);
+            }
+            return coded;
+        }
+
+        function showCodec(node, codec) {
+            var label = CODECS[codec];
+            if (!label) {
+                node.hidden = true;
+                return;
+            }
+            node.className = 'tag tag--' + codec;
+            node.textContent = label;
+            node.hidden = false;
         }
 
         function acts(row) {
@@ -218,7 +244,7 @@
             var facts = Strike.core.el('span', 'clip__facts');
             facts.appendChild(Strike.core.el('span', 'clip__time', row.time));
             var line = Strike.core.el('span', 'clip__line');
-            chips(line, row);
+            var coded = chips(line, row);
             line.appendChild(Strike.core.el('span', 'clip__meta', Strike.core.size(row.bytes)));
             facts.appendChild(line);
 
@@ -230,7 +256,7 @@
 
             host.appendChild(button);
             host.appendChild(acts(row));
-            preview(row.id, { box: box, img: img, len: len });
+            preview(row.id, { box: box, img: img, len: len, coded: coded });
             return host;
         }
 
@@ -259,9 +285,10 @@
                 shots[id] = xhr.status === 200
                     ? {
                         url: URL.createObjectURL(xhr.response),
-                        durationMs: parseInt(xhr.getResponseHeader(DURATION) || '0', 10)
+                        durationMs: parseInt(xhr.getResponseHeader(DURATION) || '0', 10),
+                        codec: xhr.getResponseHeader(CODEC)
                     }
-                    : { url: null, durationMs: 0 };
+                    : { url: null, durationMs: 0, codec: null };
                 fill(shots[id], waiting);
             };
             xhr.send();
@@ -269,6 +296,9 @@
 
         function fill(shot, nodes) {
             nodes.box.className = 'clip__shot';
+            if (nodes.coded) {
+                showCodec(nodes.coded, shot.codec);
+            }
             if (shot.url === null) {
                 nodes.box.appendChild(film());
                 return;
@@ -492,6 +522,15 @@
             button.className = 'btn btn--quiet';
         }
 
+        function codecOf(row) {
+            var shot = shots[row.id];
+            return shot ? shot.codec : null;
+        }
+
+        function stalled(row) {
+            return codecOf(row) === 'h265' ? HEVC : UNPLAYABLE;
+        }
+
         /** Null hides the layer. The spinner runs for LOADING only. */
         function waitLayer(copy) {
             document.getElementById('playerWait').hidden = copy === null;
@@ -519,10 +558,16 @@
             video.setAttribute('playsinline', '');
             video.setAttribute('webkit-playsinline', 'true');
             document.getElementById('playerFrame').className = 'player__frame';
-            waitLayer(LOADING);
             clearTimeout(stall);
+            // A browser decodes HEVC, so only the car is stopped before it stalls for nothing.
+            if (car && codecOf(row) === 'h265') {
+                document.getElementById('player').hidden = false;
+                waitLayer(HEVC);
+                return;
+            }
+            waitLayer(LOADING);
             stall = setTimeout(function () {
-                if (playing === row && video.readyState === 0) waitLayer(UNPLAYABLE);
+                if (playing === row && video.readyState === 0) waitLayer(stalled(row));
             }, STALL_MS);
             video.src = media;
             document.getElementById('player').hidden = false;
@@ -645,7 +690,7 @@
             };
             video.onerror = function () {
                 // Clearing the source on close errors too, and leaves currentSrc empty.
-                if (this.currentSrc) waitLayer(UNPLAYABLE);
+                if (this.currentSrc) waitLayer(playing ? stalled(playing) : UNPLAYABLE);
             };
             video.onpause = function () {
                 icon.setAttribute('d', PLAY);
@@ -793,6 +838,7 @@
         }
 
         function inCar(state) {
+            car = state === true;
             var next = state === false;
             if (next === canDownload) {
                 return;

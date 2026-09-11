@@ -7,6 +7,7 @@ import com.strike.daemon.Shell
 import com.strike.recording.ClipThumbs
 import com.strike.recording.RecordingSettings
 import com.strike.recording.Storage
+import com.strike.recording.Thumb
 import com.strike.surveillance.EventStorage
 import com.strike.surveillance.reservedOn
 import com.strike.server.FileSlice
@@ -25,6 +26,16 @@ private const val MP4 = "video/mp4"
 private const val JPEG = "image/jpeg"
 
 internal const val DURATION_HEADER = "X-Clip-Duration-Ms"
+internal const val CODEC_HEADER = "X-Clip-Codec"
+
+// A clip Strike cannot read tells us nothing about itself, so it carries no codec.
+internal fun thumbHeaders(thumb: Thumb?): Map<String, String> {
+    val headers = HashMap<String, String>()
+    headers[DURATION_HEADER] = (thumb?.durationMs ?: 0L).toString()
+    val codec = thumb?.codec
+    if (codec != null) headers[CODEC_HEADER] = codec
+    return headers
+}
 
 class RecordingsApi(context: Context, private val shell: Shell) {
 
@@ -69,23 +80,18 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         val volume = storage.selected() ?: return notFound()
         val file = storage.clipsOn(volume).file(id) ?: return notFound()
         val thumb = thumbs.of(file, id) ?: return notFound()
-        return Response(
-            200,
-            JPEG,
-            thumb.jpeg,
-            headers = mapOf(DURATION_HEADER to thumb.durationMs.toString())
-        )
+        return Response(200, JPEG, thumb.jpeg, headers = thumbHeaders(thumb))
     }
 
     fun delete(id: String): Response {
         val volume = storage.selected() ?: return notFound()
         if (!storage.clipsOn(volume).delete(id)) return notFound()
         thumbs.forget(id)
+        LibraryScan.forget()
         return Response(200, JSON, "{}".toByteArray())
     }
 
     fun settings(): Response {
-        storage.publish(shell)
         val payload = JSONObject()
         payload.put("values", values())
         payload.put("volumes", volumesPayload())
@@ -108,7 +114,10 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         if (!stored) {
             return Response(503, TEXT, "Strike has no shell access, so it cannot save that".toByteArray())
         }
-        if (key == RecordingSettings.BUDGET_MB) storage.reap()
+        if (key == RecordingSettings.BUDGET_MB) {
+            storage.reap()
+            LibraryScan.forget()
+        }
         if (key == RecordingSettings.LOCATION) storage.publish(shell)
         return Response(200, JSON, "{}".toByteArray())
     }

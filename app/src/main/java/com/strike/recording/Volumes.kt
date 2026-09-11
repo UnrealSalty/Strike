@@ -20,10 +20,14 @@ private const val STORAGE_ROOT = "/storage"
 private const val MMC_MAJOR = "179"
 private const val SCSI_MAJOR = "8"
 
-private const val REVALIDATE_MS = 5_000L
+private const val REVALIDATE_MS = 15_000L
+
+// A probe that times out under load is not a removed card. Only an answered listing retires one.
+private const val GRACE_MS = 60_000L
 
 private val cacheLock = Any()
 private var readAtMs = 0L
+private var answeredAtMs = 0L
 private var held: Map<String, Volume> = emptyMap()
 
 class Volume(
@@ -40,27 +44,43 @@ class Volumes(private val context: Context, private val shell: Shell) {
     fun mounted(): Map<String, Volume> = synchronized(cacheLock) {
         val now = System.currentTimeMillis()
         if (now - readAtMs < REVALIDATE_MS) return held
-        val found = discover()
+        val found = discover(now)
         held = found
         readAtMs = now
         found
     }
 
-    private fun discover(): Map<String, Volume> {
+    private fun discover(now: Long): Map<String, Volume> {
         val found = LinkedHashMap<String, Volume>()
         internal()?.let { found[INTERNAL] = it }
-        for (mount in removable()) {
+        val listing = shell.read(LIST_VOLUMES)
+        if (listing == null) {
+            if (now - answeredAtMs <= GRACE_MS) carryRemovable(found)
+            return found
+        }
+        answeredAtMs = now
+        for (mount in parseVolumes(listing, systemProperty(SD_UUID_PROP))) {
             if (found.containsKey(mount.location)) continue
-            val room = room(mount.path) ?: continue
-            if (!writable(mount.path)) continue
-            found[mount.location] = Volume(
-                location = mount.location,
-                dir = File(mount.path),
-                freeMb = room.freeMb,
-                totalMb = room.totalMb
-            )
+            found[mount.location] = measure(mount) ?: held[mount.location] ?: continue
         }
         return found
+    }
+
+    // Free space is the only reading df provides; keep the last one rather than drop the card.
+    private fun measure(mount: Mount): Volume? {
+        val room = room(mount.path) ?: return null
+        return Volume(
+            location = mount.location,
+            dir = File(mount.path),
+            freeMb = room.freeMb,
+            totalMb = room.totalMb
+        )
+    }
+
+    private fun carryRemovable(found: LinkedHashMap<String, Volume>) {
+        for (volume in held.values) {
+            if (volume.location != INTERNAL) found[volume.location] = volume
+        }
     }
 
     fun rootFor(location: String): File? {
@@ -86,19 +106,9 @@ class Volumes(private val context: Context, private val shell: Shell) {
         )
     }
 
-    private fun removable(): List<Mount> {
-        val listing = shell.read(LIST_VOLUMES) ?: return emptyList()
-        return parseVolumes(listing, systemProperty(SD_UUID_PROP))
-    }
-
     private fun room(path: String): Room? {
         val output = shell.read("timeout -s KILL 3 df -k $path") ?: return null
         return parseDf(output)
-    }
-
-    private fun writable(path: String): Boolean {
-        val probe = "$path/.strike-probe"
-        return shell.check("timeout -s KILL 3 touch $probe && timeout -s KILL 3 rm -f $probe")
     }
 }
 

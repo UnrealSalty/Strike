@@ -1680,8 +1680,13 @@ main {
 
 .tag--internal,
 .tag--sd,
-.tag--usb {
+.tag--usb,
+.tag--h264 {
     color: var(--text-dim);
+}
+
+.tag--h265 {
+    color: var(--warn);
 }
 
 .choice {
