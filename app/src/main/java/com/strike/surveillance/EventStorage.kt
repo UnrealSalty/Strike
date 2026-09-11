@@ -5,7 +5,6 @@ import com.strike.core.Config
 import com.strike.core.Logs
 import com.strike.daemon.Shell
 import com.strike.recording.MB
-import com.strike.recording.RecordingSettings
 import com.strike.recording.Retention
 import com.strike.recording.Volume
 import com.strike.recording.Volumes
@@ -17,7 +16,7 @@ import com.strike.recording.totalBytes
 import java.io.File
 
 private const val TAG = "Events"
-private const val CLIPS_DIR = "Strike/clips"
+private const val EVENTS_DIR = "Strike/events"
 
 class EventStorage(context: Context, shell: Shell) {
 
@@ -36,8 +35,6 @@ class EventStorage(context: Context, shell: Shell) {
     fun store(): EventStore {
         val published = Config.getString(SurveillanceSettings.EVENTS_DIR, "")
         publishedStore(published)?.let { return it }
-        val clips = Config.getString(RecordingSettings.CLIPS_DIR, "")
-        publishedStore(clips)?.let { return it }
         val volume = selected() ?: return EventStore(File(""))
         return eventsOn(volume)
     }
@@ -52,7 +49,7 @@ class EventStorage(context: Context, shell: Shell) {
     fun publish(shell: Shell) {
         forgetMounted()
         val root = volumes.rootFor(location()) ?: return
-        publishWriteDir(shell, File(publicRoot(root.path), CLIPS_DIR), SurveillanceSettings.EVENTS_DIR)
+        publishWriteDir(shell, File(publicRoot(root.path), EVENTS_DIR), SurveillanceSettings.EVENTS_DIR)
     }
 
     fun reap() {
@@ -70,7 +67,7 @@ private fun publishedStore(path: String): EventStore? {
     return if (dir.exists()) EventStore(dir) else null
 }
 
-internal fun eventsDir(volume: Volume): File = File(publicRoot(volume.dir.path), CLIPS_DIR)
+internal fun eventsDir(volume: Volume): File = File(publicRoot(volume.dir.path), EVENTS_DIR)
 
 // Recording and surveillance budgets share capacity when they use the same volume.
 fun reservedOn(location: String, otherLocation: String, otherBudgetMb: Int): Int =
