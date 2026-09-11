@@ -8,7 +8,6 @@ import com.strike.online.CloudflareMethod
 import com.strike.online.Online
 import com.strike.online.OnlinePower
 import com.strike.online.OnlineSettings
-import com.strike.online.TailscaleMethod
 import com.strike.online.ZrokMethod
 import com.strike.online.tunnelNetwork
 import com.strike.server.api.DaemonsApi
@@ -24,7 +23,6 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
     private val settings = OnlineSettings(File(context.filesDir, "online.json"))
     val online = Online(settings, browsers.access::isReady,
         mapOf("cloudflare" to CloudflareMethod(context, settings),
-            "tailscale" to TailscaleMethod(context, settings),
             "zrok" to ZrokMethod(context, settings)),
         { tunnelNetwork(context) },
         keepAwake = power::hold, readVehicle = vehicle?.let { it::parkingSnapshot })

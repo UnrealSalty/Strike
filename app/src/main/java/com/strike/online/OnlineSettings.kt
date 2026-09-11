@@ -10,10 +10,9 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
 internal const val CLOUDFLARE = "cloudflare"
-internal const val TAILSCALE = "tailscale"
 internal const val ZROK = "zrok"
 
-internal val ONLINE_METHODS = listOf(CLOUDFLARE, TAILSCALE, ZROK)
+internal val ONLINE_METHODS = listOf(CLOUDFLARE, ZROK)
 internal val TUNNEL_MODES = setOf("always", "off", "lock")
 
 class OnlineSettings(private val file: File) {
@@ -60,7 +59,6 @@ class OnlineSettings(private val file: File) {
 
     fun isConfigured(service: String): Boolean = when (service) {
         CLOUDFLARE -> name(service).isNotEmpty() && validTunnelToken(secret(service))
-        TAILSCALE -> validTailscaleKey(secret(service))
         ZROK -> name(service).isNotEmpty() && secret(service).isNotEmpty()
         else -> false
     }
@@ -79,10 +77,6 @@ class OnlineSettings(private val file: File) {
             CLOUDFLARE -> {
                 require(validTunnelToken(kept)) { "Paste the tunnel token from Cloudflare" }
                 tunnelHostname(name)
-            }
-            TAILSCALE -> {
-                require(validTailscaleKey(kept)) { "Paste an auth key from Tailscale" }
-                ""
             }
             else -> {
                 require(kept.isNotEmpty()) { "Paste the account token from zrok" }

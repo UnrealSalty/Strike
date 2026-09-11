@@ -12,14 +12,6 @@
             secretPlaceholder: 'Paste from Cloudflare',
             hint: 'Create a tunnel in Cloudflare Zero Trust, point its public hostname at http://127.0.0.1:8090, then paste the tunnel token here.'
         },
-        tailscale: {
-            nameLabel: '',
-            namePlaceholder: '',
-            nameLength: 0,
-            secretLabel: 'Auth key',
-            secretPlaceholder: 'tskey-auth-...',
-            hint: 'Create a reusable auth key in the Tailscale admin console. Install Tailscale on the phone that needs to reach the car.'
-        },
         zrok: {
             nameLabel: 'Share name',
             namePlaceholder: 'strikecar',

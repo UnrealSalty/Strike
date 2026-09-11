@@ -11,8 +11,6 @@ internal fun sampleTunnelToken(): String = Base64.getEncoder().encodeToString(
     JSONObject().put("a", "test-account").put("t", "test-tunnel")
         .put("s", "test-secret-not-a-credential").toString().toByteArray())
 
-private const val AUTH_KEY = "tskey-auth-notarealkey-0123456789"
-
 class OnlineSettingsTest {
     @Test fun remoteAccessDefaultsOffOnCloudflare() {
         val saved = fresh()
@@ -75,20 +73,13 @@ class OnlineSettingsTest {
         assertEquals("lock", loaded.mode)
         assertTrue(loaded.isConfigured(CLOUDFLARE))
         assertTrue(loaded.isConfigured(ZROK))
-        assertFalse(loaded.isConfigured(TAILSCALE))
         loaded.select(CLOUDFLARE)
         assertEquals("car.example.com", loaded.name(CLOUDFLARE))
         assertEquals("lock", loaded.mode)
     }
 
-    @Test fun tailscaleNeedsAnAuthKeyAndZrokNeedsAName() {
+    @Test fun zrokNeedsANameAndAToken() {
         val saved = fresh()
-        for (key in listOf("", "notakey", "tskey")) {
-            try { saved.configure(TAILSCALE, "", key, "off"); fail(key) }
-            catch (e: IllegalArgumentException) { assertFalse(saved.isConfigured(TAILSCALE)) }
-        }
-        saved.configure(TAILSCALE, "", AUTH_KEY, "off")
-        assertTrue(saved.isConfigured(TAILSCALE))
         for (name in listOf("", "ab", "Not A Name", "a".repeat(33))) {
             try { saved.configure(ZROK, name, "token", "off"); fail(name) }
             catch (e: IllegalArgumentException) { assertFalse(saved.isConfigured(ZROK)) }
@@ -100,11 +91,11 @@ class OnlineSettingsTest {
     @Test fun removingSetupClearsOnlyTheChosenService() {
         val saved = fresh()
         saved.configure(CLOUDFLARE, "car.example.com", sampleTunnelToken(), "always")
-        saved.configure(TAILSCALE, "", AUTH_KEY, "always")
+        saved.configure(ZROK, "strikecar", "zrok-account-token", "always")
         saved.enable(true)
         saved.forget()
         assertFalse(saved.enabled)
-        assertFalse(saved.isConfigured(TAILSCALE))
+        assertFalse(saved.isConfigured(ZROK))
         assertTrue(saved.isConfigured(CLOUDFLARE))
     }
 

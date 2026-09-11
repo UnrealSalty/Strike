@@ -57,7 +57,6 @@ private val PLACES = mapOf(
 )
 private val SERVICES = mapOf(
     "cloudflare" to "Cloudflare",
-    "tailscale" to "Tailscale",
     "zrok" to "zrok"
 )
 private val SENTRY_MODES = mapOf(
