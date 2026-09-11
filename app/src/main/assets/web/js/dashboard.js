@@ -137,12 +137,14 @@
         var soc = number(vehicle, 'soc');
         var kwh = number(vehicle, 'batteryKwh');
         var fuel = number(vehicle, 'fuelPercent');
+        var rangeText = range(vehicle);
         Strike.core.value('soc', soc === null ? null : soc + ' %');
         Strike.core.value('fuel', fuel === null ? null : fuel + ' %');
-        Strike.core.value('range', range(vehicle));
+        Strike.core.value('range', rangeText);
         Strike.core.value('kwh', kwh === null ? null : kwh.toFixed(1) + ' kWh');
         gauge(soc, fuel);
-        say('vehicleState', vehicle ? 'Vehicle connected' : 'Vehicle data unavailable');
+        var hasReading = soc !== null || fuel !== null || kwh !== null || rangeText !== null;
+        say('vehicleState', hasReading ? 'Vehicle connected' : 'Vehicle data unavailable');
     }
 
     function footage(storage) {

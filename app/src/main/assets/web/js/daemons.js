@@ -212,13 +212,19 @@
         host.scrollTop = tail ? host.scrollHeight : was;
     }
 
+    function logsUnreachable() {
+        if (!document.getElementById('log').childNodes.length) {
+            paintLogs({ lines: [] });
+        }
+    }
+
     function load() {
         Strike.core.get(DAEMONS, paint, unreachable);
-        Strike.core.get(LOGS, paintLogs, function () {});
+        Strike.core.get(LOGS, paintLogs, logsUnreachable);
     }
 
     Strike.core.poll(DAEMONS, 2000, paint, unreachable);
-    Strike.core.poll(LOGS, 5000, paintLogs, function () {});
+    Strike.core.poll(LOGS, 5000, paintLogs, logsUnreachable);
     setInterval(tick, 1000);
     Strike.shell.start();
 }());

@@ -17,7 +17,8 @@
     var UNPLAYABLE = 'Cannot play this clip';
     var PRESS_PLAY = 'Press play to start';
     // The head unit's WebView has no HEVC decoder for video elements. A browser has one.
-    var HEVC = 'This clip is H.265. It will not play in the car app. Download it or open it in a browser.';
+    var HEVC_CAR = 'This clip is H.265. It will not play in the car app. Open the file manager and play it from storage.';
+    var HEVC_BROWSER = 'This clip is H.265. It will not play in this browser. Download it or open it in another browser.';
 
     var CODECS = { h264: 'H.264', h265: 'H.265' };
 
@@ -322,10 +323,9 @@
         function paint() {
             armedRow = null;
             var host = document.getElementById('clips');
-            var count = document.getElementById('count');
             host.className = 'clips';
             host.innerHTML = '';
-            count.textContent = '';
+            Strike.core.value('count', null);
 
             if (!reachable) {
                 host.appendChild(empty('Cannot reach Strike', 'The app is not answering on this device.'));
@@ -347,9 +347,9 @@
                 host.appendChild(empty(copy.head, copy.note));
                 return;
             }
-            count.textContent = shown.length === 1
+            Strike.core.value('count', shown.length === 1
                 ? '1 ' + plan.one
-                : shown.length + ' ' + plan.many;
+                : shown.length + ' ' + plan.many);
 
             var pages = Math.ceil(shown.length / PER_PAGE);
             if (page >= pages) {
@@ -506,7 +506,7 @@
                             return;
                         }
                     }
-                    document.getElementById('count').textContent = 'That clip is no longer available';
+                    Strike.core.value('count', 'That clip is no longer available');
                 }
             }, function () {
                 reachable = false;
@@ -528,7 +528,10 @@
         }
 
         function stalled(row) {
-            return codecOf(row) === 'h265' ? HEVC : UNPLAYABLE;
+            if (codecOf(row) !== 'h265') {
+                return UNPLAYABLE;
+            }
+            return car ? HEVC_CAR : HEVC_BROWSER;
         }
 
         /** Null hides the layer. The spinner runs for LOADING only. */
@@ -562,7 +565,7 @@
             // A browser decodes HEVC, so only the car is stopped before it stalls for nothing.
             if (car && codecOf(row) === 'h265') {
                 document.getElementById('player').hidden = false;
-                waitLayer(HEVC);
+                waitLayer(HEVC_CAR);
                 return;
             }
             waitLayer(LOADING);
@@ -646,7 +649,7 @@
             var at = video.currentTime;
             document.getElementById('playerAt').textContent = clock(at || 0);
             var known = total && isFinite(total);
-            document.getElementById('playerEnd').textContent = clock(known ? total : 0);
+            document.getElementById('playerEnd').textContent = known ? clock(total) : Strike.core.dash;
             var share = known ? Math.max(0, Math.min(100, (at / total) * 100)) : 0;
             document.getElementById('playerFill').style.width = share + '%';
             document.getElementById('playerKnob').style.left = share + '%';
