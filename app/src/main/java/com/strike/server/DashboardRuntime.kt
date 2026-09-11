@@ -4,12 +4,13 @@ import android.content.Context
 import com.strike.core.Pin
 import com.strike.daemon.Shell
 import com.strike.online.BrowserAccess
+import com.strike.online.CloudflareMethod
 import com.strike.online.Online
 import com.strike.online.OnlinePower
-import com.strike.online.TunnelSettings
-import com.strike.online.cloudflared
+import com.strike.online.OnlineSettings
+import com.strike.online.TailscaleMethod
+import com.strike.online.ZrokMethod
 import com.strike.online.tunnelNetwork
-import com.strike.online.tunnelReady
 import com.strike.server.api.DaemonsApi
 import com.strike.update.Updates
 import com.strike.vehicle.VehicleTelemetry
@@ -20,8 +21,12 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
     val browsers = BrowserGate(BrowserAccess(File(context.filesDir, "browser-access.json")))
     private val power = OnlinePower(context)
     private val telemetry = vehicle ?: VehicleTelemetry(context)
-    val online = Online(TunnelSettings(File(context.filesDir, "online.json")), browsers.access::isReady,
-        { cloudflared(context, it) }, ::tunnelReady, { tunnelNetwork(context) },
+    private val settings = OnlineSettings(File(context.filesDir, "online.json"))
+    val online = Online(settings, browsers.access::isReady,
+        mapOf("cloudflare" to CloudflareMethod(context, settings),
+            "tailscale" to TailscaleMethod(context, settings),
+            "zrok" to ZrokMethod(context, settings)),
+        { tunnelNetwork(context) },
         keepAwake = power::hold, readVehicle = vehicle?.let { it::parkingSnapshot })
     private val daemons = DaemonsApi(context, shell, online)
     val updates = Updates(context, shell, daemons::pauseForUpdate, daemons::resumeAfterUpdate)

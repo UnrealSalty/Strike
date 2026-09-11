@@ -250,8 +250,8 @@ class OnlineTest {
                 val process = fixture.launched.poll(5, TimeUnit.SECONDS)!!
                 process.crash()
                 fixture.online.vehicle(car(true))
-                fixture.await(if (attempt == 4) "Tunnel exited with 7. Press Retry"
-                    else "Tunnel exited with 7. Retrying shortly")
+                fixture.await(if (attempt == 4) "Remote access exited with 7. Press Retry"
+                    else "Remote access exited with 7. Retrying shortly")
                 if (attempt == 4) fixture.awaitPower(false, false)
                 fixture.now.addAndGet(60_000L)
                 fixture.online.vehicle(car(true))
@@ -269,7 +269,7 @@ class OnlineTest {
         fixture.online.enable(true)
         fixture.launched.poll(5, TimeUnit.SECONDS)!!.crash()
         fixture.online.vehicle(car(true))
-        fixture.await("Tunnel exited with 7. Retrying shortly")
+        fixture.await("Remote access exited with 7. Retrying shortly")
         fixture.online.enable(false)
         fixture.await("Off")
         fixture.now.addAndGet(60_000L)
@@ -285,8 +285,8 @@ class OnlineTest {
             repeat(5) { attempt ->
                 fixture.launched.poll(5, TimeUnit.SECONDS)!!.crash()
                 fixture.online.vehicle(car(true))
-                fixture.await(if (attempt == 4) "Tunnel exited with 7. Press Retry"
-                    else "Tunnel exited with 7. Retrying shortly")
+                fixture.await(if (attempt == 4) "Remote access exited with 7. Press Retry"
+                    else "Remote access exited with 7. Retrying shortly")
                 fixture.now.addAndGet(60_000L)
                 fixture.online.vehicle(car(true))
             }
@@ -508,7 +508,7 @@ class OnlineTest {
         assertFalse(text.contains(sampleTunnelToken()))
         assertFalse(text.contains(fixture.browsers.access.code()!!))
         val payload = JSONObject(text)
-        assertTrue(payload.getBoolean("hasToken"))
+        assertTrue(payload.getBoolean("configured"))
         assertEquals("http://192.168.1.10:8090/", payload.getJSONArray("addresses").getString(0))
         assertEquals("Cloudflare rejected the token. Update the setup",
             tunnelError("Unauthorized: " + sampleTunnelToken()))
@@ -520,7 +520,7 @@ class OnlineTest {
         val fixture = Fixture()
         val api = OnlineApi(fixture.online, fixture.browsers) { emptyList() }
         val before = String(api.status(true).body)
-        for (action in listOf("toggle&enabled=true", "save&hostname=other.example.com",
+        for (action in listOf("toggle&enabled=true", "save&method=cloudflare&name=other.example.com",
             "forget", "retry", "regenerate")) {
             assertEquals(403, api.update("action=$action").status)
             assertEquals(before, String(api.status(true).body))
@@ -579,13 +579,22 @@ class OnlineTest {
         @Volatile var canAcquireParked = false
         val online: Online
 
+        private val method = object : RemoteMethod {
+            override val connecting = "Connecting to Cloudflare"
+            override val problem: String? = null
+            override fun prepare() = Unit
+            override fun start(): Process = Child().also { child -> launched.offer(child) }
+            override fun ready(): Boolean = this@Fixture.ready
+            override fun failure(line: String): String? = tunnelError(line, sampleTunnelToken())
+            override fun address(): String = "https://car.example.com/"
+        }
+
         init {
             if (pinSet) pin.set("2580")
-            val saved = TunnelSettings(File(directory, "online.json"))
-            saved.configure("car.example.com", sampleTunnelToken(), mode)
-            online = Online(saved, { accessReady }, {
-                Child().also { child -> launched.offer(child) }
-            }, { ready }, { networkRead(); polls.offer(true); if (internet) network else null },
+            val saved = OnlineSettings(File(directory, "online.json"))
+            saved.configure(CLOUDFLARE, "car.example.com", sampleTunnelToken(), mode)
+            online = Online(saved, { accessReady }, mapOf(CLOUDFLARE to method),
+                { networkRead(); polls.offer(true); if (internet) network else null },
                 { now.get() }, { _, text -> states.offer(text) },
                 keepAwake = { cpu, hardware, stillWanted ->
                     val completed = powerRead(cpu, hardware, stillWanted)

@@ -55,6 +55,11 @@ private val PLACES = mapOf(
     "sd" to "SD card",
     "usb" to "USB storage"
 )
+private val SERVICES = mapOf(
+    "cloudflare" to "Cloudflare",
+    "tailscale" to "Tailscale",
+    "zrok" to "zrok"
+)
 private val SENTRY_MODES = mapOf(
     "smart" to "Smart, person and vehicle",
     "continuous" to "Continuous"
@@ -81,7 +86,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         val cards = response.getJSONArray("cards")
         if (!inCar) for (i in 0 until cards.length()) {
             val card = cards.getJSONObject(i)
-            if (card.getString("id") == "cloudflare") card.put("can", false)
+            if (card.getString("id") == "online") card.put("can", false)
         }
         return Response(200, JSON, response.toString().toByteArray())
     }
@@ -196,8 +201,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
 
     private fun tunnelCard(status: JSONObject): JSONObject {
         val state = status.getString("state")
-        val configured = status.getBoolean("hasToken")
-        val card = card("cloudflare", "Cloudflare tunnel", tunnelDaemonState(state))
+        val configured = status.getBoolean("configured")
+        val card = card("online", "Remote access", tunnelDaemonState(state))
         card.put("status", if (configured) status.getString("status") else "Set up in Online")
         card.put("action", "switch")
         card.put("path", "/api/online")
@@ -205,7 +210,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         card.put("can", state != "stopping" && (status.getBoolean("enabled") ||
             (configured && status.getBoolean("accessReady"))))
         val facts = JSONArray()
-        fact(facts, "Hostname", status.getString("hostname").ifEmpty { DASH })
+        fact(facts, "Service", SERVICES[status.getString("method")] ?: DASH)
+        fact(facts, "Address", status.optString("address").ifEmpty { DASH })
         fact(facts, "Runs", when (status.getString("mode")) {
             "always" -> "Whenever Strike is running"
             "lock" -> "When the car is off and locked"

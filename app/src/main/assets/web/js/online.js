@@ -3,14 +3,45 @@
 
     var API = '/api/online';
     var CACHE = 'strike:' + API;
+    var SERVICES = {
+        cloudflare: {
+            nameLabel: 'Hostname',
+            namePlaceholder: 'car.example.com',
+            nameLength: 253,
+            secretLabel: 'Tunnel token',
+            secretPlaceholder: 'Paste from Cloudflare',
+            hint: 'Create a tunnel in Cloudflare Zero Trust, point its public hostname at http://127.0.0.1:8090, then paste the tunnel token here.'
+        },
+        tailscale: {
+            nameLabel: '',
+            namePlaceholder: '',
+            nameLength: 0,
+            secretLabel: 'Auth key',
+            secretPlaceholder: 'tskey-auth-...',
+            hint: 'Create a reusable auth key in the Tailscale admin console. Install Tailscale on the phone that needs to reach the car.'
+        },
+        zrok: {
+            nameLabel: 'Share name',
+            namePlaceholder: 'strikecar',
+            nameLength: 32,
+            secretLabel: 'Account token',
+            secretPlaceholder: 'Paste from zrok',
+            hint: 'Create a free zrok account and copy its account token. The car answers at the share name you choose on share.zrok.io.'
+        }
+    };
     var control = document.getElementById('tunnelControl');
     var toggle = Strike.core.el('button', 'switch');
     toggle.id = 'tunnelEnabled';
     toggle.type = 'button';
     toggle.setAttribute('aria-label', 'Remote access');
     toggle.appendChild(Strike.core.el('span', 'switch__knob'));
-    var hostname = document.getElementById('tunnelHostname');
-    var token = document.getElementById('tunnelToken');
+    var services = document.getElementById('tunnelMethod');
+    var name = document.getElementById('tunnelName');
+    var nameRow = document.getElementById('tunnelNameRow');
+    var nameLabel = document.getElementById('tunnelNameLabel');
+    var secret = document.getElementById('tunnelSecret');
+    var secretLabel = document.getElementById('tunnelSecretLabel');
+    var hint = document.getElementById('tunnelHint');
     var mode = document.getElementById('tunnelMode');
     var save = document.getElementById('tunnelSave');
     var forget = document.getElementById('tunnelForget');
@@ -27,7 +58,7 @@
     var pending = false;
     var polling = false;
     var state = null;
-    var selected = 'off';
+    var selectedMode = 'off';
     var shownAddresses = '';
     var timer = null;
     var revision = 0;
@@ -35,8 +66,9 @@
 
     function remember(payload) {
         var saved = {};
-        ['enabled', 'mode', 'hostname', 'hasToken', 'state', 'status', 'running',
-            'canRetry', 'accessReady', 'addresses'].forEach(function (key) { saved[key] = payload[key]; });
+        ['enabled', 'mode', 'method', 'methods', 'name', 'hasSecret', 'configured', 'address',
+            'state', 'status', 'running', 'canRetry', 'accessReady',
+            'addresses'].forEach(function (key) { saved[key] = payload[key]; });
         saved.browserAccess = { canManage: payload.browserAccess.canManage };
         try { sessionStorage.setItem(CACHE, JSON.stringify(saved)); } catch (e) { return; }
     }
@@ -113,18 +145,32 @@
         });
     }
 
+    function fields() {
+        var service = SERVICES[state.method] || SERVICES.cloudflare;
+        nameRow.hidden = !service.nameLabel;
+        nameLabel.textContent = service.nameLabel;
+        name.placeholder = service.namePlaceholder;
+        name.maxLength = service.nameLength || 253;
+        secretLabel.textContent = service.secretLabel;
+        secret.placeholder = state.hasSecret ? 'Saved. Leave blank to keep it' : service.secretPlaceholder;
+        hint.textContent = service.hint;
+    }
+
     function controls() {
         var canManage = state && state.browserAccess.canManage;
         var active = state && (state.enabled || state.running || state.state === 'stopping');
+        var locked = !canManage || pending || !fresh || !state || active;
         toggle.disabled = !canManage || pending || !fresh || !state || state.state === 'stopping' ||
-            (!state.enabled && (!state.accessReady || !state.hasToken));
-        hostname.disabled = token.disabled = save.disabled = !canManage || pending || !fresh || !state || active;
-        settingsOpen.disabled = !canManage || pending || !fresh || !state || active;
+            (!state.enabled && (!state.accessReady || !state.configured));
+        name.disabled = secret.disabled = save.disabled = locked;
+        settingsOpen.disabled = locked;
         settingsClose.disabled = pending;
         forget.disabled = !canManage || pending || !fresh || active;
         retry.disabled = !canManage || pending || !fresh;
+        var chooser = services.getElementsByTagName('button');
+        for (var s = 0; s < chooser.length; s++) chooser[s].disabled = locked;
         var buttons = mode.getElementsByTagName('button');
-        for (var i = 0; i < buttons.length; i++) buttons[i].disabled = !canManage || pending || !fresh || !state || active;
+        for (var i = 0; i < buttons.length; i++) buttons[i].disabled = locked;
         var access = state && state.browserAccess;
         accessShow.disabled = accessCopy.disabled = pending || !fresh || !access || !access.canManage || !access.code;
         regenerate.disabled = pending || !fresh || !access || !access.canManage;
@@ -135,16 +181,17 @@
         document.getElementById('tunnelInCar').hidden = payload.browserAccess.canManage;
         addresses(payload.addresses);
         if (!loaded) {
-            hostname.value = payload.hostname;
-            selected = payload.mode;
-            Strike.core.press(mode, selected);
+            name.value = payload.name;
+            selectedMode = payload.mode;
+            Strike.core.press(mode, selectedMode);
         }
         loaded = !cached;
         fresh = !cached;
-        token.placeholder = payload.hasToken ? 'Saved. Leave blank to keep it' : 'Paste from Cloudflare';
+        Strike.core.press(services, payload.method);
+        fields();
         toggle.setAttribute('aria-pressed', payload.enabled ? 'true' : 'false');
         document.getElementById('tunnelStatus').textContent = payload.status;
-        document.getElementById('tunnelSchedule').textContent = !payload.hasToken ? 'Not set up yet' :
+        document.getElementById('tunnelSchedule').textContent = !payload.configured ? 'Not set up yet' :
             payload.mode === 'always' ? 'Always on' :
             payload.mode === 'lock' ? 'Starts when the car locks' : 'Starts when the car is off';
         var dot = document.getElementById('tunnelDot');
@@ -152,12 +199,12 @@
             payload.state === 'broken' ? 'bad' :
             payload.state === 'starting' || payload.state === 'waiting' || payload.state === 'stopping' ? 'warn' : '');
         addressReady('remoteAddress');
-        var url = payload.hostname ? 'https://' + payload.hostname + '/' : '';
+        var url = payload.address || '';
         document.getElementById('remoteUrl').value = url;
         var remoteCopy = document.getElementById('remoteCopy');
         remoteCopy.hidden = !url;
         remoteCopy.disabled = !url;
-        forget.hidden = !payload.hasToken;
+        forget.hidden = !payload.hasSecret;
         retry.hidden = !payload.canRetry;
         document.getElementById('accessContent').setAttribute('data-manage', payload.browserAccess.canManage ? 'true' : 'false');
         document.getElementById('accessManage').setAttribute('aria-hidden', payload.browserAccess.canManage ? 'false' : 'true');
@@ -219,7 +266,7 @@
         pending = true;
         revision++;
         controls();
-        say(stopping ? 'Remote browsers will disconnect when the tunnel stops.' : '', false);
+        say(stopping ? 'Remote browsers will disconnect when remote access stops.' : '', false);
         var xhr = new XMLHttpRequest();
         xhr.open('POST', API, true);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
@@ -229,13 +276,13 @@
             if (xhr.status === 401) { Strike.session.signIn(); return; }
             if (xhr.status === 403) {
                 closeSettings();
-                say('Edit tunnel settings from the car', true);
+                say('Edit remote access settings from the car', true);
                 load();
                 return;
             }
             var found = payload(xhr);
             if (found) {
-                if (saved) { loaded = false; token.value = ''; }
+                if (saved) { loaded = false; secret.value = ''; }
                 paint(found);
                 if (saved) {
                     closeSettings();
@@ -259,13 +306,14 @@
     function closeSettings() {
         if (pending) return;
         settings.hidden = true;
-        token.value = '';
+        secret.value = '';
         settingsOpen.focus();
     }
     settingsOpen.onclick = function () {
-        hostname.value = state.hostname;
-        selected = state.mode;
-        Strike.core.press(mode, selected);
+        name.value = state.name;
+        selectedMode = state.mode;
+        Strike.core.press(mode, selectedMode);
+        fields();
         settings.hidden = false;
         say('', false);
         settingsClose.focus();
@@ -311,17 +359,25 @@
             confirmTimer = setTimeout(cancelRegeneration, 5000);
         }
     };
+    services.onclick = function (event) {
+        var button = Strike.core.buttonIn(event, services);
+        if (!button) return;
+        var chosen = button.getAttribute('data-value');
+        if (chosen === state.method) return;
+        loaded = false;
+        post('action=method&method=' + chosen, false, false);
+    };
     mode.onclick = function (event) {
         var button = Strike.core.buttonIn(event, mode);
         if (!button) return;
-        selected = button.getAttribute('data-value');
-        Strike.core.press(mode, selected);
+        selectedMode = button.getAttribute('data-value');
+        Strike.core.press(mode, selectedMode);
     };
     document.getElementById('tunnelForm').onsubmit = function (event) {
         event.preventDefault();
         if (save.disabled) return;
-        post('action=save&hostname=' + encodeURIComponent(hostname.value) +
-            '&token=' + encodeURIComponent(token.value) + '&mode=' + selected, true, false);
+        post('action=save&method=' + state.method + '&name=' + encodeURIComponent(name.value) +
+            '&secret=' + encodeURIComponent(secret.value) + '&mode=' + selectedMode, true, false);
     };
     document.addEventListener('visibilitychange', function () {
         clearTimeout(timer);

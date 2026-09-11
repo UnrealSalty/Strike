@@ -48,12 +48,29 @@
             <section class="card columns__wide online__tunnel">
                 <div class="card__actions">
                     <div class="card__lead">
-                        <h2 class="card__name">Cloudflare tunnel</h2>
-                        <p class="note">Reach the car from anywhere through your own Cloudflare hostname.</p>
+                        <h2 class="card__name">Remote access</h2>
+                        <p class="note">Reach the car from anywhere through one of these services. Only one runs at a time.</p>
                     </div>
                     <span class="card__tools">
                         <button class="btn" id="tunnelSettingsOpen" type="button" disabled>Settings</button>
                     </span>
+                </div>
+                <div class="online__services" id="tunnelMethod" role="group" aria-label="Service">
+                    <button class="online__service" type="button" data-value="cloudflare" aria-pressed="true" disabled>
+                        <span class="online__logo"><img src="img/cloudflare.webp" alt="" width="64" height="30"></span>
+                        <span class="online__service-name">Cloudflare</span>
+                        <span class="online__service-note">Your own domain</span>
+                    </button>
+                    <button class="online__service" type="button" data-value="tailscale" aria-pressed="false" disabled>
+                        <span class="online__logo"><img src="img/tailscale.webp" alt="" width="30" height="30"></span>
+                        <span class="online__service-name">Tailscale</span>
+                        <span class="online__service-note">Private, needs the app</span>
+                    </button>
+                    <button class="online__service" type="button" data-value="zrok" aria-pressed="false" disabled>
+                        <span class="online__logo"><img src="img/zrok.webp" alt="" width="30" height="30"></span>
+                        <span class="online__service-name">zrok</span>
+                        <span class="online__service-note">Public link, no app</span>
+                    </button>
                 </div>
                 <div class="online__panel">
                     <div class="online__panel-text">
@@ -67,7 +84,7 @@
                     <input class="input" id="remoteUrl" type="text" readonly placeholder="&mdash;" aria-label="Remote address">
                     <button class="btn online__copy" id="remoteCopy" type="button" aria-live="polite" disabled>Copy</button>
                 </div>
-                <p class="note" id="tunnelInCar" hidden>Edit tunnel settings from the car.</p>
+                <p class="note" id="tunnelInCar" hidden>Edit remote access settings from the car.</p>
                 <button class="btn online__retry" id="tunnelRetry" type="button" hidden>Retry</button>
             </section>
             <div class="columns__narrow">
@@ -80,7 +97,7 @@
                     <div class="card__actions">
                         <div class="card__lead">
                             <h2 class="card__name">Browser access</h2>
-                            <p class="note">Enter this code once in each browser, on the local network or through the tunnel. Regenerating signs the others out.</p>
+                            <p class="note">Enter this code once in each browser, on the local network or through remote access. Regenerating signs the others out.</p>
                         </div>
                         <span class="card__tools">
                             <button class="btn" id="accessRegenerate" type="button" disabled>Regenerate</button>
@@ -105,7 +122,7 @@
     <div class="modal online" id="tunnelSettings" hidden>
         <form class="modal__panel" id="tunnelForm" role="dialog" aria-modal="true" aria-labelledby="tunnelSettingsTitle">
             <div class="modal__head">
-                <span class="modal__title" id="tunnelSettingsTitle">Cloudflare settings</span>
+                <span class="modal__title" id="tunnelSettingsTitle">Remote access settings</span>
                 <button class="btn" id="tunnelSettingsClose" type="button">Close</button>
             </div>
             <div class="modal__body">
@@ -118,15 +135,16 @@
                             <button class="seg__btn" type="button" data-value="lock" aria-pressed="false">On lock</button>
                         </span>
                     </div>
-                    <div class="row row--control">
-                        <label class="row__label" for="tunnelHostname">Hostname</label>
-                        <input class="input" id="tunnelHostname" type="text" placeholder="car.example.com" maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+                    <div class="row row--control" id="tunnelNameRow">
+                        <label class="row__label" id="tunnelNameLabel" for="tunnelName">Hostname</label>
+                        <input class="input" id="tunnelName" type="text" placeholder="car.example.com" maxlength="253" autocomplete="off" autocapitalize="none" spellcheck="false">
                     </div>
                     <div class="row row--control">
-                        <label class="row__label" for="tunnelToken">Tunnel token</label>
-                        <input class="input" id="tunnelToken" type="password" placeholder="Paste from Cloudflare" maxlength="2048" autocomplete="new-password" spellcheck="false">
+                        <label class="row__label" id="tunnelSecretLabel" for="tunnelSecret">Tunnel token</label>
+                        <input class="input" id="tunnelSecret" type="password" placeholder="Paste from Cloudflare" maxlength="2048" autocomplete="new-password" spellcheck="false">
                     </div>
                 </div>
+                <p class="note" id="tunnelHint">Create a tunnel in Cloudflare Zero Trust, point its public hostname at http://127.0.0.1:8090, then paste the token here.</p>
             </div>
             <div class="online__buttons">
                 <button class="btn btn--quiet" id="tunnelForget" type="button" hidden>Remove</button>

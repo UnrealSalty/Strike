@@ -27,14 +27,16 @@ class OnlineApi(
     }
 
     fun update(body: String, inCar: Boolean = false): Response = if (!inCar) {
-        Response(403, TEXT, "Edit tunnel settings from the car".toByteArray())
+        Response(403, TEXT, "Edit remote access settings from the car".toByteArray())
     } else try {
         when (formValue(body, "action") ?: "toggle") {
             "regenerate" -> {
                 browsers.regenerate()
             }
-            "save" -> online.configure(formValue(body, "hostname") ?: "",
-                formValue(body, "token") ?: "", formValue(body, "mode") ?: "")
+            "method" -> online.select(formValue(body, "method") ?: "")
+            "save" -> online.configure(formValue(body, "method") ?: "",
+                formValue(body, "name") ?: "", formValue(body, "secret") ?: "",
+                formValue(body, "mode") ?: "")
             "toggle" -> {
                 val enabled = formValue(body, "enabled")
                 require(enabled == "true" || enabled == "false") { "Choose on or off" }
@@ -46,9 +48,9 @@ class OnlineApi(
         }
         status(inCar)
     } catch (e: IllegalArgumentException) {
-        Response(400, TEXT, (e.message ?: "Check the tunnel settings").toByteArray())
+        Response(400, TEXT, (e.message ?: "Check the remote access settings").toByteArray())
     } catch (e: IllegalStateException) {
-        Response(409, TEXT, (e.message ?: "The tunnel is busy").toByteArray())
+        Response(409, TEXT, (e.message ?: "Remote access is busy").toByteArray())
     } catch (e: IOException) {
         Response(500, TEXT, "Cannot save the Online settings".toByteArray())
     }

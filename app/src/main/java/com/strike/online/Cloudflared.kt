@@ -7,12 +7,36 @@ import android.net.NetworkCapabilities
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.IDN
 import java.net.NetworkInterface
 import java.net.Inet4Address
+import java.net.URI
 import java.net.URL
+import java.util.Base64
 import java.util.Collections
+import java.util.Locale
+import org.json.JSONObject
 
 private const val METRICS = "127.0.0.1:19889"
+
+internal class CloudflareMethod(
+    private val context: Context,
+    private val settings: OnlineSettings
+) : RemoteMethod {
+    override val connecting = "Connecting to Cloudflare"
+    override val problem: String? = null
+
+    override fun prepare() = Unit
+
+    override fun start(): Process = cloudflared(context, settings.secret(CLOUDFLARE))
+
+    override fun ready(): Boolean = tunnelReady()
+
+    override fun failure(line: String): String? = tunnelError(line, settings.secret(CLOUDFLARE))
+
+    override fun address(): String? =
+        settings.name(CLOUDFLARE).ifEmpty { null }?.let { "https://$it/" }
+}
 
 internal fun cloudflared(context: Context, token: String): Process {
     val binary = File(context.applicationInfo.nativeLibraryDir, "libcloudflared.so")
@@ -75,4 +99,33 @@ internal fun localAddresses(): List<String> = try {
     }.mapNotNull { it.hostAddress }.distinct().sorted()
 } catch (e: java.net.SocketException) {
     emptyList()
+}
+
+internal fun tunnelHostname(given: String): String {
+    val value = given.trim().removeSuffix("/")
+    val uri = try { URI(if (value.contains("://")) value else "https://$value") }
+        catch (e: java.net.URISyntaxException) { throw IllegalArgumentException("Enter a hostname such as car.example.com") }
+    require(uri.scheme == "https" && uri.rawUserInfo == null && uri.port == -1 &&
+        uri.rawQuery == null && uri.rawFragment == null && uri.rawPath.isNullOrEmpty()) {
+        "Enter a hostname such as car.example.com"
+    }
+    val host = IDN.toASCII(uri.host ?: "").lowercase(Locale.US)
+    require(host.length in 4..253 && host.contains('.') && host.split('.').all {
+        it.length in 1..63 && it.matches(Regex("[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"))
+    } && !host.all { it.isDigit() || it == '.' }) { "Enter a hostname such as car.example.com" }
+    return host
+}
+
+internal fun validTunnelToken(token: String): Boolean {
+    if (token.length !in 32..2048) return false
+    return try {
+        val decoded = Base64.getDecoder().decode(token)
+        val payload = JSONObject(String(decoded, Charsets.UTF_8))
+        payload.optString("a").isNotEmpty() && payload.optString("t").isNotEmpty() &&
+            payload.optString("s").isNotEmpty()
+    } catch (e: IllegalArgumentException) {
+        false
+    } catch (e: org.json.JSONException) {
+        false
+    }
 }
