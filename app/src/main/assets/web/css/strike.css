@@ -1630,8 +1630,12 @@ main {
     margin-top: 6px;
 }
 
+/* Trailing margins keep a wrapped tag line flush left instead of indented. */
+.clip__line > * {
+    margin-right: 8px;
+}
+
 .clip__meta {
-    margin-left: 8px;
     color: var(--text-dim);
     font-size: 14px;
 }
@@ -1644,10 +1648,7 @@ main {
     font-size: 12px;
     font-weight: 600;
     line-height: 18px;
-}
-
-.tag + .tag {
-    margin-left: 6px;
+    white-space: nowrap;
 }
 
 .tag--drive {
