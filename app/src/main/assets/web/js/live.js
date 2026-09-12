@@ -31,13 +31,11 @@
 
     var socket = null;
     var media = null;
-    var buffer = null;
-    var pending = [];
-    var sequence = 1;
-    var decodeTime = 0;
+    var sink = null;
     var sps = null;
     var pps = null;
     var drawn = false;
+    var useWebCodecs = Strike.webcodecs.supported();
     var angle = 'all';
     var cameras = [];
     var ticket = 0;
@@ -283,10 +281,14 @@
     }
 
     function render(status, cached) {
-        if (status.vehicle && !cached) {
-            readAtMs = Date.now();
+        if (status.vehicle) {
+            if (!cached) {
+                readAtMs = Date.now();
+            }
+            vehicle(status.vehicle);
+        } else {
+            forget();
         }
-        vehicle(status.vehicle);
         quality.inCar(status.inCar);
     }
 
@@ -301,47 +303,78 @@
         gauge(null, null);
     }
 
-    function feed(bytes) {
-        pending.push(bytes);
-        drain();
-    }
-
-    function drain() {
-        if (!buffer || buffer.updating || !pending.length) {
+    function drew() {
+        if (drawn) {
             return;
         }
-        try {
-            buffer.appendBuffer(pending.shift());
-        } catch (error) {
-            reset('The browser refused the video stream', 'Reload the page to try again.');
-        }
+        drawn = true;
+        live();
     }
 
-    function openBuffer() {
-        var frame = Strike.fmp4.sizeOf(sps);
-        if (!frame) {
-            reset('The camera stream is unreadable', 'It arrived without a usable picture size.');
-            return false;
-        }
+    function openMse(size) {
         var codec = Strike.fmp4.codecOf(sps);
         var mime = 'video/mp4; codecs="' + codec + '"';
         if (!window.MediaSource || !MediaSource.isTypeSupported(mime)) {
             reset('This browser cannot play the camera', 'It has no support for ' + codec + '.');
-            return false;
+            return null;
         }
-        buffer = media.addSourceBuffer(mime);
+        var buffer = media.addSourceBuffer(mime);
         buffer.mode = 'segments';
+        var pending = [];
+        var sequence = 1;
+        var decodeTime = 0;
+        function drain() {
+            if (buffer.updating || !pending.length) {
+                return;
+            }
+            try {
+                buffer.appendBuffer(pending.shift());
+            } catch (error) {
+                reset('The browser refused the video stream', 'Reload the page to try again.');
+            }
+        }
+        function feed(bytes) {
+            pending.push(bytes);
+            drain();
+        }
         buffer.addEventListener('updateend', drain);
-        feed(Strike.fmp4.init(frame.width, frame.height, sps, pps));
-        shotW = frame.width;
-        shotH = frame.height;
-        fitShot();
+        feed(Strike.fmp4.init(size.width, size.height, sps, pps));
         var picture = document.getElementById('video');
         var started = picture.play();
         if (started && started.catch) {
             started.catch(function () {});
         }
-        return true;
+        return {
+            push: function (nals, keyFrame) {
+                feed(Strike.fmp4.segment(sequence, decodeTime, FRAME_TICKS, nals, keyFrame));
+                sequence++;
+                decodeTime += FRAME_TICKS;
+            },
+            close: function () {
+                buffer.removeEventListener('updateend', drain);
+            }
+        };
+    }
+
+    function ensureSink() {
+        if (sink || !sps || !pps) {
+            return;
+        }
+        var size = Strike.fmp4.sizeOf(sps);
+        if (!size) {
+            reset('The camera stream is unreadable', 'It arrived without a usable picture size.');
+            return;
+        }
+        if (useWebCodecs) {
+            sink = Strike.webcodecs.open(document.getElementById('canvas'), sps, pps, size, drew, reset);
+        } else if (media && media.readyState === 'open') {
+            sink = openMse(size);
+        }
+        if (sink) {
+            shotW = size.width;
+            shotH = size.height;
+            fitShot();
+        }
     }
 
     function config(bytes) {
@@ -355,15 +388,13 @@
                 pps = nals[i];
             }
         }
-        if (sps && pps && !buffer && media && media.readyState === 'open') {
-            openBuffer();
-        }
+        ensureSink();
     }
 
     function frame(bytes, keyFrame) {
-        if (!buffer) {
+        if (!sink) {
             config(bytes);
-            if (!buffer) {
+            if (!sink) {
                 return;
             }
         }
@@ -378,9 +409,7 @@
         if (!nals.length) {
             return;
         }
-        feed(Strike.fmp4.segment(sequence, decodeTime, FRAME_TICKS, nals, keyFrame));
-        sequence++;
-        decodeTime += FRAME_TICKS;
+        sink.push(nals, keyFrame);
     }
 
     function packet(data) {
@@ -419,14 +448,14 @@
             socket.close();
             socket = null;
         }
-        buffer = null;
+        if (sink) {
+            sink.close();
+            sink = null;
+        }
         media = null;
-        pending = [];
         sps = null;
         pps = null;
         drawn = false;
-        sequence = 1;
-        decodeTime = 0;
         var video = document.getElementById('video');
         video.controls = false;
         video.pause();
@@ -438,24 +467,38 @@
 
     function connect() {
         var video = document.getElementById('video');
+        var canvas = document.getElementById('canvas');
         var mine = ticket;
         video.setAttribute('webkit-playsinline', 'true');
         video.controls = false;
-        if (!window.MediaSource) {
-            idle('This browser cannot play the camera', 'It has no Media Source support.');
-            return;
-        }
-        media = new MediaSource();
-        mediaUrl = URL.createObjectURL(media);
-        video.src = mediaUrl;
-        media.addEventListener('sourceopen', function () {
-            if (mine !== ticket) {
+        function firstFrame() {
+            if (mine !== ticket || drawn || video.readyState < 2) {
                 return;
             }
-            if (sps && pps && !buffer) {
-                openBuffer();
+            drew();
+        }
+        if (useWebCodecs) {
+            video.hidden = true;
+            canvas.hidden = false;
+        } else {
+            canvas.hidden = true;
+            video.hidden = false;
+            if (!window.MediaSource) {
+                idle('This browser cannot play the camera', 'It has no Media Source support.');
+                return;
             }
-        });
+            media = new MediaSource();
+            mediaUrl = URL.createObjectURL(media);
+            video.src = mediaUrl;
+            media.addEventListener('sourceopen', function () {
+                if (mine !== ticket) {
+                    return;
+                }
+                ensureSink();
+            });
+            video.onloadeddata = firstFrame;
+            video.ontimeupdate = firstFrame;
+        }
 
         var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host +
             '/live/stream?view=all&quality=' + quality.value();
@@ -479,17 +522,6 @@
             }
             reset('Cannot reach the camera', 'The camera daemon is not streaming.');
         };
-
-        function first() {
-            if (mine !== ticket || drawn || video.readyState < 2) {
-                return;
-            }
-            drawn = true;
-            live();
-        }
-
-        video.onloadeddata = first;
-        video.ontimeupdate = first;
     }
 
     function first(can) {
@@ -528,5 +560,5 @@
     paintGlow(angle);
     load();
     window.addEventListener('resize', fitShot);
-    Strike.shell.start(render, forget);
+    Strike.shell.start(render, forget, function (status) { return !!status.vehicle; });
 }());
