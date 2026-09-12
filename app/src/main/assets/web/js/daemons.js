@@ -225,6 +225,19 @@
 
     Strike.core.poll(DAEMONS, 2000, paint, unreachable);
     Strike.core.poll(LOGS, 5000, paintLogs, logsUnreachable);
+    var carSave = false;
+    document.getElementById('logExport').onclick = function (event) {
+        if (!carSave) return;
+        event.preventDefault();
+        Strike.core.post('/api/logs/save', '', function () {
+            Strike.toast('Log saved to Strike/logs');
+        }, function () {
+            Strike.toast('Could not save the log', true);
+        });
+    };
+
     setInterval(tick, 1000);
-    Strike.shell.start();
+    Strike.shell.start(function (status) {
+        carSave = status.inCar === true;
+    });
 }());

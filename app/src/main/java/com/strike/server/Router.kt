@@ -132,6 +132,8 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
         path == "/api/daemons/shell" -> if (method == "POST") daemons.connect() else methodNotAllowed()
         path == RECORDER_API -> if (method == "POST") daemons.setRecorder(body) else methodNotAllowed()
         path == "/api/logs" -> if (method == "GET") daemons.logs() else methodNotAllowed()
+        path == "/api/logs/export" -> if (method == "GET") daemons.exportLog() else methodNotAllowed()
+        path == "/api/logs/save" -> if (method == "POST") daemons.saveLog() else methodNotAllowed()
         path.startsWith(BYD_API) -> {
             if (method == "POST") daemons.setByd(path.substring(BYD_API.length), body)
             else methodNotAllowed()

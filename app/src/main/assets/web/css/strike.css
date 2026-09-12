@@ -1483,6 +1483,25 @@ main {
     word-break: break-word;
 }
 
+.logbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: var(--gap) 0 8px;
+}
+
+.logbar > .head {
+    margin: 0;
+    font-size: inherit;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.logbar > .btn {
+    display: inline-flex;
+    align-items: center;
+}
+
 .log {
     flex: none;
     max-height: 320px;

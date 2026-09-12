@@ -9,6 +9,7 @@ import java.io.IOException
 
 private const val TAG = "Storage"
 private const val CLIPS_DIR = "Strike/clips"
+private const val LOGS_DIR = "Strike/logs"
 
 class Storage(context: Context, shell: Shell) {
 
@@ -40,6 +41,20 @@ class Storage(context: Context, shell: Shell) {
         val budgetMb = budgetMb()
         val dropped = Retention(clipsOn(volume), budgetMb * MB).enforce(null)
         if (dropped > 0) Logs.d(TAG, "dropped $dropped oldest clips to stay under $budgetMb MB")
+    }
+
+    // Saved logs sit beside clips and events, on the volume recording writes to.
+    fun saveLog(shell: Shell, name: String, bytes: ByteArray): File? {
+        val root = volumes.rootFor(location()) ?: return null
+        val dir = File(publicRoot(root.path), LOGS_DIR)
+        if (!prepareDir(dir, shell)) return null
+        val file = File(dir, name)
+        return try {
+            file.writeBytes(bytes)
+            file
+        } catch (e: IOException) {
+            null
+        }
     }
 }
 

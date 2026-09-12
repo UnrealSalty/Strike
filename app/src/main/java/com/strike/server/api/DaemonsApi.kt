@@ -27,6 +27,9 @@ import com.strike.server.notFound
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private const val RUNNING = "running"
 private const val STARTING = "starting"
@@ -147,14 +150,10 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     }
 
     fun logs(): Response {
-        val merged = ArrayList<LogLine>(Logs.recent())
         val tail = shell.read("tail -n $LOG_TAIL_LINES $CAM_LOG_PATH 2>/dev/null; " +
             "if [ -f '$dashboardLog' ]; then tail -n $LOG_TAIL_LINES '$dashboardLog'; fi")
-        if (tail != null) merged.addAll(parseDaemonLog(tail))
-        merged.sortBy { it.atMs }
-
         val lines = JSONArray()
-        for (line in merged) {
+        for (line in merged(tail)) {
             val row = JSONObject()
             row.put("atMs", line.atMs)
             row.put("level", line.level)
@@ -165,6 +164,45 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         val payload = JSONObject()
         payload.put("lines", lines)
         return Response(200, JSON, payload.toString().toByteArray())
+    }
+
+    // A phone downloads the log; the export carries the whole cam.log and daemon.log so a
+    // bug report keeps the lines before the failure, not just the last screenful.
+    fun exportLog(): Response =
+        Response(200, TEXT, buildLog().toByteArray(),
+            headers = mapOf("Content-Disposition" to "attachment; filename=\"${logName()}\""))
+
+    // In the car there is no browser download, so save beside the clips and events instead.
+    fun saveLog(): Response {
+        val name = logName()
+        storage.saveLog(shell, name, buildLog().toByteArray())
+            ?: return Response(507, TEXT, "No place to save the log. Check where recording writes".toByteArray())
+        return Response(200, JSON, JSONObject().put("name", name).toString().toByteArray())
+    }
+
+    private fun buildLog(): String {
+        val full = shell.read("cat $CAM_LOG_PATH 2>/dev/null; " +
+            "if [ -f '$dashboardLog' ]; then cat '$dashboardLog'; fi")
+        val clock = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+        return buildString {
+            for (line in merged(full)) {
+                append(clock.format(Date(line.atMs)))
+                append("  ").append(line.level.uppercase(Locale.US))
+                append("  ").append(line.tag)
+                append("  ").append(line.message)
+                append('\n')
+            }
+        }
+    }
+
+    private fun logName(): String =
+        "strike-log-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".txt"
+
+    private fun merged(daemonLog: String?): List<LogLine> {
+        val merged = ArrayList<LogLine>(Logs.recent())
+        if (daemonLog != null) merged.addAll(parseDaemonLog(daemonLog))
+        merged.sortBy { it.atMs }
+        return merged
     }
 
     fun setByd(app: String, body: String): Response {

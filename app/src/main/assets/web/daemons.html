@@ -79,7 +79,10 @@
             </div>
         </div>
         <p class="note" id="daemonMessage" role="status" hidden></p>
-        <h2 class="head">Log</h2>
+        <div class="logbar">
+            <h2 class="head">Log</h2>
+            <a class="btn btn--quiet" id="logExport" href="/api/logs/export" download>Export</a>
+        </div>
         <div class="log" id="log"></div>
     </main>
 
