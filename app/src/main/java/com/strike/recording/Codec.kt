@@ -5,8 +5,8 @@ import android.media.MediaFormat
 import java.io.File
 import java.io.IOException
 
-// The head unit's WebView cannot decode HEVC in a video element, so every screen
-// that offers playback has to name the codec the clip was actually written with.
+// A browser may have no HEVC decoder, so every screen that offers playback has to
+// name the codec the clip was actually written with.
 fun codecOf(clip: File): String? {
     val extractor = MediaExtractor()
     return try {
