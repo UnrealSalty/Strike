@@ -2,6 +2,7 @@ package com.strike.web
 
 import android.net.Uri
 import android.graphics.Bitmap
+import android.view.TextureView
 import android.view.View
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.CookieManager
@@ -24,9 +25,15 @@ private const val HOST = "127.0.0.1"
 object WebUi {
 
     private var web: WebView? = null
+    private var player: NativePlayer? = null
 
-    fun mount(view: WebView) {
+    fun mount(view: WebView, video: TextureView) {
         web = view
+        val screen = NativePlayer(video) { call ->
+            view.post { view.evaluateJavascript("if(window.Strike&&Strike.native)Strike.native.$call;", null) }
+        }
+        player = screen
+        view.addJavascriptInterface(StrikeBridge(screen), "StrikeNative")
         val settings = view.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -50,6 +57,10 @@ object WebUi {
     fun cover() {
         val view = web ?: return
         view.post { view.loadUrl(page(LOCK_PAGE)) }
+    }
+
+    fun pausePlayback() {
+        player?.pause()
     }
 }
 

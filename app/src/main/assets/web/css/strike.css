@@ -1630,18 +1630,15 @@ main {
     margin-top: 6px;
 }
 
-/* Trailing margins keep a wrapped tag line flush left instead of indented. */
-.clip__line > * {
-    margin-right: 8px;
-}
-
 .clip__meta {
     color: var(--text-dim);
     font-size: 14px;
 }
 
+/* A trailing margin keeps a wrapped tag line flush left instead of indented. */
 .tag {
     flex: none;
+    margin-right: 8px;
     padding: 1px 7px;
     border: 1px solid currentColor;
     border-radius: 4px;
@@ -1682,12 +1679,9 @@ main {
 .tag--internal,
 .tag--sd,
 .tag--usb,
-.tag--h264 {
-    color: var(--text-dim);
-}
-
+.tag--h264,
 .tag--h265 {
-    color: var(--warn);
+    color: var(--text-dim);
 }
 
 .choice {
@@ -1871,6 +1865,11 @@ main {
 .player__frame.is-on > .player__video,
 .stage.is-on .stage__video {
     visibility: visible;
+}
+
+/* The car draws clips on a surface above the page and never uses the element. */
+.player__frame--native > .player__video {
+    display: none;
 }
 
 .player__video::-webkit-media-controls,

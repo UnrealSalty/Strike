@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.TextureView
 import android.view.WindowManager
 import android.webkit.WebView
 import com.strike.web.WebUi
@@ -20,7 +21,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         askForPermissions()
-        WebUi.mount(findViewById<WebView>(R.id.webRoot))
+        WebUi.mount(findViewById<WebView>(R.id.webRoot), findViewById<TextureView>(R.id.videoRoot))
     }
 
     override fun onResume() {
@@ -39,6 +40,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         (application as StrikeApp).setup.foreground(false)
+        WebUi.pausePlayback()
         super.onPause()
     }
 

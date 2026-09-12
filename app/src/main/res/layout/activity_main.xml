@@ -1,7 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<WebView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/webRoot"
+<!-- videoRoot sits above the page and is sized to the player frame. Every control the
+     player has is drawn outside that rect, so nothing web needs to paint over it. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/shell_background"
-    android:defaultFocusHighlightEnabled="false" />
+    android:layout_height="match_parent">
+
+    <WebView
+        android:id="@+id/webRoot"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/shell_background"
+        android:defaultFocusHighlightEnabled="false" />
+
+    <TextureView
+        android:id="@+id/videoRoot"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+</FrameLayout>
