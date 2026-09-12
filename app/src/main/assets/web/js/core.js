@@ -113,7 +113,7 @@ Strike.core = {
         return (bytes / 1073741824).toFixed(2) + ' GB';
     },
 
-    poll: function (path, everyMs, onOk, onFail) {
+    poll: function (path, everyMs, onOk, onFail, cacheable) {
         var key = 'strike:' + path;
 
         function remembered() {
@@ -147,7 +147,9 @@ Strike.core = {
             pending = true;
             Strike.core.get(path, function (payload) {
                 pending = false;
-                keep(payload);
+                if (!cacheable || cacheable(payload)) {
+                    keep(payload);
+                }
                 onOk(payload, false);
             }, function () { pending = false; onFail(); });
         }

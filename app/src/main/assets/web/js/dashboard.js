@@ -4,7 +4,8 @@
     window.Strike = window.Strike || {};
 
     var VALUE_IDS = ['soc', 'fuel', 'range', 'kwh'];
-    var TEXT_IDS = ['vehicleState', 'usedSub', 'clipCount', 'eventCount', 'daemonCount', 'clipsToday'];
+    var STALE_MS = 30000;
+    var readAtMs = 0;
     var LOCATION = { internal: 'Internal storage', sd: 'SD card', usb: 'USB storage' };
     var EVENTS = { person: 'Person', vehicle: 'Vehicle', watch: 'Continuous', event: 'Movement' };
     var shownEvent = null;
@@ -147,6 +148,19 @@
         say('vehicleState', hasReading ? 'Vehicle connected' : 'Vehicle data unavailable');
     }
 
+    // A dropped or vehicle-less poll is news about the link, not the car. Hold the
+    // last reading through a dip, then stop claiming it is current.
+    function forget() {
+        if (Date.now() - readAtMs <= STALE_MS) {
+            return;
+        }
+        for (var i = 0; i < VALUE_IDS.length; i++) {
+            Strike.core.value(VALUE_IDS[i], null);
+        }
+        gauge(null, null);
+        say('vehicleState', 'Vehicle data unavailable');
+    }
+
     function footage(storage) {
         if (!storage) {
             Strike.core.meter('usedFill', null);
@@ -206,7 +220,14 @@
             updateNotice(update, cached);
             document.getElementById('updateLink').hidden = !update || !update.available;
             say('updateSummary', update && update.latest ? 'v' + update.latest.replace(/^v/, '') : null);
-            battery(status.vehicle);
+            if (status.vehicle) {
+                if (!cached) {
+                    readAtMs = Date.now();
+                }
+                battery(status.vehicle);
+            } else {
+                forget();
+            }
             footage(status.storage);
             say('eventCount', typeof status.eventCount === 'number' ? clips(status.eventCount) : null);
             daemons(status.daemons);
@@ -216,18 +237,18 @@
         clear: function () {
             offeredUpdate = null;
             if (!requestingUpdate) hideUpdateNotice();
-            for (var i = 0; i < VALUE_IDS.length; i++) {
-                Strike.core.value(VALUE_IDS[i], null);
-            }
-            for (var j = 0; j < TEXT_IDS.length; j++) {
-                say(TEXT_IDS[j], null);
-            }
-            gauge(null, null);
+            forget();
+            say('usedSub', null);
+            say('clipCount', null);
+            say('clipsToday', null);
+            say('eventCount', null);
+            say('daemonCount', null);
             Strike.core.meter('usedFill', null);
             document.getElementById('daemonDot').removeAttribute('data-state');
             activity(null, null, true);
         }
     };
 
-    Strike.shell.start(Strike.dashboard.render, Strike.dashboard.clear);
+    Strike.shell.start(Strike.dashboard.render, Strike.dashboard.clear,
+        function (status) { return !!status.vehicle; });
 }());
