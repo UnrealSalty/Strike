@@ -22,6 +22,7 @@ object AvcHal {
 
     fun warmAndWait() {
         pokedAtMs = System.currentTimeMillis()
+        if (running()) return
         if (!launch()) return
         Thread.sleep(SETTLE_MS)
     }

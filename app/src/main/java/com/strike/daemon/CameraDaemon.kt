@@ -317,7 +317,7 @@ object CameraDaemon {
             if (bus != null) {
                 AvcHal.keepAlive(if (sentryMode != SentryMode.OFF) 10_000L else 60_000L)
             }
-            if (nothingWatching() && wantedTarget == null && !(liveWanted && relay.hasReader)) {
+            if (nothingWatching() && wantedTarget == null && !(liveWanted && relay.hasReader) && !awakeArmingDrive()) {
                 cameraDown()
             } else {
                 superviseFrames()
@@ -398,6 +398,14 @@ object CameraDaemon {
 
     private fun nothingWatching(): Boolean =
         recorder == null && !streamer.isStreaming && sentry?.isArmed != true
+
+    // Hold the camera open across the parked->drive handoff so gear->D reuses the
+    // open FrameBus instead of a cold reopen while the car's own cameras wake.
+    private fun awakeArmingDrive(): Boolean {
+        if (acc.snapshot()?.accOn != true) return false
+        val mode = Config.getString(RecordingSettings.MODE, RecordingSettings.fallback(RecordingSettings.MODE))
+        return mode == "continuous" || mode == "driving"
+    }
 
     // Smart mode keeps capture open between events while the recording encoder is idle.
     private fun superviseSentry() {
