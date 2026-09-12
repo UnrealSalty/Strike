@@ -16,8 +16,7 @@
     var LOADING = 'Loading video';
     var UNPLAYABLE = 'Cannot play this clip';
     var PRESS_PLAY = 'Press play to start';
-    // The head unit's WebView has no HEVC decoder for video elements. A browser has one.
-    var HEVC_CAR = 'This clip is H.265. It will not play in the car app. Open the file manager and play it from storage.';
+    // The car app decodes every clip natively. A browser may not have HEVC.
     var HEVC_BROWSER = 'This clip is H.265. It will not play in this browser. Download it or open it in another browser.';
 
     var CODECS = { h264: 'H.264', h265: 'H.265' };
@@ -130,11 +129,14 @@
         var asking = {};
         var angle = 'all';
         var scrubbing = false;
+        var scrubAt = 0;
+        var held = false;
         var stall = null;
         var full = false;
         var stamped = '';
         var canDownload = false;
-        var car = false;
+        var native = Strike.native.available();
+        var screen = null;
         var requested = window.location.hash.slice(1);
 
         function tagOf(row) {
@@ -528,10 +530,10 @@
         }
 
         function stalled(row) {
-            if (codecOf(row) !== 'h265') {
+            if (native || codecOf(row) !== 'h265') {
                 return UNPLAYABLE;
             }
-            return car ? HEVC_CAR : HEVC_BROWSER;
+            return HEVC_BROWSER;
         }
 
         /** Null hides the layer. The spinner runs for LOADING only. */
@@ -556,44 +558,25 @@
             link.href = media;
             link.setAttribute('download', row.id);
             link.hidden = !canDownload;
-            var video = document.getElementById('playerVideo');
-            video.controls = false;
-            video.setAttribute('playsinline', '');
-            video.setAttribute('webkit-playsinline', 'true');
-            document.getElementById('playerFrame').className = 'player__frame';
+            document.getElementById('playerFrame').className = frameClass(false);
             clearTimeout(stall);
-            // A browser decodes HEVC, so only the car is stopped before it stalls for nothing.
-            if (car && codecOf(row) === 'h265') {
-                document.getElementById('player').hidden = false;
-                waitLayer(HEVC_CAR);
-                return;
-            }
             waitLayer(LOADING);
             stall = setTimeout(function () {
-                if (playing === row && video.readyState === 0) waitLayer(stalled(row));
+                if (playing === row && screen.idle()) waitLayer(stalled(row));
             }, STALL_MS);
-            video.src = media;
+            // The native surface is measured against the frame, so the modal shows first.
             document.getElementById('player').hidden = false;
+            screen.open(media);
             progress();
-            var started = video.play();
-            if (started && started.catch) {
-                // Closing also rejects this promise, so ignore a clip that is gone.
-                started.catch(function () {
-                    if (playing === row) waitLayer(PRESS_PLAY);
-                });
-            }
         }
 
         function close() {
             clearTimeout(stall);
             document.getElementById('player').hidden = true;
-            document.getElementById('playerFrame').className = 'player__frame';
+            document.getElementById('playerFrame').className = frameClass(false);
             waitLayer(null);
             expand(false);
-            var video = document.getElementById('playerVideo');
-            video.pause();
-            video.removeAttribute('src');
-            video.load();
+            screen.close();
             document.getElementById('playerMarks').innerHTML = '';
             stamped = '';
             playing = null;
@@ -603,8 +586,8 @@
             if (!playing) {
                 return;
             }
-            var total = document.getElementById('playerVideo').duration;
-            if (!total || !isFinite(total)) {
+            var total = screen.total();
+            if (!total) {
                 return;
             }
             var key = playing.id + ':' + total;
@@ -632,6 +615,7 @@
             angle = next;
             document.getElementById('playerFrame').setAttribute('data-angle', next);
             Strike.core.press(document.getElementById('angles'), next);
+            screen.setAngle(next);
         }
 
         function expand(on) {
@@ -641,66 +625,262 @@
             button.setAttribute('aria-pressed', on ? 'true' : 'false');
             button.setAttribute('aria-label', on ? 'Leave fullscreen' : 'Fullscreen');
             document.getElementById('playerFullIcon').setAttribute('d', on ? SHRINK : GROW);
+            screen.resize();
+        }
+
+        function frameClass(on) {
+            var name = 'player__frame';
+            if (native) {
+                name += ' player__frame--native';
+            }
+            return on ? name + ' is-on' : name;
+        }
+
+        function showPlaying() {
+            var play = document.getElementById('playerPlay');
+            play.getElementsByTagName('path')[0].setAttribute('d', PAUSE);
+            play.setAttribute('aria-label', 'Pause');
+        }
+
+        function showPaused() {
+            var play = document.getElementById('playerPlay');
+            play.getElementsByTagName('path')[0].setAttribute('d', PLAY);
+            play.setAttribute('aria-label', 'Play');
+        }
+
+        function showPicture() {
+            document.getElementById('playerFrame').className = frameClass(true);
+            waitLayer(null);
+        }
+
+        function showBroken() {
+            waitLayer(playing ? stalled(playing) : UNPLAYABLE);
         }
 
         function progress() {
-            var video = document.getElementById('playerVideo');
-            var total = video.duration;
-            var at = video.currentTime;
+            var total = screen.total();
+            var at = scrubbing ? scrubAt : screen.at();
             document.getElementById('playerAt').textContent = clock(at || 0);
-            var known = total && isFinite(total);
-            document.getElementById('playerEnd').textContent = known ? clock(total) : Strike.core.dash;
-            var share = known ? Math.max(0, Math.min(100, (at / total) * 100)) : 0;
+            document.getElementById('playerEnd').textContent = total ? clock(total) : Strike.core.dash;
+            var share = total ? Math.max(0, Math.min(100, (at / total) * 100)) : 0;
             document.getElementById('playerFill').style.width = share + '%';
             document.getElementById('playerKnob').style.left = share + '%';
             stamp();
         }
 
-        function seek(event) {
-            var video = document.getElementById('playerVideo');
-            if (!video.duration || !isFinite(video.duration)) {
+        /** A seek costs far more than a frame, so the drag only moves the scrubber. */
+        function aim(event) {
+            var total = screen.total();
+            if (!total) {
                 return;
             }
-            var scrub = document.getElementById('playerScrub');
-            var box = scrub.getBoundingClientRect();
+            var box = document.getElementById('playerScrub').getBoundingClientRect();
             var touch = event.touches && event.touches.length ? event.touches[0] : event;
             var share = box.width ? (touch.clientX - box.left) / box.width : 0;
-            video.currentTime = Math.max(0, Math.min(1, share)) * video.duration;
+            scrubAt = Math.max(0, Math.min(1, share)) * total;
             progress();
         }
 
-        function wirePlayer() {
+        function grab(event) {
+            if (!screen.total()) {
+                return;
+            }
+            scrubbing = true;
+            held = !screen.paused();
+            if (held) {
+                screen.setPlaying(false);
+            }
+            aim(event);
+        }
+
+        function release() {
+            if (!scrubbing) {
+                return;
+            }
+            scrubbing = false;
+            screen.seekTo(scrubAt);
+            if (held) {
+                screen.setPlaying(true);
+            }
+            progress();
+        }
+
+        /** The element the car never uses still answers for the phone and the browser. */
+        function videoScreen() {
             var video = document.getElementById('playerVideo');
+            video.controls = false;
+            video.setAttribute('playsinline', '');
+            video.setAttribute('webkit-playsinline', 'true');
+            video.onplay = showPlaying;
+            video.onpause = showPaused;
+            video.onplaying = showPicture;
+            video.ontimeupdate = progress;
+            video.ondurationchange = progress;
+            video.onerror = function () {
+                // Clearing the source on close errors too, and leaves currentSrc empty.
+                if (this.currentSrc) showBroken();
+            };
+            return {
+                open: function (url) {
+                    video.src = url;
+                    var started = video.play();
+                    if (started && started.catch) {
+                        // Closing also rejects this promise, so ignore a clip that is gone.
+                        started.catch(function () {
+                            if (playing) waitLayer(PRESS_PLAY);
+                        });
+                    }
+                },
+                close: function () {
+                    video.pause();
+                    video.removeAttribute('src');
+                    video.load();
+                },
+                paused: function () {
+                    return video.paused;
+                },
+                setPlaying: function (on) {
+                    if (on) {
+                        video.play();
+                    } else {
+                        video.pause();
+                    }
+                },
+                at: function () {
+                    return video.currentTime || 0;
+                },
+                total: function () {
+                    return video.duration && isFinite(video.duration) ? video.duration : 0;
+                },
+                seekTo: function (seconds) {
+                    video.currentTime = seconds;
+                },
+                setMuted: function (quiet) {
+                    video.muted = quiet;
+                },
+                muted: function () {
+                    return video.muted;
+                },
+                setAngle: function () {
+                    return;
+                },
+                resize: function () {
+                    return;
+                },
+                idle: function () {
+                    return video.readyState === 0;
+                }
+            };
+        }
+
+        /** The head unit decodes every codec, so the car draws on a surface instead. */
+        function nativeScreen() {
+            var media = Strike.native;
+            var frame = document.getElementById('playerFrame');
+            var lengthMs = 0;
+            var atMs = 0;
+            var paused = true;
+            var quiet = false;
+            var seeking = false;
+
+            // The decoder reports the old position until the seek lands, which would
+            // drag the scrubber backwards for a moment.
+            function tick() {
+                if (!scrubbing && !seeking) {
+                    atMs = media.positionMs();
+                }
+                progress();
+            }
+
+            media.on('ready', function (durationMs) {
+                lengthMs = durationMs;
+                paused = false;
+                showPlaying();
+                progress();
+            });
+            media.on('firstFrame', showPicture);
+            media.on('seeked', function () {
+                seeking = false;
+            });
+            media.on('ended', function () {
+                atMs = lengthMs;
+                paused = true;
+                showPaused();
+                progress();
+            });
+            media.on('paused', function () {
+                paused = true;
+                showPaused();
+            });
+            media.on('error', function () {
+                paused = true;
+                showBroken();
+            });
+
+            return {
+                open: function (url) {
+                    lengthMs = 0;
+                    atMs = 0;
+                    paused = false;
+                    seeking = false;
+                    media.play(window.location.origin + url, frame, angle, quiet);
+                    media.watch(tick);
+                },
+                close: function () {
+                    media.stop();
+                    lengthMs = 0;
+                    atMs = 0;
+                    paused = true;
+                },
+                paused: function () {
+                    return paused;
+                },
+                setPlaying: function (on) {
+                    paused = !on;
+                    media.setPlaying(on);
+                    if (on) {
+                        showPlaying();
+                    } else {
+                        showPaused();
+                    }
+                },
+                at: function () {
+                    return atMs / 1000;
+                },
+                total: function () {
+                    return lengthMs / 1000;
+                },
+                seekTo: function (seconds) {
+                    atMs = Math.round(seconds * 1000);
+                    seeking = true;
+                    media.seek(atMs);
+                },
+                setMuted: function (next) {
+                    quiet = next;
+                    media.setMuted(next);
+                },
+                muted: function () {
+                    return quiet;
+                },
+                setAngle: function (next) {
+                    media.setAngle(next);
+                },
+                resize: function () {
+                    media.sync();
+                },
+                idle: function () {
+                    return lengthMs === 0;
+                }
+            };
+        }
+
+        function wirePlayer() {
             var play = document.getElementById('playerPlay');
-            var icon = play.getElementsByTagName('path')[0];
             var scrub = document.getElementById('playerScrub');
 
             play.onclick = function () {
-                if (video.paused) {
-                    video.play();
-                } else {
-                    video.pause();
-                }
+                screen.setPlaying(screen.paused());
             };
-
-            video.onplay = function () {
-                icon.setAttribute('d', PAUSE);
-                play.setAttribute('aria-label', 'Pause');
-            };
-            video.onplaying = function () {
-                document.getElementById('playerFrame').className = 'player__frame is-on';
-                waitLayer(null);
-            };
-            video.onerror = function () {
-                // Clearing the source on close errors too, and leaves currentSrc empty.
-                if (this.currentSrc) waitLayer(playing ? stalled(playing) : UNPLAYABLE);
-            };
-            video.onpause = function () {
-                icon.setAttribute('d', PLAY);
-                play.setAttribute('aria-label', 'Play');
-            };
-            video.ontimeupdate = progress;
-            video.ondurationchange = progress;
 
             document.getElementById('playerFull').onclick = function () {
                 expand(!full);
@@ -708,38 +888,31 @@
 
             var mute = document.getElementById('playerMute');
             mute.onclick = function () {
-                video.muted = !video.muted;
-                this.setAttribute('aria-pressed', video.muted ? 'true' : 'false');
-                document.getElementById('playerWaves').style.display = video.muted ? 'none' : '';
-                document.getElementById('playerSlash').style.display = video.muted ? '' : 'none';
+                var quiet = !screen.muted();
+                screen.setMuted(quiet);
+                this.setAttribute('aria-pressed', quiet ? 'true' : 'false');
+                document.getElementById('playerWaves').style.display = quiet ? 'none' : '';
+                document.getElementById('playerSlash').style.display = quiet ? '' : 'none';
             };
 
-            scrub.onmousedown = function (event) {
-                scrubbing = true;
-                seek(event);
-            };
+            scrub.onmousedown = grab;
             document.addEventListener('mousemove', function (event) {
                 if (scrubbing) {
-                    seek(event);
+                    aim(event);
                 }
             });
-            document.addEventListener('mouseup', function () {
-                scrubbing = false;
-            });
+            document.addEventListener('mouseup', release);
             scrub.addEventListener('touchstart', function (event) {
-                scrubbing = true;
-                seek(event);
+                grab(event);
                 event.preventDefault();
             });
             scrub.addEventListener('touchmove', function (event) {
                 if (scrubbing) {
-                    seek(event);
+                    aim(event);
                     event.preventDefault();
                 }
             });
-            scrub.addEventListener('touchend', function () {
-                scrubbing = false;
-            });
+            scrub.addEventListener('touchend', release);
 
             document.getElementById('angles').onclick = function (event) {
                 var button = Strike.core.buttonIn(event, this);
@@ -778,6 +951,8 @@
         }
 
         function wire() {
+            screen = native ? nativeScreen() : videoScreen();
+
             document.getElementById('kind').onclick = function (event) {
                 var button = Strike.core.buttonIn(event, this);
                 if (!button) {
@@ -841,7 +1016,6 @@
         }
 
         function inCar(state) {
-            car = state === true;
             var next = state === false;
             if (next === canDownload) {
                 return;
