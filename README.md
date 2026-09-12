@@ -1,14 +1,26 @@
-![Strike](app/src/main/assets/web/img/wordmark.webp)
+<div align="center">
 
-Lightweight dashcam, parked surveillance, and live cameras for BYD head units.
-Built around recording, with a small web interface for the car's screen and your
-phone.
+<img src="art/wordmark.png" alt="Strike" width="260">
 
-**[Download the APK](https://github.com/UnrealSalty/Strike/releases/latest)** · [strikebyd.com](https://strikebyd.com) · [Get started](#get-started) · [Report a bug](https://github.com/UnrealSalty/Strike/issues) · [Official Discord](https://discord.gg/DTBZRgHX3s)
+# Your car. On watch.
 
-![Strike dashboard with vehicle status, recording storage, and quick actions](art/screenshots/dashboard.png)
+**Dashcam and parked surveillance for BYD head units.**
+Records locally on the car's own cameras, watches while you're parked, and opens
+the same dashboard from your phone.
 
-*Interface previews use sample vehicle, storage, and connection values.*
+[![Latest release](https://img.shields.io/github/v/release/UnrealSalty/Strike?style=flat-square&label=release&color=2b6cff)](https://github.com/UnrealSalty/Strike/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/UnrealSalty/Strike/total?style=flat-square&label=downloads&color=2b6cff)](https://github.com/UnrealSalty/Strike/releases)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/DTBZRgHX3s)
+
+[**Download the APK**](https://github.com/UnrealSalty/Strike/releases/latest) &nbsp;·&nbsp; [strikebyd.com](https://strikebyd.com) &nbsp;·&nbsp; [Get started](#get-started) &nbsp;·&nbsp; [Report a bug](https://github.com/UnrealSalty/Strike/issues)
+
+<img src="art/screenshots/dashboard.webp" alt="Strike dashboard with vehicle status, storage, shortcuts and the latest surveillance clip" width="860">
+
+<sub>Records while you drive &nbsp;·&nbsp; Watches while you're parked &nbsp;·&nbsp; Opens in any browser</sub>
+
+<sub>Interface previews use sample vehicle, storage, and connection values.</sub>
+
+</div>
 
 ## Features
 
@@ -27,18 +39,55 @@ your own domain with an optional Cloudflare tunnel.
 Footage is stored on the car, and detection runs on the head unit. Remote access
 is optional. Strike has no account or subscription of its own.
 
-Recording, surveillance, and live view share one camera feed. Strike uses hardware
-video encoding on supported head units and only runs the live encoder while
-someone is watching. Motion checks limit how often Smart surveillance runs person
-and vehicle detection.
+## Your car, at a glance
 
+<table>
+<tr>
+<td width="50%"><img src="art/screenshots/live.webp" alt="Live view of all four cameras with the radar camera picker"><br><sub><b>Live</b> — all four cameras together, with the radar camera picker.</sub></td>
+<td width="50%"><img src="art/screenshots/recordings.webp" alt="Recording library listing today's drive clips"><br><sub><b>Recordings</b> — the drive-clip library, newest first.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="art/screenshots/surveillance.webp" alt="Surveillance events with person and vehicle detections"><br><sub><b>Surveillance</b> — parked events, with person and vehicle detections.</sub></td>
+<td width="50%"><img src="art/screenshots/online.webp" alt="Online page with Cloudflare and zrok, addresses masked"><br><sub><b>Online</b> — remote access with Cloudflare and zrok.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="art/screenshots/daemons.webp" alt="Daemons page showing recorder, surveillance, remote access and the log"><br><sub><b>Daemons</b> — recorder, surveillance, remote access, and the log.</sub></td>
+<td width="50%"><img src="art/screenshots/settings.webp" alt="Settings page showing versions and the Automatic camera profile"><br><sub><b>Settings</b> — versions, camera profile, and the in-car PIN.</sub></td>
+</tr>
+</table>
 
-| Recording                                                                                                            | Surveillance                                                                                                                          |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Recording settings with clip length, quality, audio, and storage controls](art/screenshots/recording-settings.png) | ![Surveillance settings with Smart mode, arming, proximity, and screen deterrent controls](art/screenshots/surveillance-settings.png) |
+## Four cameras. One recording.
 
+<img src="art/screenshots/clip-mosaic.png" alt="A single clip with all four cameras, a vehicle detection boxed" align="right" width="440">
 
+All four cameras go into a single clip. Detections sit on the timeline, so you
+can jump to the moment instead of hunting for it, then fill the screen with one
+camera.
 
+Recording, surveillance, and live view share one camera feed. Strike uses
+hardware video encoding on supported head units and only runs the live encoder
+while someone is watching. Motion checks limit how often Smart surveillance runs
+person and vehicle detection.
+
+<br clear="all">
+
+## Parked, not blind
+
+<img src="art/screenshots/deterrent.webp" alt="The head unit filling its screen with red, reading Strike, sentry mode, recording in progress" align="right" width="440">
+
+Strike arms itself when you leave, watches for people and vehicles close by, and
+saves what happened.
+
+- **Arms on** — ignition off, or locking the car.
+- **Keeps recording** — 20 seconds past the last detection.
+- **Clip length cap** — about 2 minutes per event.
+- **Optional deterrent** — fills the screen with red and a message you set.
+
+On an Atto 2 with surveillance armed, this used about **1–2 % of the battery over
+one day parked**. Other cars and settings will differ; it keeps the head unit and
+cameras awake, so a fixed number of days is not promised.
+
+<br clear="all">
 
 ## Built lean
 
@@ -51,7 +100,18 @@ screen loads with the car offline.
 - 🔒 **No telemetry, analytics, or crash reporting.** The only address Strike calls
 on its own is GitHub's release API, at most once a day.
 
+## Away from the car. Still in the picture.
 
+<img src="art/screenshots/phone.webp" alt="A phone showing the Strike dashboard with vehicle status and quick actions" align="right" width="220">
+
+Strike serves its own interface. Open the car's address and you get the same live
+view and recordings, behind an access code. Connect on your local network, or
+reach the car from anywhere with your own domain over a Cloudflare tunnel, or a
+public zrok link. Only one remote service runs at a time.
+
+The head unit has to be awake and online. A tunnel cannot wake a sleeping car.
+
+<br clear="all">
 
 ## Get started
 
@@ -68,7 +128,12 @@ on its own is GitHub's release API, at most once a day.
 6. For parked recording, open **Surveillance → Settings**, enable **Watch the car
   when it is off**, and choose Smart or Continuous mode.
 
-
+<table>
+<tr>
+<td width="50%"><img src="art/screenshots/recording-settings.webp" alt="Recording settings with clip length, quality, audio, and storage controls"><br><sub><b>Recording settings</b></sub></td>
+<td width="50%"><img src="art/screenshots/surveillance-settings.webp" alt="Surveillance settings with Smart mode, arming, proximity, and screen deterrent controls"><br><sub><b>Surveillance settings</b></sub></td>
+</tr>
+</table>
 
 ## Compatibility
 
@@ -101,8 +166,6 @@ interface but cannot provide the car's cameras.
 Automatic parked operation requires working ignition readings. Local ADB must be
 available on port 5555 and authorized on the head unit.
 
-
-
 ## Access from your phone
 
 On the car's **Online** page, copy a local address and open it on a phone or
@@ -116,8 +179,6 @@ trusted network.
 In the browser's Live view, choose **Low data**, **Balanced**, or **High** stream
 quality. This leaves recorded clips unchanged. If several browsers are watching,
 the lowest selected quality applies to the shared live stream.
-
-![Online page with Cloudflare tunnel controls, local address, and masked browser access code](art/screenshots/online.png)
 
 Set up Cloudflare with your own domain
 
@@ -143,8 +204,6 @@ The head unit must stay awake and have internet access. The tunnel cannot wake
 the car. Playback depends on upload speed and browser codec support. Review
 [Cloudflare's video delivery policy](https://developers.cloudflare.com/fundamentals/reference/policies-compliances/delivering-videos-with-cloudflare/)
 before using Live or recordings through a public tunnel hostname.
-
-
 
 ## Recording while parked
 
@@ -175,8 +234,6 @@ saved footage are kept. Uninstalling Strike or clearing its app data resets the
 PIN and browser access. In-app installation needs authorized ADB
 access and an APK signed with the same key as the installed version.
 
-![Settings page with installed and latest versions, release notes, and the in-car PIN control](art/screenshots/settings.png)
-
 ## PIN recovery
 
 Forgot the in-car PIN?
@@ -191,8 +248,6 @@ adb shell touch /data/local/tmp/.strike_pin_reset
 Reopen or refresh Strike, then set a new PIN under **Settings → Security**.
 This clears the PIN and failed-attempt lockout. Recordings and other settings
 are kept.
-
-
 
 ## Build
 
