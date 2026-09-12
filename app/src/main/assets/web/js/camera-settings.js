@@ -7,13 +7,15 @@
     var picker = Strike.pick('cameraProfile', save);
 
     function paint(payload) {
+        if (!payload.canManage) {
+            document.getElementById('cameraProfile').hidden = true;
+            document.getElementById('cameraProfileNote').textContent = 'Edit camera settings from the car.';
+            return;
+        }
         saved = payload.profile;
         picker.fill(payload.profiles);
         picker.select(saved);
-        button.disabled = !payload.canManage;
-        if (!payload.canManage) {
-            document.getElementById('cameraProfileNote').textContent = 'Edit camera settings from the car.';
-        }
+        button.disabled = false;
     }
 
     function save(profile) {
