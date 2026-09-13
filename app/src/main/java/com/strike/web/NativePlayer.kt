@@ -78,7 +78,6 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
         view.post {
             this.angle = angle
             applyAngle()
-            Logs.d(TAG, "PROBE angle $angle")
         }
     }
 
@@ -99,7 +98,6 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
         view.post {
             release()
             view.visibility = View.GONE
-            Logs.d(TAG, "PROBE stop")
         }
     }
 
@@ -165,7 +163,6 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
             }
             fresh.setOnCompletionListener { toWeb("_ended()") }
             fresh.setOnErrorListener { _, what, extra ->
-                Logs.d(TAG, "PROBE error ${wanted.substringAfterLast('/')} after ${System.currentTimeMillis() - preparingAtMs}ms")
                 Logs.w(TAG, "a clip could not be played ($what/$extra)")
                 fail()
                 true
