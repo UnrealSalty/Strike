@@ -9,6 +9,7 @@ import com.strike.camera.FrameBus
 import com.strike.camera.frameOf
 import com.strike.daemon.AudioIngest
 import com.strike.daemon.DaemonLog
+import com.strike.surveillance.EVENT_PREROLL_MS
 import java.io.File
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -23,6 +24,12 @@ private const val FINALISE_WAIT_MS = 6_000L
 
 // Wait briefly for the app's AAC format before starting the first muxer.
 private const val AUDIO_WAIT_MS = 1_000L
+
+// The clip can open a supervisor tick after the trigger, so hold more than the pre-roll itself.
+private const val PREROLL_SPAN_MS = EVENT_PREROLL_MS + 3_000L
+
+// Covers the span above at the highest bitrate on offer, and bounds the ring if timestamps stall.
+private const val PREROLL_BUDGET_BYTES = 24L * MB
 
 data class RecordingOptions(
     val clipLengthMs: Long,
@@ -41,6 +48,10 @@ class Recorder(
 ) {
 
     private val samples = ArrayBlockingQueue<Sample>(QUEUED_SAMPLES)
+
+    // Surveillance encodes the whole time it is armed; only an event opens a clip.
+    private val gated = mode == RecordingMode.EVENT
+    private val ring = if (gated) PreRoll(PREROLL_SPAN_MS, PREROLL_BUDGET_BYTES) else null
 
     private var bus: FrameBus? = null
     private var encoder: Encoder? = null
@@ -67,11 +78,22 @@ class Recorder(
     var clipStartedAtMs = 0L
         private set
 
+    /** When the clip's first frame was captured, earlier than [clipStartedAtMs] by the pre-roll. */
+    @Volatile
+    var mediaStartedAtMs = 0L
+        private set
+
+    @Volatile
+    var eventActive = false
+
     @Volatile
     var frame: Frame? = null
         private set
 
     val isRecording: Boolean get() = running && encoder?.isDead != true
+
+    /** Armed surveillance encodes without a clip open, which is not yet footage on disk. */
+    val isWriting: Boolean get() = isRecording && (!gated || clip != null)
 
     fun start(options: RecordingOptions, bus: FrameBus): Boolean {
         if (running) return true
@@ -122,6 +144,7 @@ class Recorder(
         closer = null
         indexer?.join(FINALISE_WAIT_MS)
         indexer = null
+        ring?.clear()
         clip = null
         frame = null
     }
@@ -130,38 +153,69 @@ class Recorder(
         val format = awaitFormat(encoder) ?: return
         if (options.audio) awaitAudio()
         if (!running) return
-        var current = openClip(format) ?: return
+        var current: ClipWriter? = null
+        if (!gated) current = openClip(format) ?: return
         val clipLengthMs = options.clipLengthMs
 
         try {
             while (running || samples.isNotEmpty()) {
                 val sample = samples.poll(TAKE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                drainAudio(current)
-                if (sample == null) {
-                    if (running && elapsed(current) >= clipLengthMs) encoder.splitAtNextKeyFrame()
+                if (gated && !eventActive) {
+                    val done = current
+                    if (done != null) {
+                        current = null
+                        clip = null
+                        finish(done)
+                    }
+                    if (sample != null) ring?.add(sample)
                     continue
                 }
-                if (running && shouldRotate(sample, current, clipLengthMs)) {
-                    val done = current
-                    current = openClip(format) ?: break
+                var open = current
+                if (open == null) {
+                    open = openClip(format, preRoll = true) ?: break
+                    current = open
+                }
+                drainAudio(open)
+                if (sample == null) {
+                    if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
+                    continue
+                }
+                if (running && shouldRotate(sample, open, clipLengthMs)) {
+                    val done = open
+                    open = openClip(format) ?: break
+                    current = open
                     finish(done)
                 }
-                current.write(sample)
-                if (running && elapsed(current) >= clipLengthMs) encoder.splitAtNextKeyFrame()
+                open.write(sample)
+                if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
             }
         } finally {
-            finish(current)
+            current?.let { finish(it) }
         }
     }
 
+    // One encoder feeds both the ring and the live stream, so the buffered samples splice on their
+    // own timestamps and the clip simply begins before the trigger.
+    private fun flushPreRoll(writer: ClipWriter): Long {
+        val buffer = ring ?: return 0L
+        val buffered = buffer.snapshot()
+        if (buffered.isEmpty()) return 0L
+        val spanMs = buffer.spanMs
+        for (sample in buffered) writer.write(sample)
+        buffer.clear()
+        DaemonLog.d(TAG, "event clip opens $spanMs ms before the sighting, ${buffered.size} frames")
+        return spanMs
+    }
+
     // Tracks cannot be added after muxer start; audio changes apply at a clip boundary.
-    private fun openClip(format: MediaFormat): ClipWriter? {
+    private fun openClip(format: MediaFormat, preRoll: Boolean = false): ClipWriter? {
         val writer = ClipWriter(dir)
         if (!writer.open(mode, format, audio?.config)) {
             running = false
             return null
         }
         clipStartedAtMs = writer.startedAtMs
+        mediaStartedAtMs = writer.startedAtMs - if (preRoll) flushPreRoll(writer) else 0L
         clip = writer.name
         return writer
     }

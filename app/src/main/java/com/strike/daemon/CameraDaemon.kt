@@ -230,9 +230,9 @@ object CameraDaemon {
         val payload = ok()
         payload.put("cameras", found())
         if (camerasReason.isNotEmpty()) payload.put("camerasReason", camerasReason)
-        payload.put("recording", held != null && held.isRecording)
+        payload.put("recording", held != null && held.isWriting)
         payload.put("clip", held?.clip ?: JSONObject.NULL)
-        payload.put("clipMs", if (held?.clip == null) 0 else System.currentTimeMillis() - held.clipStartedAtMs)
+        payload.put("clipMs", if (held?.clip == null) 0 else System.currentTimeMillis() - held.mediaStartedAtMs)
         payload.put("clips", clips)
         payload.put("writing", target?.mode?.name?.lowercase() ?: JSONObject.NULL)
         payload.put("sentry", sentryMode.name.lowercase())
@@ -309,6 +309,7 @@ object CameraDaemon {
                     (wantedTarget.mode == RecordingMode.EVENT || now - failedAtMs > RETRY_AFTER_MS) ->
                     startRecording(wantedTarget)
             }
+            superviseEvent()
             superviseLive()
             superviseFlag()
             if (sentryMode != SentryMode.OFF && ParkedRails.tick()) {
@@ -421,6 +422,16 @@ object CameraDaemon {
         }
     }
 
+    // The armed encoder writes a clip only inside an event window; outside one it fills the pre-roll.
+    private fun superviseEvent() {
+        val recording = recorder ?: return
+        if (target?.mode != RecordingMode.EVENT) return
+        val until = sentry?.triggeredUntilMs ?: 0L
+        val startedAtMs = if (recording.clip == null) 0L else recording.mediaStartedAtMs
+        recording.eventActive =
+            eventInProgress(until, startedAtMs, System.currentTimeMillis()) || flagged != null
+    }
+
     // Hold the sighting until encoder startup gives the clip a filename.
     private fun superviseFlag() {
         val watching = sentry ?: return
@@ -436,7 +447,7 @@ object CameraDaemon {
             store.flag(clip, it.seen, it.score, it.hero)
             flagged = null
         }
-        store.mark(clip, recording.clipStartedAtMs, marked)
+        store.mark(clip, recording.mediaStartedAtMs, marked)
         marked.clear()
     }
 
@@ -550,11 +561,8 @@ object CameraDaemon {
         if (sentryMode == SentryMode.CONTINUOUS) {
             return Target(dir, RecordingMode.WATCH, options(clipLengthMs(), false))
         }
-        val until = sentry?.triggeredUntilMs ?: 0L
-        val held = recorder?.takeIf { target?.mode == RecordingMode.EVENT }
-        val naming = held != null && held.clip == null
-        val startedAtMs = if (held?.clip != null) held.clipStartedAtMs else 0L
-        if (!eventInProgress(until, startedAtMs, System.currentTimeMillis()) && !naming && flagged == null) return null
+        // Armed Smart keeps the encoder up between events; without it there is no pre-roll to flush.
+        if (sentry?.isArmed != true) return null
         return Target(dir, RecordingMode.EVENT, options(EVENT_CLIP_CAP_MS, false))
     }
 

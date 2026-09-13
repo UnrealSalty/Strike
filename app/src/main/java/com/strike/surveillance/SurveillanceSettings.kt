@@ -12,6 +12,9 @@ const val EVENT_CLIP_CAP_MS = 120_000L
 /** Kept recording for this long after the last confirmed person or vehicle. */
 const val EVENT_TAIL_MS = 20_000L
 
+/** Footage kept from before the trigger, so the subject is still walking in when the clip opens. */
+const val EVENT_PREROLL_MS = 5_000L
+
 object SurveillanceSettings {
 
     const val ENABLED = "surveillance.enabled"
