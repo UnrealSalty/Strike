@@ -36,6 +36,7 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
     private var cornerPx = 0f
     private var seekingMs = NO_SEEK
     private var queuedMs = NO_SEEK
+    private var preparingAtMs = 0L
 
     @Volatile
     private var muted = false
@@ -62,6 +63,7 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
             this.muted = muted
             place(left, top, width, height, corner)
             view.visibility = View.VISIBLE
+            Logs.d(TAG, "PROBE play ${url.substringAfterLast('/')} angle=$angle ${width}x$height muted=$muted")
             view.surfaceTexture?.let { open(it) }
         }
     }
@@ -74,6 +76,7 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
         view.post {
             this.angle = angle
             applyAngle()
+            Logs.d(TAG, "PROBE angle $angle")
         }
     }
 
@@ -94,6 +97,7 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
         view.post {
             release()
             view.visibility = View.GONE
+            Logs.d(TAG, "PROBE stop")
         }
     }
 
@@ -134,10 +138,14 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
                 ready = true
                 volume(prepared)
                 prepared.start()
+                Logs.d(TAG, "PROBE prepared ${prepared.videoWidth}x${prepared.videoHeight} dur=${prepared.duration}ms in ${System.currentTimeMillis() - preparingAtMs}ms")
                 toWeb("_ready(${prepared.duration})")
             }
             fresh.setOnInfoListener { _, what, _ ->
-                if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) toWeb("_firstFrame()")
+                if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
+                    Logs.d(TAG, "PROBE first frame in ${System.currentTimeMillis() - preparingAtMs}ms")
+                    toWeb("_firstFrame()")
+                }
                 false
             }
             fresh.setOnSeekCompleteListener { seeked ->
@@ -154,6 +162,7 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
             }
             fresh.setOnCompletionListener { toWeb("_ended()") }
             fresh.setOnErrorListener { _, what, extra ->
+                Logs.d(TAG, "PROBE error ${wanted.substringAfterLast('/')} after ${System.currentTimeMillis() - preparingAtMs}ms")
                 Logs.w(TAG, "a clip could not be played ($what/$extra)")
                 fail()
                 true
@@ -163,6 +172,7 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
                 // over by hand or the server answers the clip with 401.
                 val headers = mapOf("Cookie" to CookieManager.getInstance().getCookie(wanted).orEmpty())
                 fresh.setDataSource(view.context, Uri.parse(wanted), headers)
+                preparingAtMs = System.currentTimeMillis()
                 fresh.prepareAsync()
             } catch (e: IOException) {
                 Logs.w(TAG, "a clip could not be opened")

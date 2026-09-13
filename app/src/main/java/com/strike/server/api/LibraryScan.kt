@@ -1,5 +1,6 @@
 package com.strike.server.api
 
+import com.strike.core.Logs
 import com.strike.recording.MB
 import com.strike.recording.Storage
 import com.strike.recording.Volume
@@ -41,7 +42,9 @@ object LibraryScan {
         if (last != null && fresh && last.location == location && last.eventsLocation == eventsLocation) {
             return last
         }
+        val startedAt = System.currentTimeMillis()
         val scanned = scan(storage, events, location, eventsLocation)
+        Logs.d("Library", "PROBE scan ${scanned.clips} clips ${scanned.usedMb}MB in ${System.currentTimeMillis() - startedAt}ms")
         held = scanned
         readAtMs = now
         scanned
