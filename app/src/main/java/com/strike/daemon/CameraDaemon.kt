@@ -373,7 +373,7 @@ object CameraDaemon {
     private fun updateVehicle() = synchronized(acc) {
         val snapshot = acc.snapshot()
         AccGate.say(snapshot?.accOn?.takeIf { snapshot.gear == null || snapshot.gear == "P" }, acc.observedAtMs())
-        if (AccGate.isUnsafe) screen.hide()
+        if (AccGate.isUnsafe) screen.standDown()
         val recordingMode = Config.getString(RecordingSettings.MODE, RecordingSettings.fallback(RecordingSettings.MODE))
         wanted = driveWanted(recordingMode, snapshot, wanted)
         val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)

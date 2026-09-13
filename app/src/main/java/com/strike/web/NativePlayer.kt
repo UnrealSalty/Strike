@@ -20,7 +20,7 @@ private const val ZOOM = 2f
 private const val NO_SEEK = -1
 
 // The car WebView cannot decode H.265 and is slow to start H.264, so the head unit's
-// decoder paints clips on a surface behind the page. The web modal keeps every control.
+// decoder paints clips on a surface over the page. The web modal keeps every control.
 class NativePlayer(private val view: TextureView, private val toWeb: (String) -> Unit) :
     TextureView.SurfaceTextureListener {
 
@@ -62,7 +62,9 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
             this.angle = angle
             this.muted = muted
             place(left, top, width, height, corner)
-            view.visibility = View.VISIBLE
+            // The surface still holds the last clip's frame, and it draws over the page. Keep it
+            // out of the way until the new clip renders, or the old one covers the loading state.
+            view.visibility = if (view.surfaceTexture == null) View.VISIBLE else View.INVISIBLE
             Logs.d(TAG, "PROBE play ${url.substringAfterLast('/')} angle=$angle ${width}x$height muted=$muted")
             view.surfaceTexture?.let { open(it) }
         }
@@ -143,6 +145,7 @@ class NativePlayer(private val view: TextureView, private val toWeb: (String) ->
             }
             fresh.setOnInfoListener { _, what, _ ->
                 if (what == MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
+                    view.visibility = View.VISIBLE
                     Logs.d(TAG, "PROBE first frame in ${System.currentTimeMillis() - preparingAtMs}ms")
                     toWeb("_firstFrame()")
                 }

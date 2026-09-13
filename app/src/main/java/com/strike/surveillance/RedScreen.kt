@@ -47,6 +47,7 @@ class RedScreen(
     private var untilMs = 0L
     private var wokeAtMs = 0L
     private var closed = false
+    private var previewing = false
 
     val isShowing: Boolean get() = control != null
 
@@ -56,6 +57,7 @@ class RedScreen(
         if (!forced && AccGate.isUnsafe) return
         untilMs = System.currentTimeMillis() + seconds * 1_000L
         if (control != null) return
+        previewing = forced
         wakePanel()
         val size = panelSize()
         val made = createLayer(size.width(), size.height()) ?: return
@@ -98,9 +100,17 @@ class RedScreen(
         return true
     }
 
+    /** ACC on takes the deterrent down, except a preview the owner asked for. */
+    @Synchronized
+    fun standDown() {
+        if (previewing) return
+        hide()
+    }
+
     @Synchronized
     fun hide(darken: Boolean = false) {
         wokeAtMs = 0L
+        previewing = false
         surface?.release()
         surface = null
         val held = control
