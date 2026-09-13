@@ -48,6 +48,7 @@ class Recorder(
 ) {
 
     private val samples = ArrayBlockingQueue<Sample>(QUEUED_SAMPLES)
+    private var dropped = 0L
 
     // Surveillance encodes the whole time it is armed; only an event opens a clip.
     private val gated = mode == RecordingMode.EVENT
@@ -257,6 +258,8 @@ class Recorder(
         if (samples.offer(sample)) return
         samples.poll()
         samples.offer(sample)
+        dropped++
+        if (dropped % 30 == 0L) DaemonLog.w(TAG, "PROBE dropped $dropped encoded frames, the writer is behind")
     }
 
     private fun shouldRotate(sample: Sample, writer: ClipWriter, clipLengthMs: Long): Boolean =

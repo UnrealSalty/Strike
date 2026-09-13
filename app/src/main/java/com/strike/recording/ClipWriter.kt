@@ -140,7 +140,12 @@ class ClipWriter(private val dir: File) {
 // The head unit's WebView reads the index out of the first bytes it is given.
 fun indexUpFront(finished: File) {
     val scratch = File(finished.parentFile, finished.name + FAST)
-    if (moovToFront(finished, scratch) && swap(scratch, finished)) return
+    val startedAt = System.currentTimeMillis()
+    val sizeMb = finished.length() / MB
+    if (moovToFront(finished, scratch) && swap(scratch, finished)) {
+        DaemonLog.d(TAG, "PROBE faststart ${finished.name} ${sizeMb}MB in ${System.currentTimeMillis() - startedAt}ms")
+        return
+    }
     scratch.delete()
     DaemonLog.w(TAG, "clip ${finished.name} keeps its index at the end, the player may not start it")
 }
