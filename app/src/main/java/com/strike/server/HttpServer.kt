@@ -24,11 +24,14 @@ private const val SOCKET_KEY = "Sec-WebSocket-Key:"
 private const val COOKIE = "Cookie:"
 private const val BODY_MAX = 4096
 private const val COPY_BUFFER = 64 * 1024
+private const val TRANSFER_STALL_MS = 30_000L
+private const val TRANSFER_WATCH_MS = 1_000L
 
 class HttpServer(private val port: Int, private val router: Router, private val browsers: BrowserGate) {
 
     private val workers = ThreadPoolExecutor(8, 8, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue(16))
     private val clients = ConcurrentHashMap.newKeySet<Socket>()
+    private val transfers = ConcurrentHashMap<Socket, Long>()
     private var listener: ServerSocket? = null
 
     fun start(): Boolean {
@@ -41,6 +44,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
         socket.reuseAddress = true
         listener = socket
         Thread({ accept(socket) }, "strike-http").start()
+        Thread({ dropStalled(socket) }, "strike-transfers").start()
         return true
     }
 
@@ -74,7 +78,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
     }
 
     private fun serve(client: Socket) {
-        var streaming = false
+        var handedOff = false
         try {
             client.soTimeout = READ_TIMEOUT_MS
             val reader = BufferedReader(InputStreamReader(client.getInputStream(), "UTF-8"))
@@ -129,7 +133,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
             val method = requestMethod(requestLine) ?: return
             val path = requestPath(requestLine) ?: return
             if ((socketKey != null || method != "GET") && !sameOrigin(host, origin)) {
-                write(client.getOutputStream(), forbidden())
+                write(client, forbidden())
                 return
             }
             val body = read(reader, bodyLength)
@@ -137,26 +141,32 @@ class HttpServer(private val port: Int, private val router: Router, private val 
             if (!inCar) {
                 val gate = browsers.guard(method, path, body, cookie, secure || forwarded, client, router::asset)
                 if (gate != null) {
-                    write(client.getOutputStream(), gate)
+                    write(client, gate)
                     return
                 }
             }
             val token = cookieValue(cookie, SESSION_COOKIE)
             if (path == LIVE_STREAM_PATH) {
                 if (inCar && refuseWhenLocked("GET", LIVE_STREAM_PATH, router.locked(token))) {
-                    write(client.getOutputStream(), forbidden())
+                    write(client, forbidden())
                     return
                 }
-                streaming = upgrade(client, socketKey, queryValue(requestLine, "view"),
+                handedOff = upgrade(client, socketKey, queryValue(requestLine, "view"),
                     if (inCar) null else queryValue(requestLine, "quality"))
-                if (streaming) return
+                if (handedOff) return
             }
-            write(client.getOutputStream(), respond(requestLine, body, range, token, inCar))
+            val response = respond(requestLine, body, range, token, inCar)
+            if (response.slice != null) {
+                handedOff = true
+                sendClip(client, response)
+                return
+            }
+            write(client, response)
         } catch (e: IOException) {
             // The WebView drops connections on navigation; logging here floods.
         } finally {
-            // The Live thread owns this socket after upgrade.
-            if (!streaming) {
+            // The live or the clip thread owns this socket once it is handed over.
+            if (!handedOff) {
                 clients.remove(client)
                 browsers.leave(client)
                 try {
@@ -242,14 +252,54 @@ class HttpServer(private val port: Int, private val router: Router, private val 
         }
     }
 
-    private fun write(out: OutputStream, response: Response) {
+    // A clip runs for minutes on a slow link, so it must not hold one of the API workers.
+    private fun sendClip(client: Socket, response: Response) {
+        Thread({
+            try {
+                write(client, response)
+            } catch (e: IOException) {
+                Logs.d(TAG, "the clip transfer ended early: ${e.message}")
+            } finally {
+                transfers.remove(client)
+                clients.remove(client)
+                browsers.leave(client)
+                try {
+                    client.close()
+                } catch (e: IOException) {
+                    // Nothing left to do with a socket we are done with.
+                }
+            }
+        }, "strike-clip").start()
+    }
+
+    // A blocked write has no timeout of its own, so closing the socket is what frees the thread.
+    private fun dropStalled(listener: ServerSocket) {
+        while (!listener.isClosed) {
+            Thread.sleep(TRANSFER_WATCH_MS)
+            val cutoff = System.currentTimeMillis() - TRANSFER_STALL_MS
+            for ((client, movedAtMs) in transfers) {
+                if (movedAtMs > cutoff) continue
+                transfers.remove(client)
+                Logs.w(TAG, "a clip transfer stopped moving for ${TRANSFER_STALL_MS / 1000}s and was dropped")
+                try {
+                    client.close()
+                } catch (e: IOException) {
+                    // The browser may have gone away already.
+                }
+            }
+        }
+    }
+
+    private fun write(client: Socket, response: Response) {
+        val out = client.getOutputStream()
         out.write(headerBlock(response).toByteArray())
         val slice = response.slice
-        if (slice == null) out.write(response.body) else stream(out, slice)
+        if (slice == null) out.write(response.body) else stream(client, out, slice)
         out.flush()
     }
 
-    private fun stream(out: OutputStream, slice: FileSlice) {
+    private fun stream(client: Socket, out: OutputStream, slice: FileSlice) {
+        transfers[client] = System.currentTimeMillis()
         RandomAccessFile(slice.file, "r").use { file ->
             file.seek(slice.offset)
             val buffer = ByteArray(COPY_BUFFER)
@@ -259,6 +309,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
                 if (count < 0) break
                 out.write(buffer, 0, count)
                 left -= count
+                transfers[client] = System.currentTimeMillis()
             }
         }
     }
