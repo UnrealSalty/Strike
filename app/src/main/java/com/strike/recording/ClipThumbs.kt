@@ -5,6 +5,7 @@ import android.media.MediaMetadataRetriever
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.Semaphore
 
 private const val WIDE = 320
 private const val HIGH = 240
@@ -13,13 +14,28 @@ private const val QUALITY = 75
 // Skip the first second while camera exposure settles.
 private const val AT_US = 1_000_000L
 
+private val thumbnailDecoder = Semaphore(1)
+
 class Thumb(val jpeg: ByteArray, val durationMs: Long, val codec: String?)
 
 // Cache the decoded frame and what the clip says about itself. Opening the clip costs a
 // container parse, so a cached thumbnail must answer without touching the file again.
 class ClipThumbs(private val dir: File) {
 
-    fun of(clip: File, id: String): Thumb? = cached(id) ?: decode(clip, id)
+    fun of(clip: File, id: String): Thumb? {
+        cached(id)?.let { return it }
+        try {
+            thumbnailDecoder.acquire()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return null
+        }
+        return try {
+            cached(id) ?: decode(clip, id)
+        } finally {
+            thumbnailDecoder.release()
+        }
+    }
 
     fun forget(id: String) {
         file(id).delete()
