@@ -112,7 +112,7 @@ internal fun writeScriptLine(lines: List<String>): String {
             .replace("\"", "\\\"")
             .replace("$", "\\$")
             .replace("`", "\\`")
-        command.append("echo \"$escaped\" ")
+        command.append("printf '%s\\n' \"$escaped\" ")
         command.append(if (index == 0) "> " else ">> ")
         command.append("$CAM_SCRIPT_PATH; ")
     }

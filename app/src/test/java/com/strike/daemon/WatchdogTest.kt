@@ -101,7 +101,10 @@ class WatchdogTest {
 
     @Test
     fun writingAScriptPreservesShellMetacharacters() {
-        val lines = listOf("#!/system/bin/sh", "echo \"path\\name \$NAME `date`\"")
+        val lines = listOf(
+            "#!/system/bin/sh", "echo \"path\\name \$NAME `date`\"",
+            "", "-n", "-e", "printf '%s\\n' \"100%\""
+        )
         assertEquals(0, execute(writeScriptLine(lines)))
         assertEquals(lines, file("start_cam.sh").readLines())
     }
