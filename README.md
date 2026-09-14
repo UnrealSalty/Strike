@@ -11,8 +11,11 @@ the same dashboard from your phone.
 [![Latest release](https://img.shields.io/github/v/release/UnrealSalty/Strike?style=flat-square&label=release&color=2b6cff)](https://github.com/UnrealSalty/Strike/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/UnrealSalty/Strike/total?style=flat-square&label=downloads&color=2b6cff)](https://github.com/UnrealSalty/Strike/releases)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/DTBZRgHX3s)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=flat-square&logo=buymeacoffee&logoColor=000)](https://buymeacoffee.com/unrealsalty)
 
 [**Download the APK**](https://github.com/UnrealSalty/Strike/releases/latest) &nbsp;·&nbsp; [strikebyd.com](https://strikebyd.com) &nbsp;·&nbsp; [Get started](#get-started) &nbsp;·&nbsp; [Report a bug](https://github.com/UnrealSalty/Strike/issues)
+
+[![Buy Me a Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://buymeacoffee.com/unrealsalty)
 
 <img src="art/screenshots/dashboard.webp" alt="Strike dashboard with vehicle status, storage, shortcuts and the latest surveillance clip" width="860">
 
