@@ -1,6 +1,7 @@
 package com.strike.update
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import com.strike.core.Logs
 import com.strike.daemon.Shell
 import com.strike.online.hasInternet
@@ -31,7 +32,8 @@ class Updates internal constructor(
     private val worker: Executor = Executor { Thread(it, "updates").start() },
     private val nowMs: () -> Long = System::currentTimeMillis,
     private val pause: (Long) -> Unit = Thread::sleep,
-    private val isCurrentApk: () -> Boolean = { true }
+    private val isCurrentApk: () -> Boolean = { true },
+    private val debug: Boolean = false
 ) {
     constructor(context: Context, shell: Shell, pauseRecorder: ((Boolean) -> Unit) -> Unit,
                 resumeRecorder: () -> Unit) : this(context, UpdateInstall(context, shell, pauseRecorder, resumeRecorder))
@@ -41,7 +43,8 @@ class Updates internal constructor(
         File(context.filesDir, "updates.json"), File(context.cacheDir, "update.apk"),
         { hasInternet(context) }, ::fetchRelease, ::downloadRelease,
         { apk, release -> verifyUpdateApk(context, apk, release); Unit },
-        installer::start, { installer.pending }, installer::outcome, isCurrentApk = { installer.isCurrentApk }
+        installer::start, { installer.pending }, installer::outcome, isCurrentApk = { installer.isCurrentApk },
+        debug = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
     )
 
     private var release: Release? = null
@@ -162,7 +165,7 @@ class Updates internal constructor(
         val offered = release
         val newer = offered != null && compareVersions(offered.version, current) > 0
         val payload = JSONObject().put("current", current).put("latest", offered?.version ?: JSONObject.NULL)
-            .put("phase", phase).put("available", newer).put("ready", ready)
+            .put("debug", debug).put("phase", phase).put("available", newer).put("ready", ready)
             .put("checkedAtMs", if (checkedAtMs > 0) checkedAtMs else JSONObject.NULL)
             .put("receivedBytes", received).put("totalBytes", offered?.bytes ?: 0)
             .put("message", message).put("failed", failed).put("busy", working)

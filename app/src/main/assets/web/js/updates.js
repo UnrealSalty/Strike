@@ -48,6 +48,7 @@
         installing = payload.phase === 'installing';
         fresh = true;
         Strike.core.value('updateCurrent', version(payload.current));
+        document.getElementById('updateDebug').hidden = !payload.debug;
         Strike.core.value('updateLatest', version(payload.latest));
         Strike.core.value('updateChecked', checked(payload.checkedAtMs));
         document.getElementById('updateChecked').title = payload.checkedAtMs ? new Date(payload.checkedAtMs).toLocaleString() : '';
