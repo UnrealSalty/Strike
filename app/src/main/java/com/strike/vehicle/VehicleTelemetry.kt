@@ -7,6 +7,7 @@ import com.strike.core.Logs
 private const val TAG = "Vehicle"
 private const val STATISTIC = "android.hardware.bydauto.statistic.BYDAutoStatisticDevice"
 private const val POWER = "android.hardware.bydauto.power.BYDAutoPowerDevice"
+private const val ENERGY = "android.hardware.bydauto.energy.BYDAutoEnergyDevice"
 private const val BODYWORK = "android.hardware.bydauto.bodywork.BYDAutoBodyworkDevice"
 private const val GEARBOX = "android.hardware.bydauto.gearbox.BYDAutoGearboxDevice"
 private const val OTA = "android.hardware.bydauto.ota.BYDAutoOtaDevice"
@@ -44,10 +45,12 @@ class VehicleTelemetry(
         val power = device(POWER)
         val ota = device(OTA)
         val gear = gear(gearbox)
-        if (statistic == null && bodywork == null && gearbox == null && power == null && ota == null && gear == null) {
+        val soc = socOf(read(statistic, "getElecPercentageValue")?.toDouble()) {
+            read(device(ENERGY), "getElecPercentageValue")?.toDouble()
+        }
+        if (statistic == null && bodywork == null && gearbox == null && power == null && ota == null && gear == null && soc == null) {
             return null
         }
-        val soc = socOf(read(statistic, "getElecPercentageValue")?.toDouble())
         val fuel = fuelOf(read(statistic, "getFuelPercentageValue")?.toInt())
         val fuelRange = fuelRangeOf(read(statistic, "getFuelDrivingRangeValue")?.toInt())
         // An electric car answers one fuel getter with a plausible number, never both.
@@ -122,6 +125,9 @@ internal fun socOf(percent: Double?): Int? {
     if (percent == null || !percent.isFinite() || percent <= 0.0 || percent > 100.0) return null
     return Math.round(percent).toInt()
 }
+
+internal inline fun socOf(percent: Double?, fallback: () -> Double?): Int? =
+    socOf(percent) ?: socOf(fallback())
 
 internal fun rangeOf(km: Int?): Int? = if (km != null && km in 1..999) km else null
 

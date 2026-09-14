@@ -22,6 +22,37 @@ class VehicleSignalsTest {
     }
 
     @Test
+    fun validSocNeverReadsTheFallback() {
+        assertEquals(46, socOf(45.6) { error("The primary reading is valid") })
+    }
+
+    @Test
+    fun invalidSocUsesTheAlternateReader() {
+        for (primary in listOf(null, 0.0, -1.0, 101.0, Double.NaN, Double.POSITIVE_INFINITY)) {
+            assertEquals(68, socOf(primary) { 67.6 })
+        }
+    }
+
+    @Test
+    fun invalidAlternateSocRemainsUnknown() {
+        for (fallback in listOf(null, 0.0, -1.0, 101.0, Double.NaN, Double.NEGATIVE_INFINITY)) {
+            assertNull(socOf(null) { fallback })
+        }
+    }
+
+    @Test
+    fun alternateSocIsReadAgainAndClearsWhenUnavailable() {
+        var percent: Double? = 68.0
+        val read = { socOf(null) { percent } }
+        assertEquals(68, read())
+        percent = 67.0
+        assertEquals(67, read())
+        percent = null
+        assertNull(read())
+        assertEquals(66, socOf(66.0) { percent })
+    }
+
+    @Test
     fun rangeRejectsZeroAndImpossibleDistances() {
         assertNull(rangeOf(0))
         assertNull(rangeOf(1000))

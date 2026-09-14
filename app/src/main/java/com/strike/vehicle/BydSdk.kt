@@ -23,17 +23,22 @@ object BydSdk {
     fun deviceClass(name: String, context: Context): Class<*>? {
         if (classes.containsKey(name)) return classes[name]
         val found = try {
-            Class.forName(name)
-        } catch (e: ClassNotFoundException) {
-            Logs.d(TAG, "$name is not on the app classpath, trying the OEM apk")
-            oemLoader(context)?.let { oem ->
-                try {
-                    Class.forName(name, true, oem)
-                } catch (e: ClassNotFoundException) {
-                    Logs.w(TAG, "$name is not in the OEM apk either")
-                    null
+            try {
+                Class.forName(name)
+            } catch (e: ClassNotFoundException) {
+                Logs.d(TAG, "$name is not on the app classpath, trying the OEM apk")
+                oemLoader(context)?.let { oem ->
+                    try {
+                        Class.forName(name, true, oem)
+                    } catch (e: ClassNotFoundException) {
+                        Logs.w(TAG, "$name is not in the OEM apk either")
+                        null
+                    }
                 }
             }
+        } catch (e: LinkageError) {
+            Logs.w(TAG, "$name could not load: ${e.javaClass.simpleName}")
+            null
         }
         classes[name] = found
         return found
