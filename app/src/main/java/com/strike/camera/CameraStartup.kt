@@ -11,12 +11,14 @@ const val CAMERA_FIRST_FRAME_MS = 25_000L
 
 class CameraStartup(
     initial: CameraChoice,
-    private val automatic: Boolean,
+    automatic: Boolean,
     private val savedRaw: File,
     private val firmware: String
 ) {
+    private val automatic = automatic && initial.backend == CameraBackend.LEGACY
+
     @Volatile
-    var choice = if (automatic && remembered()) RAW_STRIP else initial
+    var choice = if (this.automatic && remembered()) RAW_STRIP else initial
         private set
 
     private var receivedFrames = false

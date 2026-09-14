@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.SystemClock
 import com.strike.camera.CAMERA_PROFILE
 import com.strike.camera.CAMERA_FIRST_FRAME_MS
+import com.strike.camera.CameraBackend
 import com.strike.camera.CameraChoice
 import com.strike.camera.CameraProfile
 import com.strike.camera.CameraSource
@@ -25,6 +26,7 @@ import com.strike.camera.fallbackCamera
 import com.strike.camera.loadCameraLibraries
 import com.strike.camera.roadCamera
 import com.strike.core.Config
+import com.strike.core.DiLink5
 import com.strike.core.systemProperty
 import com.strike.recording.ClipStore
 import com.strike.recording.MB
@@ -130,6 +132,7 @@ object CameraDaemon {
     private var flagged: Flag? = null
     private val marked = ArrayList<Mark>()
     private var inventory: List<CameraChoice>? = null
+    private var nativeDir: String? = null
     private var cameraProfile = CameraProfile.AUTO
     private var cameraStartup: CameraStartup? = null
     private var cameraOpenedAtMs = 0L
@@ -152,8 +155,9 @@ object CameraDaemon {
         // The camera HAL posts its callbacks to the main looper, as in Overdrive's daemon.
         Looper.prepareMainLooper()
         DaemonFonts.install()
-        loadCameraLibraries()
-        CameraTexture.load(args.firstOrNull())
+        if (cameraProfile != CameraProfile.AUTO || !DiLink5.isSupported) loadCameraLibraries()
+        nativeDir = args.firstOrNull()
+        CameraTexture.load(nativeDir)
         screen.apkPath = args.getOrNull(1)
         panelReady = panelLease.acquire()
         sentry = Sentry(args.getOrNull(1), screen)
@@ -315,7 +319,7 @@ object CameraDaemon {
             if (sentryMode != SentryMode.OFF && ParkedRails.tick()) {
                 if (!screen.isShowing) screen.sleepPanel()
             }
-            if (bus != null) {
+            if (bus != null && cameraStartup?.choice?.backend == CameraBackend.LEGACY) {
                 AvcHal.keepAlive(if (sentryMode != SentryMode.OFF) 10_000L else 60_000L)
             }
             if (nothingWatching() && wantedTarget == null && !(liveWanted && relay.hasReader) && !awakeArmingDrive()) {
@@ -477,7 +481,7 @@ object CameraDaemon {
         inventoryNow()
         val strip = cameraStartup?.choice ?: return null
         cameraRetryAtMs = SystemClock.elapsedRealtime() + RETRY_AFTER_MS
-        AvcHal.warmAndWait()
+        if (strip.backend == CameraBackend.LEGACY) AvcHal.warmAndWait()
         if (!alive) return null
         val fresh = FrameBus(strip.width, strip.height)
         val input = fresh.start()
@@ -485,7 +489,7 @@ object CameraDaemon {
             fresh.stop()
             return null
         }
-        if (!camera.open(strip, frameRateFps(), input)) {
+        if (!camera.open(strip, frameRateFps(), input, nativeDir)) {
             fresh.stop()
             return null
         }

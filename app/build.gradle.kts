@@ -59,7 +59,10 @@ android {
     packaging {
         resources.excludes += setOf("META-INF/*.kotlin_module", "kotlin/**")
         // app_process loads native libraries from extracted files.
-        jniLibs { useLegacyPackaging = true }
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols += "**/libstrike_capture.so"
+        }
     }
 }
 

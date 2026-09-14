@@ -15,3 +15,7 @@
 -keepclasseswithmembernames,includedescriptorclasses class com.strike.camera.CameraTexture {
     native <methods>;
 }
+
+-keepclasseswithmembernames,includedescriptorclasses class com.strike.camera.DiLink5Camera {
+    native <methods>;
+}

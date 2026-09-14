@@ -41,6 +41,13 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Check native camera capture
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror -pthread -Iapp/src/main/cpp tools/fastcamcheck.cpp app/src/main/cpp/fast_camera_socket.cpp -o "$RUNNER_TEMP/fastcamcheck"
+          timeout 15s "$RUNNER_TEMP/fastcamcheck"
+          c++ -std=c++17 -Wall -Wextra -Werror -pthread -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" tools/captureprocesscheck.cpp app/src/main/cpp/capture_process.cpp -o "$RUNNER_TEMP/captureprocesscheck"
+          timeout 25s "$RUNNER_TEMP/captureprocesscheck"
+
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-provider: basic

@@ -1,6 +1,7 @@
 package com.strike.camera
 
 import android.view.Surface
+import com.strike.core.DiLink5
 import com.strike.core.systemProperty
 import com.strike.daemon.DaemonLog
 import java.io.File
@@ -18,7 +19,7 @@ private val TAGS = arrayOf("pano_h", "pano_l", "byd_apa", "apa", "front")
 private val KNOWN_TAGS =
     listOf("front", "rear", "rvs", "rf", "dms", "face", "pano_h", "pano_l", "byd_apa", "apa")
 
-// AIS is detected for diagnostics; capture through this API is not implemented.
+// AIS libraries identify the newer native camera stack.
 private val AIS_LIBS =
     arrayOf("/vendor/lib64/libais_client.so", "/system/lib64/libais_client.so")
 
@@ -46,8 +47,13 @@ class CameraSource {
 
     private var camera: Any? = null
     private var previewing = false
+    private var ais = false
 
-    fun open(choice: CameraChoice, frameRateFps: Int, target: Surface): Boolean {
+    fun open(choice: CameraChoice, frameRateFps: Int, target: Surface, nativeDir: String? = null): Boolean {
+        if (choice.backend == CameraBackend.AIS) {
+            ais = DiLink5Camera.open(target, frameRateFps, nativeDir)
+            return ais
+        }
         val avm = classOrNull(AVM_CAMERA) ?: return fail("the car's camera library is not on this firmware")
         return try {
             val opened = avm.getDeclaredConstructor(Int::class.javaPrimitiveType)
@@ -70,6 +76,11 @@ class CameraSource {
 
     /** Always in this order, or the next open finds the camera still held. */
     fun close() {
+        if (ais) {
+            DiLink5Camera.close()
+            ais = false
+            return
+        }
         val held = camera ?: return
         val avm = classOrNull(AVM_CAMERA)
         if (avm != null) {
@@ -101,7 +112,18 @@ class CameraSource {
     }
 }
 
-class CameraChoice(val id: Int, val tag: String, val width: Int, val height: Int)
+enum class CameraBackend { LEGACY, AIS }
+
+class CameraChoice(
+    val id: Int,
+    val tag: String,
+    val width: Int,
+    val height: Int,
+    val backend: CameraBackend = CameraBackend.LEGACY
+)
+
+// The native adapter emits rear/left/right/front at half the sensor resolution.
+val DILINK5_STRIP = CameraChoice(0, "ais", 3840, 650, CameraBackend.AIS)
 
 class CameraInventory(val cameras: List<CameraChoice>, val reason: String)
 
@@ -118,11 +140,13 @@ fun cameraStack(): String {
 fun roadCamera(found: List<CameraChoice>, model: String? = null): CameraChoice? {
     if (found.isEmpty()) return fallbackCamera(model)
     if (found.singleOrNull() === RAW_STRIP) return RAW_STRIP
+    found.firstOrNull { it.backend == CameraBackend.AIS }?.let { return it }
     return TAGS.firstNotNullOfOrNull { tag -> found.firstOrNull { it.tag == tag } }
 }
 
-fun cameras(profile: CameraProfile = CameraProfile.AUTO): CameraInventory {
+fun cameras(profile: CameraProfile = CameraProfile.AUTO, ais: Boolean = DiLink5.isSupported): CameraInventory {
     profile.camera?.let { return CameraInventory(listOf(it), "") }
+    if (ais) return CameraInventory(listOf(DILINK5_STRIP), "")
     val bmm = classOrNull(BMM_CAMERA_INFO)
         ?: return CameraInventory(emptyList(), "this firmware has no camera library Strike can drive")
     val tags = validTags(bmm)
