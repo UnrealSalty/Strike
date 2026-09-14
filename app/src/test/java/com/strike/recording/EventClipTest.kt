@@ -9,7 +9,6 @@ import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.util.concurrent.ArrayBlockingQueue
 
 class EventClipTest {
 
@@ -73,10 +72,10 @@ class EventClipTest {
     }
 
     private fun feed(vararg atMs: Long) {
-        @Suppress("UNCHECKED_CAST")
-        val queue = field(Recorder::class.java, "samples").get(recorder) as ArrayBlockingQueue<Sample>
+        val enqueue = Recorder::class.java.getDeclaredMethod("enqueue", Sample::class.java)
+            .also { it.isAccessible = true }
         for (at in atMs) {
-            queue.put(Sample(ByteArray(1), at * 1000L, MediaCodec.BUFFER_FLAG_KEY_FRAME, false))
+            enqueue.invoke(recorder, Sample(ByteArray(1), at * 1000L, MediaCodec.BUFFER_FLAG_KEY_FRAME, false))
         }
     }
 

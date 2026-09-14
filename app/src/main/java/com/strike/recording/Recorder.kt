@@ -47,8 +47,7 @@ class Recorder(
     private val onClipFinished: () -> Unit
 ) {
 
-    private val samples = ArrayBlockingQueue<Sample>(QUEUED_SAMPLES)
-    private var dropped = 0L
+    private val samples = SampleQueue(QUEUED_SAMPLES)
 
     // Surveillance encodes the whole time it is armed; only an event opens a clip.
     private val gated = mode == RecordingMode.EVENT
@@ -160,7 +159,7 @@ class Recorder(
 
         try {
             while (running || samples.isNotEmpty()) {
-                val sample = samples.poll(TAKE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+                val sample = samples.poll(TAKE_TIMEOUT_MS)
                 if (gated && !eventActive) {
                     val done = current
                     if (done != null) {
@@ -242,24 +241,15 @@ class Recorder(
         }
     }
 
-    // Preserve splice samples: losing one can prevent the next clip from opening.
     private fun enqueue(sample: Sample) {
         if (!running) return
-        if (sample.startsClip) {
-            try {
-                while (running) {
-                    if (samples.offer(sample, TAKE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) return
-                }
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-            }
-            return
+        val admission = samples.offer(sample)
+        if (admission == SampleAdmission.ACCEPTED) return
+        if (admission == SampleAdmission.REQUEST_KEY_FRAME) encoder?.requestKeyFrame()
+        val dropped = samples.dropped
+        if (dropped == 1L || dropped % 30 == 0L) {
+            DaemonLog.w(TAG, "skipped $dropped encoded frames; the recording writer is behind")
         }
-        if (samples.offer(sample)) return
-        samples.poll()
-        samples.offer(sample)
-        dropped++
-        if (dropped % 30 == 0L) DaemonLog.w(TAG, "PROBE dropped $dropped encoded frames, the writer is behind")
     }
 
     private fun shouldRotate(sample: Sample, writer: ClipWriter, clipLengthMs: Long): Boolean =

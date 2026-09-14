@@ -6,6 +6,7 @@ import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.Surface
 import com.strike.daemon.DaemonLog
 import java.io.IOException
@@ -16,8 +17,8 @@ private const val DEQUEUE_TIMEOUT_US = 10_000L
 /** A keyframe normally lands within a second; this only bounds the wait. */
 private const val SPLICE_DEADLINE_MS = 3_000L
 
-/** Long enough that a slow first keyframe is not mistaken for a dead encoder. */
-private const val MUTE_MS = 5_000L
+private const val STARTUP_WAIT_MS = 25_000L
+private const val OUTPUT_WAIT_MS = 10_000L
 
 class Sample(val bytes: ByteArray, val timeUs: Long, val flags: Int, val startsClip: Boolean)
 
@@ -39,13 +40,31 @@ class Encoder(
     private var running = false
 
     @Volatile
-    var isDead = false
-        private set
+    private var dead = false
+
+    @Volatile
+    private var startedAtMs = 0L
+
+    @Volatile
+    private var lastOutputAtMs = 0L
+
+    val isDead: Boolean
+        get() {
+            if (dead) return true
+            if (!running) return false
+            val now = SystemClock.elapsedRealtime()
+            val lastOutput = lastOutputAtMs
+            if (encoderStalled(startedAtMs, lastOutput, now)) {
+                val quietMs = now - if (lastOutput == 0L) startedAtMs else lastOutput
+                fail("the ${width}x$height encoder produced no video for ${quietMs / 1000}s")
+            }
+            return dead
+        }
 
     @Volatile
     private var rotateAskedAtMs = 0L
 
-    private var codec: MediaCodec? = null
+    @Volatile private var codec: MediaCodec? = null
     private var inputSurface: Surface? = null
     private var drain: Thread? = null
 
@@ -79,6 +98,9 @@ class Encoder(
         val (fresh, surface) = opened
         codec = fresh
         inputSurface = surface
+        dead = false
+        lastOutputAtMs = 0L
+        startedAtMs = SystemClock.elapsedRealtime()
         running = true
         DaemonLog.d(TAG, "${width}x$height on ${fresh.codecInfo.name}, ${instances(fresh)} at once")
         drain = Thread({ pump(fresh) }, "encoder").also { it.start() }
@@ -175,12 +197,22 @@ class Encoder(
     fun splitAtNextKeyFrame() {
         if (rotateAskedAtMs != 0L) return
         rotateAskedAtMs = System.currentTimeMillis()
-        try {
+        requestKeyFrame()
+    }
+
+    fun requestKeyFrame(): Boolean {
+        val active = codec ?: return false
+        return try {
             val request = Bundle()
             request.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
-            codec?.setParameters(request)
+            active.setParameters(request)
+            true
         } catch (e: IllegalStateException) {
-            DaemonLog.w(TAG, "cannot ask for a keyframe")
+            DaemonLog.w(TAG, "cannot ask for a keyframe: ${codecFailure(e)}")
+            false
+        } catch (e: IllegalArgumentException) {
+            DaemonLog.w(TAG, "the encoder rejected a keyframe request: ${e.message}")
+            false
         }
     }
 
@@ -207,53 +239,47 @@ class Encoder(
 
     private fun pump(codec: MediaCodec) {
         val info = MediaCodec.BufferInfo()
-        val startedAtMs = System.currentTimeMillis()
-        var outputs = 0L
-        var reported = false
         try {
             while (running) {
-                val index = try {
-                    codec.dequeueOutputBuffer(info, DEQUEUE_TIMEOUT_US)
-                } catch (e: IllegalStateException) {
-                    DaemonLog.e(TAG, "encoder stopped answering")
-                    return
-                }
+                val index = codec.dequeueOutputBuffer(info, DEQUEUE_TIMEOUT_US)
                 if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                     format = codec.outputFormat
                     continue
                 }
-                if (index < 0) {
-                    if (!reported && outputs == 0L &&
-                        System.currentTimeMillis() - startedAtMs > MUTE_MS
-                    ) {
-                        reported = true
-                        DaemonLog.e(
-                            TAG,
-                            "the ${width}x$height encoder has returned nothing in ${MUTE_MS / 1000}s"
-                        )
-                    }
-                    continue
-                }
-                outputs++
+                if (index < 0) continue
 
-                // SPS and PPS reach the file through the format handed to addTrack.
-                val skip = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 || info.size == 0
-                if (!skip) {
-                    val buffer = codec.getOutputBuffer(index)
-                    if (buffer != null) {
+                val sample = try {
+                    // SPS and PPS reach the file through the format handed to addTrack.
+                    val skip = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0 || info.size == 0
+                    val buffer = if (skip) null else codec.getOutputBuffer(index)
+                    if (buffer == null) null else {
                         val bytes = ByteArray(info.size)
                         buffer.position(info.offset)
                         buffer.get(bytes)
                         val keyFrame = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
-                        onSample(Sample(bytes, info.presentationTimeUs, info.flags, splits(keyFrame)))
+                        Sample(bytes, info.presentationTimeUs, info.flags, splits(keyFrame))
                     }
+                } finally {
+                    codec.releaseOutputBuffer(index, false)
                 }
-                codec.releaseOutputBuffer(index, false)
+                if (sample != null) {
+                    lastOutputAtMs = SystemClock.elapsedRealtime()
+                    onSample(sample)
+                }
                 if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return
             }
+        } catch (e: IllegalStateException) {
+            fail("encoder stopped answering: ${codecFailure(e)}")
         } finally {
-            if (running) isDead = true
+            if (running) dead = true
         }
+    }
+
+    @Synchronized
+    private fun fail(reason: String) {
+        if (!running || dead) return
+        dead = true
+        DaemonLog.e(TAG, reason)
     }
 
     private fun splits(keyFrame: Boolean): Boolean {
@@ -267,12 +293,12 @@ class Encoder(
         try {
             codec?.stop()
         } catch (e: IllegalStateException) {
-            DaemonLog.w(TAG, "encoder stop failed")
+            DaemonLog.w(TAG, "encoder stop failed: ${codecFailure(e)}")
         }
         try {
             codec?.release()
         } catch (e: IllegalStateException) {
-            DaemonLog.w(TAG, "encoder release failed: ${e.message}")
+            DaemonLog.w(TAG, "encoder release failed: ${codecFailure(e)}")
         } finally {
             codec = null
             inputSurface?.release()
@@ -327,3 +353,13 @@ internal fun splitsNow(keyFrame: Boolean, askedAtMs: Long, nowMs: Long): Boolean
     if (askedAtMs == 0L) return false
     return keyFrame || nowMs - askedAtMs >= SPLICE_DEADLINE_MS
 }
+
+internal fun encoderStalled(startedAtMs: Long, lastOutputAtMs: Long, nowMs: Long): Boolean =
+    if (lastOutputAtMs == 0L) nowMs - startedAtMs >= STARTUP_WAIT_MS
+    else nowMs - lastOutputAtMs >= OUTPUT_WAIT_MS
+
+private fun codecFailure(error: IllegalStateException): String =
+    if (error is MediaCodec.CodecException) {
+        "${error.diagnosticInfo}, code=${error.errorCode}, " +
+            "recoverable=${error.isRecoverable}, transient=${error.isTransient}: ${error.message}"
+    } else error.message ?: error.javaClass.simpleName
