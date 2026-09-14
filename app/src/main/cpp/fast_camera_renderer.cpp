@@ -42,8 +42,8 @@ static GLuint shader(GLenum type, const char *source) {
     return 0;
 }
 
-static bool rendererError(const char *stage) {
-    cameraError("renderer %s failed: EGL 0x%x GL 0x%x", stage, eglGetError(), glGetError());
+static bool rendererError(const char *stage, GLenum glError = GL_NO_ERROR) {
+    cameraError("renderer %s failed: EGL 0x%x GL 0x%x", stage, eglGetError(), glError);
     return false;
 }
 
@@ -99,7 +99,8 @@ bool CameraRenderer::open(ANativeWindow *window) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, VIEW_WIDTH, VIEW_HEIGHT, 0,
                      GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     }
-    if (position < 0 || coordinates < 0 || glGetError() != GL_NO_ERROR) return rendererError("texture setup");
+    const GLenum error = glGetError();
+    if (position < 0 || coordinates < 0 || error != GL_NO_ERROR) return rendererError("texture setup", error);
     return true;
 }
 
@@ -107,7 +108,8 @@ bool CameraRenderer::upload(uint32_t camera, const uint8_t *snapshot) {
     glBindTexture(GL_TEXTURE_2D, textures[camera]);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, VIEW_WIDTH, VIEW_HEIGHT,
                     GL_RGBA, GL_UNSIGNED_BYTE, snapshot);
-    if (glGetError() != GL_NO_ERROR) return rendererError("texture upload");
+    const GLenum error = glGetError();
+    if (error != GL_NO_ERROR) return rendererError("texture upload", error);
     return true;
 }
 
@@ -127,7 +129,8 @@ bool CameraRenderer::draw() {
     }
     glDisableVertexAttribArray(position);
     glDisableVertexAttribArray(coordinates);
-    if (glGetError() != GL_NO_ERROR) return rendererError("drawing");
+    const GLenum error = glGetError();
+    if (error != GL_NO_ERROR) return rendererError("drawing", error);
     if (eglSwapBuffers(display, surface) != EGL_TRUE) return rendererError("surface submission");
     return true;
 }

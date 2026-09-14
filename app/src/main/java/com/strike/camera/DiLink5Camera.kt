@@ -2,12 +2,10 @@ package com.strike.camera
 
 import android.os.Process
 import android.view.Surface
-import com.strike.daemon.DaemonContext
 import com.strike.daemon.DaemonLog
 import java.io.File
 
 internal object DiLink5Camera {
-    private val avm = DiLink5Avm()
     private var child = 0
 
     @Synchronized
@@ -16,7 +14,6 @@ internal object DiLink5Camera {
         if (!CameraTexture.isLoaded || nativeDir.isNullOrEmpty()) return failed("The camera capture library is unavailable")
         val executable = File(nativeDir, "libstrike_capture.so")
         if (!executable.isFile || !executable.canExecute()) return failed("The DiLink 5 capture program is unavailable")
-        DaemonContext.get()?.let { avm.open(it) }
         val socket = "strike_fast_cam_${Process.myPid()}"
         try {
             child = nativeLaunch(executable.path, socket)
@@ -35,7 +32,6 @@ internal object DiLink5Camera {
             nativeTerminate(child)
             child = 0
         }
-        avm.close()
     }
 
     private fun failed(reason: String): Boolean {
