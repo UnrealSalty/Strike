@@ -15,7 +15,7 @@ the same dashboard from your phone.
 
 [**Download the APK**](https://github.com/UnrealSalty/Strike/releases/latest) &nbsp;·&nbsp; [strikebyd.com](https://strikebyd.com) &nbsp;·&nbsp; [Get started](#get-started) &nbsp;·&nbsp; [Report a bug](https://github.com/UnrealSalty/Strike/issues)
 
-[![Buy Me a Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://buymeacoffee.com/unrealsalty)
+<a href="https://buymeacoffee.com/unrealsalty"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="140"></a>
 
 <img src="art/screenshots/dashboard.webp" alt="Strike dashboard with vehicle status, storage, shortcuts and the latest surveillance clip" width="860">
 
