@@ -105,6 +105,37 @@ class OnlineTest {
         assertFalse(fixture.parked)
     }
 
+    @Test fun disablingWithoutInternetWaitsForPowerReleaseBeforeReportingOff() {
+        val releasing = CountDownLatch(1)
+        val proceed = CountDownLatch(1)
+        val fixture = Fixture(powerRead = { cpu, parked, _ ->
+            if (!cpu && !parked) {
+                releasing.countDown()
+                check(proceed.await(5, TimeUnit.SECONDS))
+            }
+            true
+        })
+        try {
+            fixture.internet = false
+            fixture.online.acc(false)
+            fixture.online.enable(true)
+            fixture.await("Waiting for internet")
+            fixture.online.enable(false)
+            assertTrue(releasing.await(5, TimeUnit.SECONDS))
+            assertEquals("stopping", fixture.online.status().getString("state"))
+            assertTrue(fixture.awake)
+            assertTrue(fixture.parked)
+            assertEquals(0, fixture.launched.size)
+            proceed.countDown()
+            fixture.await("Off")
+            assertFalse(fixture.awake)
+            assertFalse(fixture.parked)
+        } finally {
+            proceed.countDown()
+            fixture.online.close()
+        }
+    }
+
     @Test fun disablingOrIgnitionOnCancelsParkedPowerDuringHardwareSetup() {
         for (disable in listOf(true, false)) {
             val entered = CountDownLatch(1)

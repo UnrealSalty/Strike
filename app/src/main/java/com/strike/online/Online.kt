@@ -96,7 +96,8 @@ class Online(
             change("starting", "Starting")
             start()
         } else {
-            change(if (child == null) "off" else "stopping", if (child == null) "Off" else "Stopping")
+            val stopping = worker != null || child != null
+            change(if (stopping) "stopping" else "off", if (stopping) "Stopping" else "Off")
             start()
         }
         wake()
