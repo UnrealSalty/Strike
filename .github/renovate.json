@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "enabledManagers": ["gradle", "gradle-wrapper", "github-actions"],
+  "timezone": "Europe/Paris",
+  "schedule": ["* * * * 1"],
+  "automerge": false,
+  "prConcurrentLimit": 3,
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "GitHub Actions"
+    }
+  ]
+}
