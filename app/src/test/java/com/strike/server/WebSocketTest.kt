@@ -3,10 +3,17 @@ package com.strike.server
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.IOException
+import java.io.OutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class WebSocketTest {
 
@@ -100,6 +107,38 @@ class WebSocketTest {
             socket.awaitClose()
             assertEquals(true, socket.isClosed)
             assertEquals(0, output.size())
+        }
+    }
+
+    @Test(timeout = 5_000)
+    fun closingDoesNotWaitForABlockedWriterAndDisconnectsOnlyOnce() {
+        val writing = CountDownLatch(1)
+        val released = CountDownLatch(1)
+        val disconnects = AtomicInteger()
+        val output = object : OutputStream() {
+            override fun write(value: Int) {
+                writing.countDown()
+                if (!released.await(3, TimeUnit.SECONDS)) throw AssertionError("write remained blocked")
+                throw IOException("closed")
+            }
+        }
+        val socket = WebSocket(ByteArrayInputStream(ByteArray(0)), output) {
+            disconnects.incrementAndGet()
+            released.countDown()
+        }
+        val writer = Thread { socket.send(byteArrayOf(1), 0, 1) }
+        writer.start()
+        try {
+            assertTrue(writing.await(2, TimeUnit.SECONDS))
+            socket.close()
+            writer.join(2_000)
+            assertFalse(writer.isAlive)
+            socket.close()
+            assertTrue(socket.isClosed)
+            assertEquals(1, disconnects.get())
+        } finally {
+            released.countDown()
+            writer.join(2_000)
         }
     }
 }

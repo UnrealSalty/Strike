@@ -5,6 +5,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.security.MessageDigest
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** RFC 6455 fixes this string; the client checks the digest against it. */
 private const val ACCEPT_SALT = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -19,31 +20,34 @@ private const val LENGTH_16_BIT = 126
 private const val LENGTH_64_BIT = 127
 private const val SHORT_MAX = 125
 
-class WebSocket(private val input: InputStream, private val output: OutputStream) {
+class WebSocket(
+    private val input: InputStream,
+    private val output: OutputStream,
+    private val disconnect: () -> Unit = { try { input.close() } finally { output.close() } }
+) {
 
-    @Volatile
-    private var closed = false
+    private val closed = AtomicBoolean(false)
 
     val isClosed: Boolean
-        get() = closed
+        get() = closed.get()
 
     /** One frame per call, since a partial write leaves the stream unreadable. */
     @Synchronized
     fun send(payload: ByteArray, offset: Int, length: Int) {
-        if (closed) return
+        if (isClosed) return
         try {
             output.write(header(OPCODE_BINARY, length))
             output.write(payload, offset, length)
             output.flush()
         } catch (e: IOException) {
-            closed = true
+            close()
         }
     }
 
     // Read control frames to detect when a viewer disconnects.
     fun awaitClose() {
         try {
-            while (!closed) {
+            while (!isClosed) {
                 val first = input.read()
                 if (first < 0) break
                 val second = input.read()
@@ -67,11 +71,21 @@ class WebSocket(private val input: InputStream, private val output: OutputStream
         } catch (e: IOException) {
             // A dropped viewer is the normal way this ends.
         }
-        closed = true
+        close()
+    }
+
+    fun close() {
+        if (!closed.compareAndSet(false, true)) return
+        try {
+            disconnect()
+        } catch (e: IOException) {
+            // The viewer may already have disconnected.
+        }
     }
 
     private fun pong(body: ByteArray) {
         synchronized(this) {
+            if (isClosed) return
             output.write(header(OPCODE_PONG, body.size))
             output.write(body)
             output.flush()

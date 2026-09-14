@@ -188,7 +188,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
         output.flush()
         Thread({
             try {
-                router.stream(WebSocket(client.getInputStream(), output), view, quality)
+                router.stream(WebSocket(client.getInputStream(), output) { client.close() }, view, quality)
             } catch (e: IOException) {
                 Logs.d(TAG, "the live viewer's connection ended: ${e.message}")
             } finally {

@@ -62,73 +62,89 @@
             canvas.width = size.width;
             canvas.height = size.height;
             var codec = Strike.fmp4.codecOf(sps);
+            var configuration = { codec: codec, description: record(sps, pps), optimizeForLatency: true };
             var drew = false;
             var closed = false;
             var sawKey = false;
-            var timeUs = 0;
-            var FRAME_US = 1000000 / 12;
-            var decoder = new VideoDecoder({
-                output: function (picture) {
-                    if (!closed) {
-                        try {
-                            ctx.drawImage(picture, 0, 0, canvas.width, canvas.height);
-                        } catch (error) {
-                        }
-                        if (!drew) {
-                            drew = true;
-                            onDraw();
-                        }
-                    }
-                    picture.close();
-                },
-                error: function () {
-                    if (!closed) {
-                        onFail('This browser cannot play the camera', 'Its video decoder failed.');
-                    }
+            var decoder = null;
+            var generation = 0;
+            var MAX_QUEUED_FRAMES = 6;
+
+            function release() {
+                var held = decoder;
+                decoder = null;
+                generation++;
+                if (held && held.state !== 'closed') {
+                    held.close();
                 }
-            });
-            try {
-                decoder.configure({ codec: codec, description: record(sps, pps), optimizeForLatency: true });
-            } catch (error) {
-                onFail('This browser cannot play the camera', 'It has no support for ' + codec + '.');
-                return null;
             }
+
+            function fail(detail) {
+                if (closed) return;
+                closed = true;
+                release();
+                onFail('This browser cannot play the camera', detail);
+            }
+
+            function configure() {
+                var current = ++generation;
+                try {
+                    decoder = new VideoDecoder({
+                        output: function (picture) {
+                            try {
+                                if (closed || current !== generation) return;
+                                ctx.drawImage(picture, 0, 0, canvas.width, canvas.height);
+                                if (!drew) {
+                                    drew = true;
+                                    onDraw();
+                                }
+                            } catch (error) {
+                                fail('Its video decoder failed.');
+                            } finally {
+                                picture.close();
+                            }
+                        },
+                        error: function () {
+                            if (!closed && current === generation) {
+                                fail('Its video decoder failed.');
+                            }
+                        }
+                    });
+                    decoder.configure(configuration);
+                    return true;
+                } catch (error) {
+                    fail('It has no support for ' + codec + '.');
+                    return false;
+                }
+            }
+
+            if (!configure()) return null;
             return {
-                push: function (nals, keyFrame) {
-                    if (closed || decoder.state !== 'configured') {
-                        return;
+                push: function (nals, keyFrame, timeUs) {
+                    if (closed || typeof timeUs !== 'number' || !isFinite(timeUs) || timeUs < 0) return;
+                    if (decoder && decoder.decodeQueueSize >= MAX_QUEUED_FRAMES) {
+                        release();
+                        sawKey = false;
                     }
-                    if (!sawKey && !keyFrame) {
-                        return;
-                    }
-                    sawKey = true;
-                    var chunk;
+                    if (!sawKey && !keyFrame) return;
+                    if (!decoder && !configure()) return;
+                    if (decoder.state !== 'configured') return;
                     try {
-                        chunk = new EncodedVideoChunk({
+                        var chunk = new EncodedVideoChunk({
                             type: keyFrame ? 'key' : 'delta',
                             timestamp: timeUs,
                             data: lengthPrefixed(nals)
                         });
-                    } catch (error) {
-                        return;
-                    }
-                    timeUs += FRAME_US;
-                    try {
                         decoder.decode(chunk);
+                        sawKey = true;
                     } catch (error) {
-                        if (!closed) {
-                            onFail('This browser cannot play the camera', 'Its video decoder failed.');
-                        }
+                        fail('Its video decoder failed.');
                     }
                 },
                 close: function () {
+                    if (closed) return;
                     closed = true;
-                    try {
-                        if (decoder.state !== 'closed') {
-                            decoder.close();
-                        }
-                    } catch (error) {
-                    }
+                    release();
                 }
             };
         }

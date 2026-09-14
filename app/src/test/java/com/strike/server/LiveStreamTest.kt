@@ -10,9 +10,11 @@ import org.junit.Test
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.LinkedBlockingQueue
@@ -77,6 +79,81 @@ class LiveStreamTest {
         }
     }
 
+    @Test fun aBlockedViewerCannotDelayAHealthyViewerAndOverflowClosesItsSocket() {
+        Fixture().use { fixture ->
+            val stalled = BlockedOutput()
+            val slow = fixture.join(LiveQuality.HIGH, stalled)
+            fixture.command("live.start", 1_500_000)
+            val relay = fixture.relays.poll(3, TimeUnit.SECONDS)!!
+            val healthy = fixture.join(LiveQuality.HIGH)
+            fixture.command("live.start", 1_500_000)
+            try {
+                fixture.frame(relay, healthy)
+                assertTrue(stalled.entered.await(2, TimeUnit.SECONDS))
+                repeat(17) { fixture.frame(relay, healthy) }
+                slow.ended.get(3, TimeUnit.SECONDS)
+                assertTrue(stalled.closed.await(2, TimeUnit.SECONDS))
+                assertEquals(-1, slow.client.getInputStream().read())
+                assertTrue(fixture.live.isWatched)
+                fixture.frame(relay, healthy)
+                assertTrue(fixture.commands.isEmpty())
+            } finally {
+                slow.close()
+                healthy.close()
+            }
+            healthy.ended.get(3, TimeUnit.SECONDS)
+            fixture.command("live.stop")
+            assertFalse(fixture.live.isWatched)
+        }
+    }
+
+    @Test fun disconnectingAViewerUnblocksItsWriterWithoutWaitingForMorePackets() {
+        Fixture().use { fixture ->
+            val stalled = BlockedOutput()
+            val viewer = fixture.join(LiveQuality.HIGH, stalled)
+            fixture.command("live.start", 1_500_000)
+            val relay = fixture.relays.poll(3, TimeUnit.SECONDS)!!
+            try {
+                fixture.frame(relay)
+                assertTrue(stalled.entered.await(2, TimeUnit.SECONDS))
+                viewer.close()
+                viewer.ended.get(3, TimeUnit.SECONDS)
+                assertTrue(stalled.closed.await(2, TimeUnit.SECONDS))
+                fixture.command("live.stop")
+                assertFalse(fixture.live.isWatched)
+                assertEquals(-1, relay.getInputStream().read())
+            } finally {
+                viewer.close()
+            }
+        }
+    }
+
+    @Test fun cancellingAnIdleViewerClosesItsConnectionAndStopsTheLastStream() {
+        Fixture().use { fixture ->
+            val viewer = fixture.join(LiveQuality.HIGH)
+            fixture.command("live.start", 1_500_000)
+            val relay = fixture.relays.poll(3, TimeUnit.SECONDS)!!
+            assertTrue(viewer.ended.cancel(true))
+            fixture.command("live.stop")
+            assertEquals(-1, viewer.client.getInputStream().read())
+            assertEquals(-1, relay.getInputStream().read())
+            assertFalse(fixture.live.isWatched)
+        }
+    }
+
+    private class BlockedOutput : OutputStream() {
+        val entered = CountDownLatch(1)
+        val closed = CountDownLatch(1)
+
+        override fun write(value: Int) {
+            entered.countDown()
+            if (!closed.await(5, TimeUnit.SECONDS)) throw AssertionError("blocked live write was not closed")
+            throw IOException("closed")
+        }
+
+        override fun close() { closed.countDown() }
+    }
+
     private class Viewer(val client: Socket, val ended: Future<*>) {
         fun close() = client.close()
     }
@@ -113,14 +190,20 @@ class LiveStreamTest {
             }
         }
 
-        fun join(quality: LiveQuality): Viewer {
+        fun join(quality: LiveQuality, blocked: BlockedOutput? = null): Viewer {
             ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { port ->
                 val client = Socket(InetAddress.getLoopbackAddress(), port.localPort)
                 client.soTimeout = 3000
                 clients.add(client)
                 val accepted = port.accept()
                 val ended = workers.submit {
-                    accepted.use { live.serve(WebSocket(it.getInputStream(), it.getOutputStream()), "all", quality) }
+                    accepted.use {
+                        val output = blocked ?: it.getOutputStream()
+                        val socket = WebSocket(it.getInputStream(), output) {
+                            try { it.close() } finally { blocked?.close() }
+                        }
+                        live.serve(socket, "all", quality)
+                    }
                 }
                 return Viewer(client, ended)
             }

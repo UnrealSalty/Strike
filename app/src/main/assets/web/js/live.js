@@ -7,9 +7,6 @@
     var FLAG_KEYFRAME = 1;
     var FLAG_CONFIG = 2;
     var HEADER_BYTES = 9;
-    var TIMESCALE = 90000;
-
-    var FRAME_TICKS = TIMESCALE / 12;
 
     // A dropped poll is news about the link, not about the car. Hold the last
     // reading through a dip, then stop claiming it is current.
@@ -30,6 +27,8 @@
     var CONE_SPAN = 142, TURN_MS = 200;
 
     var socket = null;
+    var retryTimer = 0;
+    var leaving = false;
     var media = null;
     var sink = null;
     var sps = null;
@@ -311,51 +310,6 @@
         live();
     }
 
-    function openMse(size) {
-        var codec = Strike.fmp4.codecOf(sps);
-        var mime = 'video/mp4; codecs="' + codec + '"';
-        if (!window.MediaSource || !MediaSource.isTypeSupported(mime)) {
-            reset('This browser cannot play the camera', 'It has no support for ' + codec + '.');
-            return null;
-        }
-        var buffer = media.addSourceBuffer(mime);
-        buffer.mode = 'segments';
-        var pending = [];
-        var sequence = 1;
-        var decodeTime = 0;
-        function drain() {
-            if (buffer.updating || !pending.length) {
-                return;
-            }
-            try {
-                buffer.appendBuffer(pending.shift());
-            } catch (error) {
-                reset('The browser refused the video stream', 'Reload the page to try again.');
-            }
-        }
-        function feed(bytes) {
-            pending.push(bytes);
-            drain();
-        }
-        buffer.addEventListener('updateend', drain);
-        feed(Strike.fmp4.init(size.width, size.height, sps, pps));
-        var picture = document.getElementById('video');
-        var started = picture.play();
-        if (started && started.catch) {
-            started.catch(function () {});
-        }
-        return {
-            push: function (nals, keyFrame) {
-                feed(Strike.fmp4.segment(sequence, decodeTime, FRAME_TICKS, nals, keyFrame));
-                sequence++;
-                decodeTime += FRAME_TICKS;
-            },
-            close: function () {
-                buffer.removeEventListener('updateend', drain);
-            }
-        };
-    }
-
     function ensureSink() {
         if (sink || !sps || !pps) {
             return;
@@ -368,7 +322,7 @@
         if (useWebCodecs) {
             sink = Strike.webcodecs.open(document.getElementById('canvas'), sps, pps, size, drew, reset);
         } else if (media && media.readyState === 'open') {
-            sink = openMse(size);
+            sink = Strike.liveMse.open(media, document.getElementById('video'), size, sps, pps, reset);
         }
         if (sink) {
             shotW = size.width;
@@ -391,7 +345,7 @@
         ensureSink();
     }
 
-    function frame(bytes, keyFrame) {
+    function frame(bytes, keyFrame, timeUs) {
         if (!sink) {
             config(bytes);
             if (!sink) {
@@ -409,7 +363,7 @@
         if (!nals.length) {
             return;
         }
-        sink.push(nals, keyFrame);
+        sink.push(nals, keyFrame, timeUs);
     }
 
     function packet(data) {
@@ -423,7 +377,9 @@
             config(body);
             return;
         }
-        frame(body, (flags & FLAG_KEYFRAME) !== 0);
+        var header = new DataView(data);
+        var timeUs = header.getUint32(1) * 4294967296 + header.getUint32(5);
+        frame(body, (flags & FLAG_KEYFRAME) !== 0, timeUs);
     }
 
     function fitShot() {
@@ -439,6 +395,8 @@
 
     function reset(headline, detail) {
         ticket++;
+        clearTimeout(retryTimer);
+        retryTimer = 0;
         document.getElementById('stage').className = 'stage';
         document.getElementById('idle').hidden = false;
         if (socket) {
@@ -463,6 +421,16 @@
         video.load();
         if (mediaUrl) { URL.revokeObjectURL(mediaUrl); mediaUrl = null; }
         idle(headline, detail);
+    }
+
+    function reconnect() {
+        reset('Reconnecting camera', '');
+        var mine = ticket;
+        if (leaving) return;
+        retryTimer = setTimeout(function () {
+            retryTimer = 0;
+            if (mine === ticket && !leaving) connect();
+        }, 2000);
     }
 
     function connect() {
@@ -514,13 +482,13 @@
             if (mine !== ticket) {
                 return;
             }
-            reset('Camera stopped', 'The camera daemon closed the stream.');
+            reconnect();
         };
         socket.onerror = function () {
             if (mine !== ticket) {
                 return;
             }
-            reset('Cannot reach the camera', 'The camera daemon is not streaming.');
+            reconnect();
         };
     }
 
@@ -537,7 +505,9 @@
     }
 
     function load() {
+        var mine = ticket;
         Strike.core.get(CAMERAS, function (payload) {
+            if (mine !== ticket || leaving) return;
             cameras = payload.cameras || [];
             paintSpots();
             look(first(offered()));
@@ -548,6 +518,7 @@
             idle('Starting the camera', 'The daemon is opening the camera.');
             connect();
         }, function () {
+            if (mine !== ticket || leaving) return;
             cameras = [];
             paintSpots();
             idle('Cannot reach Strike', 'The app is not answering on this device.');
@@ -560,5 +531,15 @@
     paintGlow(angle);
     load();
     window.addEventListener('resize', fitShot);
+    window.addEventListener('pagehide', function () {
+        leaving = true;
+        reset('Camera stopped', '');
+    });
+    window.addEventListener('pageshow', function (event) {
+        if (!event.persisted) return;
+        leaving = false;
+        reset('Starting the camera', '');
+        load();
+    });
     Strike.shell.start(render, forget, function (status) { return !!status.vehicle; });
 }());
