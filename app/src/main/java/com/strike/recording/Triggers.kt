@@ -1,12 +1,14 @@
 package com.strike.recording
 
 import android.content.Context
+import com.strike.core.DiLink5
 import com.strike.core.Config
 import com.strike.daemon.DaemonClient
 import com.strike.daemon.Shell
 import com.strike.surveillance.EventStorage
 import com.strike.surveillance.LOCK_FALLBACK_MS
 import com.strike.vehicle.VehicleSnapshot
+import com.strike.vehicle.DILINK5_POWER_DUMP
 import com.strike.vehicle.VehicleTelemetry
 
 private const val EVERY_MS = 5_000L
@@ -20,7 +22,8 @@ class Triggers(
     private val onVehicle: (VehicleSnapshot?) -> Unit = {}
 ) {
 
-    private val vehicle = VehicleTelemetry(context)
+    private val vehicle = VehicleTelemetry(context,
+        readPowerDump = if (DiLink5.isSupported) ({ shell.read(DILINK5_POWER_DUMP) }) else null)
     private val daemon = DaemonClient()
     private val events = EventStorage(context, shell)
     private val clips = Storage(context, shell)

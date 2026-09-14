@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.strike.StrikeApp
 import com.strike.core.Config
+import com.strike.core.DiLink5
 import com.strike.core.Logs
 import com.strike.core.PinSession
 import com.strike.surveillance.SurveillanceSettings
@@ -17,9 +18,10 @@ private const val TAG = "AccOff"
 class AccOff : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        (context.applicationContext as StrikeApp).dashboard.acc(false)
+        if (!DiLink5.isSupported) (context.applicationContext as StrikeApp).dashboard.acc(false)
         PinSession.lock()
         WebUi.cover()
+        if (DiLink5.isSupported) return
         val watching = Config.getBool(SurveillanceSettings.ENABLED, false)
         val arm = Config.getString(
             SurveillanceSettings.ARM, SurveillanceSettings.fallback(SurveillanceSettings.ARM)

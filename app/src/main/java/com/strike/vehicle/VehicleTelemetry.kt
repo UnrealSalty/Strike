@@ -2,6 +2,7 @@ package com.strike.vehicle
 
 import android.content.Context
 import android.os.Looper
+import com.strike.core.DiLink5
 import com.strike.core.Logs
 
 private const val TAG = "Vehicle"
@@ -20,9 +21,11 @@ private val GEARS = arrayOf("P", "R", "N", "D", "M", "S")
 // Read-only BYD vehicle signals.
 class VehicleTelemetry(
     private val context: Context,
+    private val readPowerDump: (() -> String?)? = null,
     private val warn: (String) -> Unit = { Logs.w(TAG, it) }
 ) {
 
+    private val powerQuery by lazy { DiLink5Power(readPowerDump ?: { readDiLink5PowerDump() }) }
     private val lock = Any()
     private val devices = HashMap<String, Any>()
     private val triedAtMs = HashMap<String, Long>()
@@ -64,12 +67,14 @@ class VehicleTelemetry(
             fuelPercent = if (burnsFuel) fuel else null,
             fuelRangeKm = if (burnsFuel) fuelRange else null,
             gear = gear,
-            accOn = accOnOf(read(bodywork, "getPowerLevel")?.toInt()),
+            accOn = if (DiLink5.isSupported) null else accOnOf(read(bodywork, "getPowerLevel")?.toInt()),
             locked = lockOf(read(ota, "getLFDoorLockState")?.toInt())
         )
     }
 
-    fun accOn(): Boolean? = accOnOf(read(device(BODYWORK), "getPowerLevel")?.toInt())
+    fun accOn(): Boolean? = ignitionOf(DiLink5.isSupported, {
+        accOnOf(read(device(BODYWORK), "getPowerLevel")?.toInt())
+    }, { currentPowerMode() })
 
     fun parkingSnapshot(): VehicleSnapshot = VehicleSnapshot(
         soc = null,
@@ -78,9 +83,14 @@ class VehicleTelemetry(
         fuelPercent = null,
         fuelRangeKm = null,
         gear = gear(device(GEARBOX)),
-        accOn = polledAccOnOf(read(device(BODYWORK), "getPowerLevel")?.toInt()),
+        accOn = ignitionOf(DiLink5.isSupported, {
+            polledAccOnOf(read(device(BODYWORK), "getPowerLevel")?.toInt())
+        }, { currentPowerMode() }),
         locked = lockOf(read(device(OTA), "getLFDoorLockState")?.toInt())
     )
+
+    private fun currentPowerMode(): Boolean? =
+        diLink5AccOnOf(powerQuery.read())
 
     private fun gear(gearbox: Any?): String? =
         gears.read(read(gearbox, "getGearboxAutoModeType")?.toInt())
@@ -168,3 +178,9 @@ internal fun lockOf(state: Int?): Boolean? = when (state) {
     2 -> true
     else -> null
 }
+
+internal inline fun ignitionOf(
+    diLink5: Boolean,
+    legacy: () -> Boolean?,
+    currentPowerMode: () -> Boolean?
+): Boolean? = if (diLink5) currentPowerMode() else legacy()
