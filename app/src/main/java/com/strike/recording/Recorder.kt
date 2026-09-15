@@ -154,8 +154,9 @@ class Recorder(
         if (options.audio) awaitAudio()
         if (!running) return
         var current: ClipWriter? = null
-        if (!gated) current = openClip(format) ?: return
+        if (!gated) current = openClip(format, options.audio) ?: return
         val clipLengthMs = options.clipLengthMs
+        var audioFromUs = Long.MIN_VALUE
 
         try {
             while (running || samples.isNotEmpty()) {
@@ -172,19 +173,25 @@ class Recorder(
                 }
                 var open = current
                 if (open == null) {
-                    open = openClip(format, preRoll = true) ?: break
+                    open = openClip(format, options.audio, preRoll = true) ?: break
                     current = open
                 }
-                drainAudio(open)
+                val audioReady = options.audio && !open.hasAudio && audio?.config != null
+                if (!audioReady) drainAudio(open, audioFromUs)
                 if (sample == null) {
                     if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
                     continue
                 }
-                if (running && shouldRotate(sample, open, clipLengthMs)) {
+                if (running && shouldRotate(sample, open, clipLengthMs, audioReady)) {
                     val done = open
-                    open = openClip(format) ?: break
+                    open = openClip(format, options.audio) ?: break
                     current = open
                     finish(done)
+                    if (audioReady && open.hasAudio) {
+                        audioFromUs = sample.timeUs
+                        drainAudio(open, audioFromUs)
+                        DaemonLog.d(TAG, "cabin audio joined recording")
+                    }
                 }
                 open.write(sample)
                 if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
@@ -208,9 +215,9 @@ class Recorder(
     }
 
     // Tracks cannot be added after muxer start; audio changes apply at a clip boundary.
-    private fun openClip(format: MediaFormat, preRoll: Boolean = false): ClipWriter? {
+    private fun openClip(format: MediaFormat, audioEnabled: Boolean, preRoll: Boolean = false): ClipWriter? {
         val writer = ClipWriter(dir)
-        if (!writer.open(mode, format, audio?.config)) {
+        if (!writer.open(mode, format, if (audioEnabled) audio?.config else null)) {
             running = false
             return null
         }
@@ -226,10 +233,10 @@ class Recorder(
         while (running && queue.config == null && System.currentTimeMillis() < deadline) {
             Thread.sleep(50)
         }
-        if (queue.config == null) DaemonLog.w(TAG, "the microphone is not sending, this clip has no sound")
+        if (queue.config == null) DaemonLog.w(TAG, "microphone not ready; recording video while waiting for sound")
     }
 
-    private fun drainAudio(writer: ClipWriter) {
+    private fun drainAudio(writer: ClipWriter, fromUs: Long) {
         val queue = audio ?: return
         if (!writer.hasAudio) {
             queue.clear()
@@ -237,7 +244,7 @@ class Recorder(
         }
         while (true) {
             val sample = queue.take() ?: return
-            writer.writeAudio(sample)
+            if (sample.timeUs >= fromUs) writer.writeAudio(sample)
         }
     }
 
@@ -252,12 +259,13 @@ class Recorder(
         }
     }
 
-    private fun shouldRotate(sample: Sample, writer: ClipWriter, clipLengthMs: Long): Boolean =
+    private fun shouldRotate(sample: Sample, writer: ClipWriter, clipLengthMs: Long, audioReady: Boolean): Boolean =
         clipShouldRotate(
             sample.startsClip,
             elapsed(writer),
             clipLengthMs,
-            sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
+            sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0,
+            audioReady
         )
 
     private fun elapsed(writer: ClipWriter): Long = System.currentTimeMillis() - writer.startedAtMs
@@ -323,8 +331,10 @@ internal fun clipShouldRotate(
     startsClip: Boolean,
     elapsedMs: Long,
     clipLengthMs: Long,
-    keyFrame: Boolean
+    keyFrame: Boolean,
+    audioReady: Boolean = false
 ): Boolean {
     if (startsClip) return true
-    return elapsedMs >= clipLengthMs && keyFrame
+    // Clip names have second precision; an early audio splice must use a new name.
+    return keyFrame && (elapsedMs >= clipLengthMs || audioReady && elapsedMs >= 1_000L)
 }
