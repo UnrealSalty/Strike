@@ -18,6 +18,8 @@ import android.view.Surface
 import com.strike.daemon.DaemonLog
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "FrameBus"
 private const val FRAME_WAIT_MS = 500L
@@ -29,8 +31,32 @@ class Consumer(
     val name: String,
     val surface: Surface,
     val view: CameraView,
-    val frame: Frame
-)
+    val frame: Frame,
+    private val onSurfaceFailure: (() -> Unit)? = null
+) {
+    private var rejectedFrames = 0
+    private var failed = false
+
+    internal fun accepted() {
+        if (rejectedFrames != 0) rejectedFrames = 0
+    }
+
+    internal fun rejected(error: Int) {
+        if (onSurfaceFailure == null || failed) return
+        rejectedFrames = if (error == EGL14.EGL_BAD_SURFACE) rejectedFrames + 1 else 0
+        if (rejectedFrames >= 3) unusable()
+    }
+
+    internal fun unusable() {
+        if (failed) return
+        failed = true
+        onSurfaceFailure?.invoke()
+    }
+}
+
+private class Retirement(val name: String, val done: CountDownLatch? = null) {
+    @Volatile var released = false
+}
 
 // Owns capture and all EGL work on the bus thread.
 // Other threads enqueue consumer changes; they must not destroy EGL resources.
@@ -38,7 +64,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
 
     private val consumers = CopyOnWriteArrayList<Consumer>()
     private val targets = HashMap<String, EGLSurface>()
-    private val retired = ConcurrentLinkedQueue<String>()
+    private val retired = ConcurrentLinkedQueue<Retirement>()
     private val drawn = HashSet<String>()
     private val reported = HashSet<String>()
 
@@ -103,22 +129,36 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         return input
     }
 
-    fun stop() {
+    fun stop(): Boolean {
         running = false
-        thread?.join(2_000)
+        synchronized(arrived) { arrived.notifyAll() }
+        val worker = thread ?: return true
+        worker.join(2_000)
+        if (worker.isAlive) return false
         thread = null
+        return true
     }
 
     // Only the bus thread may release a replaced consumer's EGL surface.
     fun add(consumer: Consumer) {
         consumers.removeAll { it.name == consumer.name }
-        retired.add(consumer.name)
+        retired.add(Retirement(consumer.name))
         consumers.add(consumer)
     }
 
     fun remove(name: String) {
         consumers.removeAll { it.name == name }
-        retired.add(name)
+        retired.add(Retirement(name))
+    }
+
+    fun detach(name: String): Boolean {
+        consumers.removeAll { it.name == name }
+        if (thread?.isAlive != true) return true
+        val done = CountDownLatch(1)
+        val request = Retirement(name, done)
+        retired.add(request)
+        synchronized(arrived) { arrived.notifyAll() }
+        return done.await(2_000, TimeUnit.MILLISECONDS) && request.released
     }
 
     private fun open(): Boolean {
@@ -214,11 +254,12 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         openedAtMs = System.currentTimeMillis()
         while (running) {
             val arrivedNow = synchronized(arrived) {
-                if (!pending) arrived.wait(FRAME_WAIT_MS)
+                if (!pending && retired.isEmpty()) arrived.wait(FRAME_WAIT_MS)
                 val had = pending
                 pending = false
                 had
             }
+            retire()
             if (!arrivedNow) continue
             if (bind()) {
                 frameAtMs = System.currentTimeMillis()
@@ -263,43 +304,56 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
 
     private fun paint(timestampNs: Long) {
         val program = shader ?: return
-        retire()
         for (consumer in consumers) {
             val target = targetFor(consumer) ?: continue
             if (!EGL14.eglMakeCurrent(display, target, target, context)) {
-                fault(consumer.name, "cannot be drawn on")
+                fault(consumer, "cannot be drawn on")
                 continue
             }
             program.draw(texture, tilesOf(consumer.view), consumer.frame)
             EGLExt.eglPresentationTimeANDROID(display, target, timestampNs)
             if (!EGL14.eglSwapBuffers(display, target)) {
-                fault(consumer.name, "would not take the frame")
+                fault(consumer, "would not take the frame")
                 continue
             }
+            consumer.accepted()
             if (drawn.add(consumer.name)) DaemonLog.d(TAG, "${consumer.name} took its first frame")
         }
     }
 
     private fun retire() {
         while (true) {
-            val name = retired.poll() ?: return
-            targets.remove(name)?.let { EGL14.eglDestroySurface(display, it) }
-            drawn.remove(name)
-            reported.remove(name)
+            val request = retired.poll() ?: return
+            val target = targets[request.name]
+            val released = target == null ||
+                (EGL14.eglMakeCurrent(display, pump, pump, context) && EGL14.eglDestroySurface(display, target))
+            if (released) {
+                targets.remove(request.name)
+                drawn.remove(request.name)
+                reported.remove(request.name)
+            }
+            request.released = released
+            request.done?.countDown()
         }
     }
 
-    private fun fault(name: String, what: String) {
-        if (!reported.add(name)) return
-        DaemonLog.e(TAG, "$name $what: ${EGL14.eglGetError()}")
+    private fun fault(consumer: Consumer, what: String) {
+        val error = EGL14.eglGetError()
+        consumer.rejected(error)
+        if (reported.add(consumer.name)) DaemonLog.e(TAG, "${consumer.name} $what: $error")
     }
 
     private fun targetFor(consumer: Consumer): EGLSurface? {
         targets[consumer.name]?.let { return it }
-        if (!consumer.surface.isValid) return null
+        if (!consumer.surface.isValid) {
+            if (reported.add(consumer.name)) DaemonLog.e(TAG, "${consumer.name} input surface is no longer valid")
+            consumer.unusable()
+            return null
+        }
         val made = windowOn(consumer.surface, config) ?: windowOn(consumer.surface, readback)
         if (made == null) {
             DaemonLog.e(TAG, "${consumer.name} cannot take frames: ${EGL14.eglGetError()}")
+            consumer.unusable()
             consumers.remove(consumer)
             return null
         }

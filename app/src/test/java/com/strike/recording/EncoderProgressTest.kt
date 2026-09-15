@@ -3,7 +3,10 @@ package com.strike.recording
 import android.media.MediaFormat
 import android.os.SystemClock
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -91,6 +94,41 @@ class EncoderProgressTest {
         assertFalse(encoder.isDead)
     }
 
+    @Test
+    fun aBrokenInputSurfaceMakesRecentVideoUnhealthy() {
+        val encoder = encoder(startedAgoMs = 5_000L, outputAgoMs = 67L)
+        encoder.inputFailed()
+        assertFalse(recorder(encoder).isRecording)
+        assertTrue(encoder.isDead)
+    }
+
+    @Test
+    fun aLateSurfaceFailureDoesNotChangeAnExplicitlyStoppedEncoder() {
+        val encoder = encoder(startedAgoMs = 5_000L, outputAgoMs = 67L)
+        assertTrue(encoder.stop())
+        encoder.inputFailed()
+        assertFalse(encoder.isDead)
+    }
+
+    @Test
+    fun aStuckDrainIsRetainedUntilItActuallyExits() {
+        val encoder = encoder(startedAgoMs = 5_000L, outputAgoMs = 67L)
+        val entered = CountDownLatch(1)
+        val releaseDrain = CountDownLatch(1)
+        val worker = Thread { entered.countDown(); releaseDrain.await() }
+        set(encoder, "drain", worker)
+        worker.start()
+        assertTrue(entered.await(1, TimeUnit.SECONDS))
+        try {
+            assertFalse(encoder.stop())
+            val drain = Encoder::class.java.getDeclaredField("drain").also { it.isAccessible = true }
+            assertSame(worker, drain.get(encoder))
+        } finally {
+            releaseDrain.countDown()
+            worker.join(2_000)
+        }
+        assertTrue(encoder.stop())
+    }
     private fun encoder(startedAgoMs: Long, outputAgoMs: Long? = null): Encoder {
         val encoder = Encoder(64, 64, 15, 1_000_000, MediaFormat.MIMETYPE_VIDEO_AVC) {}
         val now = SystemClock.elapsedRealtime()

@@ -46,7 +46,8 @@ class Encoder(
     private var startedAtMs = 0L
 
     @Volatile
-    private var lastOutputAtMs = 0L
+    var lastOutputAtMs = 0L
+        private set
 
     val isDead: Boolean
         get() {
@@ -216,11 +217,18 @@ class Encoder(
         }
     }
 
-    fun stop() {
+    fun inputFailed() {
+        if (running) dead = true
+    }
+
+    fun stop(): Boolean {
         running = false
-        drain?.join(1_000)
+        val worker = drain
+        worker?.join(1_000)
+        if (worker?.isAlive == true) return false
         drain = null
         release()
+        return true
     }
 
     fun setBitrate(bitrateBps: Int): Boolean {

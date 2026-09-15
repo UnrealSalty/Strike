@@ -20,7 +20,9 @@ private const val QUEUED_SAMPLES = 240
 private const val TAKE_TIMEOUT_MS = 500L
 // Allow HAL startup before declaring the encoder stalled; the first frame can take seconds.
 private const val FORMAT_WAIT_MS = 25_000L
-private const val FINALISE_WAIT_MS = 6_000L
+// A writer can still be inside the bounded storage-remount wait.
+private const val FINALISE_WAIT_MS = 25_000L
+private const val INDEX_WAIT_MS = 6_000L
 
 // Wait briefly for the app's AAC format before starting the first muxer.
 private const val AUDIO_WAIT_MS = 1_000L
@@ -54,6 +56,7 @@ class Recorder(
     private val ring = if (gated) PreRoll(PREROLL_SPAN_MS, PREROLL_BUDGET_BYTES) else null
 
     private var bus: FrameBus? = null
+    @Volatile
     private var encoder: Encoder? = null
     private var writerThread: Thread? = null
     private var closer: Thread? = null
@@ -92,6 +95,8 @@ class Recorder(
 
     val isRecording: Boolean get() = running && encoder?.isDead != true
 
+    val lastOutputAtMs: Long get() = encoder?.lastOutputAtMs ?: 0L
+
     /** Armed surveillance encodes without a clip open, which is not yet footage on disk. */
     val isWriting: Boolean get() = isRecording && (!gated || clip != null)
 
@@ -110,7 +115,7 @@ class Recorder(
         val surface = encoder.start() ?: return false
         samples.clear()
         running = true
-        bus.add(Consumer(CONSUMER, surface, CameraView.ALL, wanted))
+        bus.add(Consumer(CONSUMER, surface, CameraView.ALL, wanted, encoder::inputFailed))
         this.bus = bus
         this.encoder = encoder
         frame = wanted
@@ -132,21 +137,26 @@ class Recorder(
         return true
     }
 
-    fun stop() {
+    fun stop(): Boolean {
         running = false
-        bus?.remove(CONSUMER)
+        if (bus?.detach(CONSUMER) == false) return false
         bus = null
-        encoder?.stop()
+        if (encoder?.stop() == false) return false
         encoder = null
-        writerThread?.join(FINALISE_WAIT_MS)
+        val deadlineNs = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(FINALISE_WAIT_MS)
+        for (worker in listOfNotNull(writerThread, closer)) {
+            val remainingNs = deadlineNs - System.nanoTime()
+            if (remainingNs > 0L) TimeUnit.NANOSECONDS.timedJoin(worker, remainingNs)
+            if (worker.isAlive) return false
+        }
         writerThread = null
-        closer?.join(FINALISE_WAIT_MS)
         closer = null
-        indexer?.join(FINALISE_WAIT_MS)
+        indexer?.join(INDEX_WAIT_MS)
         indexer = null
         ring?.clear()
         clip = null
         frame = null
+        return true
     }
 
     private fun writeClips(encoder: Encoder, options: RecordingOptions) {

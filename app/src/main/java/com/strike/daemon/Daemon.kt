@@ -49,7 +49,7 @@ class Daemon(private val context: Context, private val shell: Shell) {
 internal fun stopWatchdogLine(): String =
     "mkdir -p $STRIKE_DIR || exit 1; chmod 755 $STRIKE_DIR; " +
         "echo stopped from the app > $CAM_SENTINEL_PATH || exit 1; chmod 644 $CAM_SENTINEL_PATH; " +
-        killLine(CAM_SCRIPT_PATH) + "; rm -f $CAM_SCRIPT_PATH $CAM_WATCHDOG_PID_PATH"
+        killLine(CAM_SCRIPT_PATH) + "; rm -f $CAM_SCRIPT_PATH $CAM_WATCHDOG_PID_PATH $CAM_RECOVERY_PATH $CAM_RECOVERY_PATH.tmp"
 
 internal fun stopDaemonLine(graceful: Boolean, force: Boolean = true): String =
     (if (graceful) "" else killLine(CAM_PROCESS, 15) + "; ") + "WAITED=0; " +

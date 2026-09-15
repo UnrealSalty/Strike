@@ -59,13 +59,13 @@ class LiveStreamer(private val relay: PacketRelay) {
         return true
     }
 
-    fun stop() {
-        if (!isStreaming) return
+    fun stop(): Boolean {
         isStreaming = false
-        bus?.remove(CONSUMER)
+        if (bus?.detach(CONSUMER) == false) return false
         bus = null
-        encoder?.stop()
+        if (encoder?.stop() == false) return false
         encoder = null
+        return true
     }
 
     fun adjustBitrate(bitrateBps: Int): Boolean {

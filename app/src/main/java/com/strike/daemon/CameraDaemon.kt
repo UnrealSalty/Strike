@@ -127,7 +127,12 @@ object CameraDaemon {
     private var bus: FrameBus? = null
     private var server: CommandServer? = null
     private var supervisor: Thread? = null
-    private var recorder: Recorder? = null
+    @Volatile private var recorder: Recorder? = null
+    @Volatile private var captureExpected = false
+    @Volatile private var supervisorAtMs = 0L
+    @Volatile private var parkedIntent: Pair<String, String>? = null
+    private val parkedRecovery = ParkedRecovery()
+    private val restarting = AtomicBoolean(false)
     private var target: Target? = null
     private var flagged: Flag? = null
     private val marked = ArrayList<Mark>()
@@ -165,11 +170,14 @@ object CameraDaemon {
             VehicleTelemetry(context) { DaemonLog.w("ACC", it) }
         }
         wanted = shouldRecord(Config.getString(RecordingSettings.MODE, RecordingSettings.fallback(RecordingSettings.MODE)), null)
+        resumeParked()
         // SIGTERM can finalize an open clip; SIGKILL and power loss cannot.
         Runtime.getRuntime().addShutdownHook(Thread({ finish() }, "last-clip"))
         val commands = CommandServer(::answer)
         server = commands
+        supervisorAtMs = SystemClock.uptimeMillis()
         supervisor = Thread({ supervise() }, "supervisor").also { it.isDaemon = true; it.start() }
+        Thread({ watchCapture() }, "capture-watch").also { it.isDaemon = true; it.start() }
         Thread({ commands.serveForever() }, "commands").also { it.isDaemon = true }.start()
         Thread({ relay.serveForever() }, "packets").also { it.isDaemon = true }.start()
         Thread({ audio.serveForever() }, "audio").also { it.isDaemon = true }.start()
@@ -263,7 +271,11 @@ object CameraDaemon {
 
     private fun supervise() {
         while (alive) {
+            supervisorAtMs = SystemClock.uptimeMillis()
+            captureExpected = wanted || sentryMode != SentryMode.OFF || recorder != null
             updateVehicle()
+            captureExpected = (wanted && clipsDir() != null) ||
+                (sentryMode != SentryMode.OFF && eventsDir() != null) || recorder != null
             if (onlinePanelHeld && !ParkedRails.onlineHeld() &&
                 (sentryMode != SentryMode.OFF || screen.releasePanel())) onlinePanelHeld = false
             if (!panelReady) {
@@ -301,13 +313,13 @@ object CameraDaemon {
             val wantedTarget = targetNow()
             when {
                 held != null && !held.isRecording -> {
-                    stopRecording()
+                    if (!stopRecording()) return
                     failedAtMs = now
                 }
-                held != null && wantedTarget == null -> stopRecording()
+                held != null && wantedTarget == null -> if (!stopRecording()) return
                 held != null && target != wantedTarget -> {
                     DaemonLog.d(TAG, "what is being recorded changed, starting a new clip")
-                    stopRecording()
+                    if (!stopRecording()) return
                 }
                 held == null && wantedTarget != null &&
                     (wantedTarget.mode == RecordingMode.EVENT || now - failedAtMs > RETRY_AFTER_MS) ->
@@ -334,11 +346,11 @@ object CameraDaemon {
             Thread.sleep(SUPERVISE_EVERY_MS)
         }
         superviseFlag()
-        streamer.stop()
+        if (!stopLive()) return
         sentry?.disarm()
         screen.hide()
         ParkedRails.release()
-        stopRecording()
+        if (!stopRecording()) return
         cameraDown()
         panelReady = false
         if (screen.close()) panelLease.close()
@@ -392,6 +404,12 @@ object CameraDaemon {
             }
         }
         if (sentryMode != SentryMode.OFF) wanted = false
+        val previousIntent = parkedIntent
+        parkedIntent = when {
+            !enabled || sentryMode == SentryMode.OFF || sentryMode.name.lowercase() != mode -> null
+            previousIntent?.first == mode && previousIntent.second == arm -> previousIntent
+            else -> mode to arm
+        }
         sentry?.screenOn = Config.getBool(SurveillanceSettings.SCREEN, false)
         if (sentryMode == SentryMode.OFF) sentry?.disarm()
         val reason = surveillanceReason(enabled, snapshot, arm, next, acc.isConfirmingOff())
@@ -458,13 +476,13 @@ object CameraDaemon {
     private fun superviseLive() {
         val watching = liveWanted && relay.hasReader
         if (!watching) {
-            if (streamer.isStreaming) streamer.stop()
+            if (streamer.isStreaming) stopLive()
             return
         }
         if (streamer.isStreaming && streamer.view != liveView) {
-            streamer.stop()
+            if (!stopLive()) return
         }
-        if (streamer.isStreaming && !streamer.adjustBitrate(liveBitrateBps)) streamer.stop()
+        if (streamer.isStreaming && !streamer.adjustBitrate(liveBitrateBps) && !stopLive()) return
         if (!streamer.isStreaming) {
             val bus = cameraUp() ?: return
             if (bus.frameCount == 0L) return
@@ -472,6 +490,12 @@ object CameraDaemon {
                 liveWanted = false
             }
         }
+    }
+
+    private fun stopLive(): Boolean {
+        if (streamer.stop()) return true
+        restart("the live encoder did not stop")
+        return false
     }
 
     private fun cameraUp(): FrameBus? {
@@ -486,16 +510,16 @@ object CameraDaemon {
         val fresh = FrameBus(strip.width, strip.height)
         val input = fresh.start()
         if (input == null) {
-            fresh.stop()
+            if (!fresh.stop()) restart("the camera graphics thread did not stop")
             return null
         }
         if (!camera.open(strip, frameRateFps(), input, nativeDir)) {
-            fresh.stop()
+            if (!fresh.stop()) restart("the camera graphics thread did not stop")
             return null
         }
         if (!alive) {
             camera.close()
-            fresh.stop()
+            if (!fresh.stop()) restart("the camera graphics thread did not stop")
             return null
         }
         bus = fresh
@@ -508,7 +532,10 @@ object CameraDaemon {
     private fun cameraDown() {
         if (bus == null) return
         camera.close()
-        bus?.stop()
+        if (bus?.stop() == false) {
+            restart("the camera graphics thread did not stop")
+            return
+        }
         bus = null
         DaemonLog.d(TAG, "camera released, nothing is watching")
     }
@@ -531,12 +558,13 @@ object CameraDaemon {
         } else {
             DaemonLog.w(TAG, "the camera went quiet for ${quiet / 1000}s, reopening it")
         }
-        recorder?.stop()
-        recorder = null
-        target = null
-        streamer.stop()
+        if (!stopRecording()) return
+        if (!stopLive()) return
         camera.close()
-        watched.stop()
+        if (!watched.stop()) {
+            restart("the camera graphics thread did not stop")
+            return
+        }
         bus = null
         if (sentryMode != SentryMode.OFF) ParkedRails.reassert()
         if (changed) {
@@ -590,12 +618,16 @@ object CameraDaemon {
 
     private fun startRecording(wantedTarget: Target) {
         bringUp(wantedTarget.dir)
-        if (!alive) return
+        if (!alive || targetNow() != wantedTarget) return
         val bus = cameraUp() ?: return
         if (bus.frameCount == 0L) return
         val fresh = Recorder(wantedTarget.dir, wantedTarget.mode, audioFor(wantedTarget)) { clipLanded() }
         if (!fresh.start(wantedTarget.options, bus)) {
             failedAtMs = System.currentTimeMillis()
+            return
+        }
+        if (!alive || targetNow() != wantedTarget) {
+            if (!fresh.stop()) restart("the cancelled recorder did not stop")
             return
         }
         target = wantedTarget
@@ -621,12 +653,64 @@ object CameraDaemon {
     }
 
     @Synchronized
-    private fun stopRecording() {
-        val held = recorder ?: return
+    private fun stopRecording(): Boolean {
+        val held = recorder ?: return true
+        if (!held.stop()) {
+            restart("the recording workers did not stop")
+            return false
+        }
         recorder = null
         target = null
-        held.stop()
         DaemonLog.d(TAG, "recording stopped")
+        return true
+    }
+
+    private fun watchCapture() {
+        val health = CaptureHealth()
+        while (alive) {
+            Thread.sleep(SUPERVISE_EVERY_MS)
+            if (!alive) return
+            val failure = health.check(
+                captureExpected, supervisorAtMs, recorder?.lastOutputAtMs ?: 0L,
+                SystemClock.uptimeMillis()
+            )
+            if (failure != null) {
+                restart(failure)
+                return
+            }
+        }
+    }
+
+    private fun restart(reason: String) {
+        if (!alive || File(CAM_SENTINEL_PATH).exists() || !restarting.compareAndSet(false, true)) return
+        alive = false
+        // A stuck log write or shutdown hook must not prevent the shell watchdog from taking over.
+        Thread({
+            Thread.sleep(2_000L)
+            killRecorder()
+        }, "recorder-exit").also { it.isDaemon = true; it.start() }
+        parkedIntent?.let {
+            if (!parkedRecovery.save(it.first, it.second)) {
+                DaemonLog.w(TAG, "could not preserve the parked session for restart")
+            }
+        }
+        DaemonLog.e(TAG, "$reason; restarting recorder daemon")
+    }
+
+    private fun killRecorder() {
+        Process.killProcess(Process.myPid())
+        Runtime.getRuntime().halt(1)
+    }
+
+    private fun resumeParked() {
+        val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)
+        val mode = Config.getString(SurveillanceSettings.MODE, SurveillanceSettings.fallback(SurveillanceSettings.MODE))
+        val arm = Config.getString(SurveillanceSettings.ARM, SurveillanceSettings.fallback(SurveillanceSettings.ARM))
+        val saved = parkedRecovery.consume(enabled, mode, arm) ?: return
+        sentryMode = if (saved == "smart") SentryMode.SMART else SentryMode.CONTINUOUS
+        wanted = false
+        parkedIntent = saved to arm
+        DaemonLog.d("Sentry", "resuming parked surveillance after recorder recovery")
     }
 
     private fun clipLanded() {

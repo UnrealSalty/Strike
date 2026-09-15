@@ -111,6 +111,8 @@ class WatchdogTest {
 
     @Test
     fun stoppingTargetsTheWatchdogBeforeRemovingItsFiles() {
+        file("cam.recovery").writeText("parked recording intent")
+        file("cam.recovery.tmp").writeText("pending recording intent")
         file("start_cam.sh").writeText("old watchdog")
         file("cam_watchdog.pid").writeText("999")
         val fakeProcesses = """
@@ -124,6 +126,8 @@ class WatchdogTest {
         assertEquals(listOf("-9 999"), file("killed").readLines())
         assertTrue(file("cam.disabled").exists())
         assertFalse(file("start_cam.sh").exists())
+        assertFalse(file("cam.recovery").exists())
+        assertFalse(file("cam.recovery.tmp").exists())
         assertFalse(file("cam_watchdog.pid").exists())
     }
 
@@ -167,6 +171,14 @@ class WatchdogTest {
         assertEquals(1, execute(fakeProcesses + "\n" + stopDaemonLine(graceful = true, force = false)))
         assertEquals(20, file("sleeps").readLines().size)
         assertFalse(file("killed").exists())
+    }
+
+    @Test
+    fun automaticCrashRecoveryKeepsTheParkedIntentForTheNextDaemon() {
+        file("cam.recovery").writeText("parked recording intent")
+        assertEquals(0, watchdog(listOf("137 300", "3 0")))
+        assertEquals("2", file("starts").readText().trim())
+        assertEquals("parked recording intent", file("cam.recovery").readText())
     }
 
     private fun watchdog(exits: List<String>, setup: String = ":", afterSleep: String = ":"): Int {
