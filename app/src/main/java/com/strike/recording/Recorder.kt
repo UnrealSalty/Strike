@@ -255,7 +255,8 @@ class Recorder(
             queue.clear()
             return
         }
-        while (true) {
+        // New audio arrivals wait for the next video turn.
+        repeat(queue.queuedFrames) {
             val sample = queue.take() ?: return
             if (sample.timeUs >= fromUs) writer.writeAudio(sample)
         }

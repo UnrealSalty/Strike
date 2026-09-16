@@ -58,6 +58,8 @@ class AudioIngest {
         }
     }
 
+    internal val queuedFrames: Int get() = frames.size
+
     /** Drops the oldest rather than blocking; a stalled clip must not stall capture. */
     fun take(): Sample? = frames.poll()
 
