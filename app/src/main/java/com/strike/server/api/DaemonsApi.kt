@@ -93,6 +93,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         return Response(200, JSON, response.toString().toByteArray())
     }
 
+    fun maintainRecorder() = recorder.maintain()
+
     fun pauseForUpdate(beforeStop: (Boolean) -> Unit) = recorder.pauseForUpdate(beforeStop)
 
     fun resumeAfterUpdate() {

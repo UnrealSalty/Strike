@@ -170,7 +170,50 @@ class RecorderDaemonTest {
     }
 
     @Test
-    fun failedRecoveryStopsTheWatchdog() {
+    fun aLateStatusReplyRestoresRunningAfterRecoveryTimesOut() {
+        reply = JSONObject().put("uptimeMs", 3_000)
+        recorder.start()
+        tasks.removeFirst().run()
+        reply = null
+        recorder.status()
+        tasks.removeFirst().run()
+        assertEquals(Phase.FAILED, recorder.phase)
+
+        reply = JSONObject().put("uptimeMs", 3_000)
+        recorder.status()
+
+        assertEquals(Phase.RUNNING, recorder.phase)
+        assertEquals("", recorder.failure)
+        assertEquals("", recorder.step)
+        assertTrue(watched)
+        assertTrue(recorder.canStop)
+        assertEquals(0, stops)
+        assertEquals(1, launches)
+    }
+
+    @Test
+    fun explicitStopStillDisablesTheWatchdogAfterLosingContact() {
+        reply = JSONObject().put("uptimeMs", 3_000)
+        recorder.start()
+        tasks.removeFirst().run()
+        reply = null
+        recorder.status()
+        tasks.removeFirst().run()
+        assertEquals(Phase.FAILED, recorder.phase)
+        assertEquals(0, stops)
+
+        recorder.stop()
+        tasks.removeFirst().run()
+
+        assertEquals(Phase.OFF, recorder.phase)
+        assertFalse(watched)
+        assertFalse(recorder.canStop)
+        assertEquals(1, stops)
+        assertEquals(1, launches)
+    }
+
+    @Test
+    fun missingStatusDoesNotDisableEstablishedWatchdog() {
         reply = JSONObject().put("uptimeMs", 3_000)
         recorder.start()
         tasks.removeFirst().run()
@@ -178,9 +221,11 @@ class RecorderDaemonTest {
         recorder.status()
         tasks.removeFirst().run()
 
+        assertEquals(20_000L, nowMs)
         assertEquals(Phase.FAILED, recorder.phase)
-        assertFalse(watched)
-        assertEquals(1, launches)
+        assertEquals(0, stops)
+        assertTrue(watched)
+        assertTrue(recorder.canStop)
     }
 
     @Test

@@ -12,6 +12,7 @@ private const val ANSWER_WITHIN_MS = 20_000L
 private const val STABLE_UPTIME_MS = 3_000L
 private const val ASK_EVERY_MS = 500L
 private const val FAILURE_TAIL_LINES = 20
+private const val WATCHDOG_CHECK_MS = 60_000L
 
 enum class Phase { OFF, STARTING, RUNNING, STOPPING, FAILED }
 
@@ -29,7 +30,8 @@ class RecorderDaemon internal constructor(
     private val pause: (Long) -> Unit = { Thread.sleep(it) },
     private val haltForUpdate: () -> Boolean = haltDaemon,
     private val resumeDaemon: () -> Boolean = launchDaemon,
-    private val watchdogRunning: () -> Boolean = { false }
+    private val watchdogRunning: () -> Boolean = { false },
+    private val recoverWatchdog: () -> Boolean = { false }
 ) {
 
     constructor(shell: Shell, daemon: Daemon, client: DaemonClient, beforeLaunch: () -> Unit) : this(
@@ -45,7 +47,8 @@ class RecorderDaemon internal constructor(
         haltForUpdate = { daemon.stop(client::shutdown, force = false) },
         resumeDaemon = daemon::resume,
         watchdogRunning = { shell.check("pidof $CAM_PROCESS >/dev/null || " +
-            "kill -0 \$(cat $CAM_WATCHDOG_PID_PATH 2>/dev/null) 2>/dev/null") }
+            "kill -0 \$(cat $CAM_WATCHDOG_PID_PATH 2>/dev/null) 2>/dev/null") },
+        recoverWatchdog = daemon::recover
     )
 
     @Volatile
@@ -65,6 +68,42 @@ class RecorderDaemon internal constructor(
         private set
 
     private var request = 0L
+    private var nextWatchdogCheckMs = 0L
+    private var checkingWatchdog = false
+
+    @Synchronized
+    fun maintain() {
+        if (checkingWatchdog || phase == Phase.STARTING || phase == Phase.STOPPING) return
+        val now = nowMs()
+        if (now < nextWatchdogCheckMs) return
+        nextWatchdogCheckMs = now + WATCHDOG_CHECK_MS
+        checkingWatchdog = true
+        val current = request
+        worker.execute {
+            try {
+                synchronized(this) {
+                    if (current != request || phase == Phase.STARTING || phase == Phase.STOPPING) return@execute
+                }
+                if (!recoverWatchdog()) return@execute
+                synchronized(this) {
+                    if (current != request) return@execute
+                    phase = Phase.STARTING
+                    canStop = true
+                    failure = ""
+                    step = "Waiting for restart"
+                }
+                awaitDaemon(current, cleanup = false)
+            } catch (e: Exception) {
+                if (isStarting(current)) {
+                    fail(current, "The recorder could not restart", cleanup = false, keepStop = true, error = e)
+                } else {
+                    Logs.w(TAG, "Could not restore the recorder watchdog", e)
+                }
+            } finally {
+                synchronized(this) { checkingWatchdog = false }
+            }
+        }
+    }
 
     fun status(): JSONObject? {
         val current = synchronized(this) { request }
@@ -80,7 +119,7 @@ class RecorderDaemon internal constructor(
             } else if (phase == Phase.RUNNING) {
                 phase = Phase.STARTING
                 step = "Waiting for restart"
-                worker.execute { awaitDaemon(current) }
+                worker.execute { awaitDaemon(current, cleanup = false) }
             }
         }
         return reply

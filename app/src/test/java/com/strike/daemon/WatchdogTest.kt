@@ -57,12 +57,35 @@ class WatchdogTest {
 
     @Test
     fun aRunningCameraOwnerIsLeftAlone() {
-        assertEquals(
-            0,
-            watchdog(emptyList(), setup = "echo \$\$ > cam.lock", afterSleep = ": > cam.disabled")
-        )
+        cameraOwner(CAM_PROCESS)
+        assertEquals(0, watchdog(emptyList(), afterSleep = ": > cam.disabled"))
         assertFalse(file("starts").exists())
         assertEquals(listOf("10"), file("sleeps").readLines())
+        assertEquals("777", file("cam.lock").readText())
+    }
+
+    @Test
+    fun anUnrelatedProcessReusingTheCameraPidCannotBlockRecovery() {
+        cameraOwner("unrelated")
+        assertEquals(0, watchdog(listOf("3 0")))
+        assertEquals("1", file("starts").readText().trim())
+        assertFalse(file("sleeps").exists())
+        assertEquals("777", file("cam.lock").readText())
+    }
+
+    @Test
+    fun aSimilarProcessNameDoesNotOwnTheCamera() {
+        cameraOwner("${CAM_PROCESS}_other")
+        assertEquals(0, watchdog(listOf("3 0")))
+        assertEquals("1", file("starts").readText().trim())
+        assertFalse(file("sleeps").exists())
+    }
+
+    private fun cameraOwner(name: String) {
+        file("cam.lock").writeText("777")
+        val cmdline = file("proc/777/cmdline")
+        cmdline.parentFile!!.mkdirs()
+        cmdline.writeBytes((name + "\u0000ignored\u0000").toByteArray())
     }
 
     @Test
@@ -218,6 +241,7 @@ class WatchdogTest {
             File(System.getenv("ProgramFiles") ?: "C:/Program Files", "Git/usr/bin/sh.exe")
         assertTrue("A POSIX shell is required to exercise the watchdog", shell.isFile)
         val mapped = commands.replace(STRIKE_DIR, temporary.root.absolutePath.replace('\\', '/'))
+            .replace("/proc/", temporary.root.absolutePath.replace('\\', '/') + "/proc/")
         val script = file("test.sh").also { it.writeText(mapped) }
         val output = file("output")
         val builder = ProcessBuilder(shell.absolutePath, script.name)

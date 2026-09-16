@@ -46,5 +46,7 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
         check(updates.awaitIdle(30_000L)) { "An update is still in progress" }
     }
 
+    fun maintainRecorder() = daemons.maintainRecorder()
+
     fun releasePanel(): Boolean = power.releasePanel()
 }

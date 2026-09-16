@@ -84,6 +84,7 @@ object DashboardDaemon {
                 } catch (e: PackageManager.NameNotFoundException) { exitProcess(0) }
                 if (current.uid != uid) exitProcess(0)
                 if (current.sourceDir != apk) exitProcess(42)
+                host.maintainRecorder()
                 val nowMs = SystemClock.elapsedRealtime()
                 if (nowMs >= nextLogCheckMs) {
                     nextLogCheckMs = nowMs + 3_600_000L
@@ -116,9 +117,11 @@ internal fun trimDashboardLog(file: File) {
 }
 
 private class DashboardHost(private val context: Context, private val uid: Int, private val vehicle: VehicleTelemetry) {
-    private var runtime: DashboardRuntime? = null
+    @Volatile private var runtime: DashboardRuntime? = null
     private val identityFile = File(context.filesDir, "identity")
     private var identity = if (identityFile.isFile) identityFile.readText() else ""
+
+    fun maintainRecorder() { runtime?.maintainRecorder() }
 
     fun restore() {
         if (identity.isNotEmpty()) start()

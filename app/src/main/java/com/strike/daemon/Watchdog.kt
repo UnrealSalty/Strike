@@ -10,7 +10,8 @@ internal fun watchdogScript(
     packageName: String,
     apkPath: String,
     nativeLibDir: String,
-    daemonClass: String
+    daemonClass: String,
+    installation: String = ""
 ): List<String> {
     // app_process needs the extracted native library and the apk's assets.
     val launch = "  CLASSPATH=/system/framework/bmmcamera.jar:\$APK_PATH app_process " +
@@ -20,6 +21,7 @@ internal fun watchdogScript(
 
     return listOf(
         "#!/system/bin/sh",
+        "INSTALLATION='$installation'",
         "LOG_FILE=\"$CAM_LOG_PATH\"",
         "LOCK_FILE=\"$CAM_LOCK_PATH\"",
         "SENTINEL=\"$CAM_SENTINEL_PATH\"",
@@ -35,10 +37,13 @@ internal fun watchdogScript(
         "  fi",
         // Reuse a daemon left running by an earlier watchdog.
         "  OWNER=\$(cat \"\$LOCK_FILE\" 2>/dev/null)",
-        "  if [ -n \"\$OWNER\" ] && [ -d \"/proc/\$OWNER\" ]; then",
-        "    sleep 10",
-        "    continue",
-        "  fi",
+        "  case \"\$OWNER\" in ''|*[!0-9]*) ;; *)",
+        "    OWNER_NAME=\$(tr '\\000' '\\n' 2>/dev/null < /proc/\$OWNER/cmdline | head -n 1)",
+        "    if [ \"\$OWNER_NAME\" = '$CAM_PROCESS' ]; then",
+        "      sleep 10",
+        "      continue",
+        "    fi",
+        "  esac",
         "  APK_PATH=\$(pm path $packageName 2>/dev/null | grep '/base.apk\$' | head -n 1 | sed 's/^package://')",
         "  if [ -z \"\$APK_PATH\" ] && [ -f \"\$FALLBACK_APK\" ]; then APK_PATH=\"\$FALLBACK_APK\"; fi",
         "  if [ -z \"\$APK_PATH\" ]; then",
