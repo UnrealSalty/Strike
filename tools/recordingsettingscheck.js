@@ -7,6 +7,7 @@ var vm = require('node:vm');
 var root = process.argv[2] || path.join(__dirname, '..');
 var web = path.join(root, 'app/src/main/assets/web/js');
 var settingsSource = fs.readFileSync(process.argv[3] || path.join(web, 'recording-settings.js'), 'utf8');
+var coreSource = fs.readFileSync(process.argv[3] ? path.join(path.dirname(process.argv[3]), 'core.js') : path.join(web, 'core.js'), 'utf8');
 
 function Element(tag, id) {
     this.tagName = tag.toUpperCase();
@@ -54,6 +55,8 @@ function harness() {
     var listLoads = 0;
     var timers = {};
     var nextTimer = 0;
+    var now = 0;
+    var redirects = 0;
     function node(tag, id, parent) {
         var element = new Element(tag, id);
         if (id) nodes[id] = element;
@@ -93,10 +96,10 @@ function harness() {
         button(cell, '').disabled = true;
         return cell;
     });
-    function Xhr() { requests.push(this); }
+    function Xhr() { this.timeout = 0; requests.push(this); }
     Xhr.prototype.open = function (method, url) { this.method = method; this.url = url; };
     Xhr.prototype.setRequestHeader = function () {};
-    Xhr.prototype.send = function (body) { this.body = body; };
+    Xhr.prototype.send = function (body) { this.body = body; this.started = now; };
     Xhr.prototype.respond = function (status, body) {
         this.status = status;
         this.responseText = JSON.stringify(body);
@@ -131,12 +134,12 @@ function harness() {
         Strike: {
             list: { load: function (force) { assert.equal(force, true); listLoads++; } },
             toast: function (text, error) { notices.push({ text: text, error: !!error }); },
-            session: { signIn: function () { throw new Error('Unexpected auth redirect'); } }
+            session: { signIn: function () { redirects++; } }
         }
     };
     context.window = context;
     vm.createContext(context);
-    vm.runInContext(fs.readFileSync(path.join(web, 'core.js'), 'utf8'), context);
+    vm.runInContext(coreSource, context);
     vm.runInContext(fs.readFileSync(path.join(web, 'budget.js'), 'utf8'), context);
     vm.runInContext(settingsSource, context);
     function click(element) {
@@ -150,6 +153,14 @@ function harness() {
         nodes: nodes, modal: modal, mode: mode, audio: audio, slider: slider, apps: apps,
         requests: requests, notices: notices, click: click, settings: context.Strike.settings,
         timers: timers,
+        core: context.Strike.core,
+        redirects: function () { return redirects; },
+        elapse: function (ms) {
+            now += ms;
+            requests.slice().forEach(function (xhr) {
+                if (xhr.readyState !== 4 && xhr.timeout && now - xhr.started >= xhr.timeout) xhr.respond(0);
+            });
+        },
         retry: function () {
             var ids = Object.keys(timers);
             assert.equal(ids.length, 1);
@@ -334,6 +345,65 @@ check('failed saves restore server values and factory app writes retain their ro
     app.requests[3].respond(200);
     app.requests[4].respond(200, payload(true, false));
     assert.equal(app.apps[0].children[0].disabled, true);
+});
+
+check('a stalled save times out after reopening and refreshes the server value without replaying', function () {
+    var app = harness();
+    app.open();
+    app.requests[0].respond(200, payload(true, true));
+    app.click(app.audio);
+    app.close();
+    app.open();
+    app.elapse(7999);
+    assert.equal(app.requests.length, 2);
+    assert.equal(app.audio.disabled, true);
+    assert.equal(app.nodes.settingsClose.disabled, false);
+    app.elapse(1);
+    assert.equal(app.requests.length, 3);
+    assert.equal(app.requests[1].timeout, 8000);
+    assert.equal(app.requests[2].method, 'GET');
+    app.elapse(8000);
+    assert.equal(app.modal.getAttribute('aria-busy'), 'false');
+    assert.equal(app.audio.disabled, true);
+    app.close();
+    app.open();
+    app.requests[3].respond(200, payload(false, true));
+    assert.equal(app.audio.disabled, false);
+    assert.equal(app.audio.getAttribute('aria-pressed'), 'false');
+    assert.equal(app.requests.filter(function (xhr) { return xhr.method === 'POST'; }).length, 1);
+    assert.equal(app.notices[0].error, true);
+});
+
+check('factory app writes time out without replaying and authentication expiry never refreshes', function () {
+    [0, 401].forEach(function (status) {
+        var app = harness();
+        app.open();
+        app.requests[0].respond(200, payload(true, true));
+        app.click(app.apps[0].children[0]);
+        assert.equal(app.requests[1].url, '/api/byd/dashcam');
+        assert.equal(app.requests[1].timeout, 8000);
+        if (status === 0) {
+            app.elapse(8000);
+            app.requests[2].respond(200, payload(true, false));
+            assert.equal(app.audio.disabled, false);
+        } else {
+            app.requests[1].respond(status);
+            app.close(); app.open(); app.elapse(16000);
+            assert.equal(app.requests.length, 2);
+            assert.equal(app.redirects(), 1);
+        }
+        assert.equal(app.requests.filter(function (xhr) { return xhr.method === 'POST'; }).length, 1);
+    });
+});
+
+check('other POST callers keep their existing unbounded timeout', function () {
+    var app = harness(), completed = false;
+    app.core.post('/api/daemon/start', '', function () { completed = true; }, function () { assert.fail('Unrelated POST timed out'); });
+    assert.equal(app.requests[0].timeout, 0);
+    app.elapse(60000);
+    assert.equal(completed, false);
+    app.requests[0].respond(200);
+    assert.equal(completed, true);
 });
 
 console.log(checks + ' recording settings checks passed');

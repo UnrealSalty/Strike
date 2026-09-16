@@ -29,10 +29,11 @@ Strike.core = {
         return xhr;
     },
 
-    post: function (path, body, onOk, onFail) {
+    post: function (path, body, onOk, onFail, timeoutMs) {
         var xhr = new XMLHttpRequest();
         xhr.open('POST', path, true);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.timeout = timeoutMs || 0;
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== 4) {
                 return;

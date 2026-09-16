@@ -7,6 +7,7 @@
     var PREVIEW = '/api/surveillance/preview';
     var PREVIEW_NOTE = 'The car has to be on for a preview. Parked, the daemon draws it over a dark screen.';
     var REFRESH_DELAY_MS = 500;
+    var WRITE_TIMEOUT_MS = 8000;
     var modal = document.getElementById('settings');
     var busy = false;
     var refreshTimer = null;
@@ -103,7 +104,11 @@
             pending(false);
             load();
             Strike.toast('Surveillance settings saved');
-        }, function () { pending(false); load(); Strike.toast('Could not save surveillance settings', true); });
+        }, function () {
+            pending(false);
+            load();
+            Strike.toast('Could not confirm surveillance settings', true);
+        }, WRITE_TIMEOUT_MS);
     }
 
     function show(open) {

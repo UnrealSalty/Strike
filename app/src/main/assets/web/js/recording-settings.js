@@ -5,6 +5,7 @@
 
     var SETTINGS = '/api/recording/settings';
     var REFRESH_DELAY_MS = 500;
+    var WRITE_TIMEOUT_MS = 8000;
     var modal = document.getElementById('settings');
     var busy = false;
     var refreshTimer = null;
@@ -91,12 +92,12 @@
             pending(false);
             load();
             Strike.toast(failure, true);
-        });
+        }, WRITE_TIMEOUT_MS);
     }
 
     function save(key, value) {
         var body = 'key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value);
-        post(SETTINGS, body, 'Recording settings saved', 'Could not save recording settings');
+        post(SETTINGS, body, 'Recording settings saved', 'Could not confirm recording settings');
     }
 
     function show(open) {
@@ -135,7 +136,7 @@
                 }
                 var on = toggle.getAttribute('aria-pressed') === 'true';
                 var body = 'enabled=' + (on ? 'false' : 'true');
-                post('/api/byd/' + this.getAttribute('data-app'), body, null, 'Could not change the factory app');
+                post('/api/byd/' + this.getAttribute('data-app'), body, null, 'Could not confirm the factory app change');
             };
         }
 
