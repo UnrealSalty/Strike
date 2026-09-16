@@ -13,7 +13,6 @@ private const val TAG = "Audio"
 private const val BACKLOG = 2
 private const val QUEUED_FRAMES = 200
 
-/** One frame of AAC is about 21 ms, so this is a second of slack. */
 private const val CSD_MAX_BYTES = 64
 
 const val AUDIO_KIND_CONFIG = 1
@@ -60,7 +59,6 @@ class AudioIngest {
 
     internal val queuedFrames: Int get() = frames.size
 
-    /** Drops the oldest rather than blocking; a stalled clip must not stall capture. */
     fun take(): Sample? = frames.poll()
 
     fun clear() = frames.clear()
