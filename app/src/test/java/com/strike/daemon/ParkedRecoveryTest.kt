@@ -32,14 +32,14 @@ class ParkedRecoveryTest {
     @Test
     fun recoveryAtTheDeadlineIsAccepted() {
         assertTrue(recovery().save("smart", "off"))
-        now += 120_000L
+        now += 180_000L
         assertEquals("smart", recovery().consume(true, "smart", "off"))
     }
 
     @Test
     fun expiredIntentIsDiscarded() {
         assertTrue(recovery().save("smart", "off"))
-        now += 120_001L
+        now += 180_001L
         assertNull(recovery().consume(true, "smart", "off"))
         assertFalse(saved.exists())
     }
@@ -138,6 +138,107 @@ class ParkedRecoveryTest {
         now += 2_000L
         assertTrue(recovery().save("continuous", "lock"))
         assertEquals("continuous", recovery().consume(true, "continuous", "lock"))
+    }
+
+    @Test
+    fun checkpointsKeepALongParkRecentWithoutRewritingEachPoll() {
+        val handoff = recovery()
+        assertTrue(handoff.checkpoint("smart", "off"))
+        for (minute in 1..4) {
+            val previous = saved.readBytes()
+            now += 59_999L
+            assertTrue(handoff.checkpoint("smart", "off"))
+            org.junit.Assert.assertArrayEquals(previous, saved.readBytes())
+            now++
+            assertTrue(handoff.checkpoint("smart", "off"))
+            assertFalse(previous.contentEquals(saved.readBytes()))
+        }
+        now += 120_000L
+        assertEquals("smart", recovery().consume(true, "smart", "off"))
+    }
+
+    @Test
+    fun aChangedIntentIsSavedImmediately() {
+        val handoff = recovery()
+        assertTrue(handoff.checkpoint("smart", "off"))
+        now++
+        assertTrue(handoff.checkpoint("continuous", "lock"))
+        assertEquals("continuous", recovery().consume(true, "continuous", "lock"))
+    }
+
+    @Test
+    fun leavingParkClearsTheCheckpointAndAllowsANewParkImmediately() {
+        val handoff = recovery()
+        assertTrue(handoff.checkpoint("smart", "off"))
+        File(saved.path + ".tmp").writeText("unfinished")
+        assertTrue(handoff.checkpoint(null, null))
+        assertFalse(saved.exists())
+        assertFalse(File(saved.path + ".tmp").exists())
+        assertNull(recovery().consume(true, "smart", "off"))
+        now++
+        assertTrue(handoff.checkpoint("smart", "off"))
+        assertEquals("smart", recovery().consume(true, "smart", "off"))
+    }
+
+    @Test
+    fun anInactiveFirstCheckpointClearsAnExistingIntent() {
+        assertTrue(recovery().save("smart", "off"))
+        assertTrue(recovery().checkpoint(null, null))
+        assertFalse(saved.exists())
+    }
+
+    @Test
+    fun failedCheckpointsRetryOnceAMinute() {
+        val dir = File(folder.root, "unavailable")
+        val file = File(dir, "cam.recovery")
+        val handoff = ParkedRecovery(file, stopped, "boot-a") { now }
+        assertFalse(handoff.checkpoint("smart", "off"))
+        assertTrue(dir.mkdir())
+        now += 59_999L
+        assertFalse(handoff.checkpoint("smart", "off"))
+        assertFalse(file.exists())
+        now++
+        assertTrue(handoff.checkpoint("smart", "off"))
+        assertEquals("smart", ParkedRecovery(file, stopped, "boot-a") { now }
+            .consume(true, "smart", "off"))
+    }
+
+    @Test
+    fun aManualStopBlocksCheckpointRefreshAndResume() {
+        val handoff = recovery()
+        assertTrue(handoff.checkpoint("smart", "off"))
+        stopped.writeText("stopped")
+        now += 60_000L
+        assertFalse(handoff.checkpoint("smart", "off"))
+        assertNull(recovery().consume(true, "smart", "off"))
+        assertFalse(saved.exists())
+    }
+
+    @Test
+    fun aManualStopDuringCheckpointWriteDiscardsTheIntent() {
+        var clockReads = 0
+        val handoff = recovery(clock = {
+            if (++clockReads == 2) stopped.writeText("stopped")
+            now
+        })
+        assertFalse(handoff.checkpoint("smart", "off"))
+        assertFalse(saved.exists())
+    }
+
+    @Test
+    fun failedCheckpointRemovalIsRetried() {
+        assertTrue(saved.mkdir())
+        val child = File(saved, "busy")
+        child.writeText("held")
+        val handoff = recovery()
+        assertFalse(handoff.checkpoint(null, null))
+        assertTrue(child.delete())
+        now += 59_999L
+        assertFalse(handoff.checkpoint(null, null))
+        assertTrue(saved.exists())
+        now++
+        assertTrue(handoff.checkpoint(null, null))
+        assertFalse(saved.exists())
     }
 
     @Test

@@ -130,7 +130,7 @@ object CameraDaemon {
     @Volatile private var recorder: Recorder? = null
     @Volatile private var captureExpected = false
     @Volatile private var supervisorAtMs = 0L
-    @Volatile private var parkedIntent: Pair<String, String>? = null
+    private var recoveryStateSaved = true
     private val parkedRecovery = ParkedRecovery()
     private val restarting = AtomicBoolean(false)
     private var target: Target? = null
@@ -152,7 +152,7 @@ object CameraDaemon {
     @JvmStatic
     fun main(args: Array<String>) {
         DaemonLog.watchCrashes()
-        DaemonLog.d(TAG, "starting as uid ${Process.myUid()}, pid ${Process.myPid()}")
+        DaemonLog.d(TAG, "starting as uid ${Process.myUid()}, pid ${Process.myPid()}, boot uptime ${SystemClock.elapsedRealtime() / 1000}s")
         // A duplicate daemon must stop its watchdog without clearing the active daemon's lock.
         if (!lock.take()) exitProcess(EXIT_ALREADY_RUNNING)
         cameraProfile = CameraProfile.of(Config.getString(CAMERA_PROFILE, "auto")) ?: CameraProfile.AUTO
@@ -172,7 +172,10 @@ object CameraDaemon {
         wanted = shouldRecord(Config.getString(RecordingSettings.MODE, RecordingSettings.fallback(RecordingSettings.MODE)), null)
         resumeParked()
         // SIGTERM can finalize an open clip; SIGKILL and power loss cannot.
-        Runtime.getRuntime().addShutdownHook(Thread({ finish() }, "last-clip"))
+        Runtime.getRuntime().addShutdownHook(Thread({
+            if (alive) DaemonLog.w(TAG, "process shutdown requested while recorder enabled")
+            finish()
+        }, "last-clip"))
         val commands = CommandServer(::answer)
         server = commands
         supervisorAtMs = SystemClock.uptimeMillis()
@@ -404,12 +407,14 @@ object CameraDaemon {
             }
         }
         if (sentryMode != SentryMode.OFF) wanted = false
-        val previousIntent = parkedIntent
-        parkedIntent = when {
-            !enabled || sentryMode == SentryMode.OFF || sentryMode.name.lowercase() != mode -> null
-            previousIntent?.first == mode && previousIntent.second == arm -> previousIntent
-            else -> mode to arm
+        val parked = enabled && when (sentryMode) {
+            SentryMode.SMART -> mode == "smart"
+            SentryMode.CONTINUOUS -> mode == "continuous"
+            SentryMode.OFF -> false
         }
+        val saved = parkedRecovery.checkpoint(if (parked) mode else null, if (parked) arm else null)
+        if (!saved && recoveryStateSaved) DaemonLog.w(TAG, "could not save parked recovery state")
+        recoveryStateSaved = saved
         sentry?.screenOn = Config.getBool(SurveillanceSettings.SCREEN, false)
         if (sentryMode == SentryMode.OFF) sentry?.disarm()
         val reason = surveillanceReason(enabled, snapshot, arm, next, acc.isConfirmingOff())
@@ -689,11 +694,6 @@ object CameraDaemon {
             Thread.sleep(2_000L)
             killRecorder()
         }, "recorder-exit").also { it.isDaemon = true; it.start() }
-        parkedIntent?.let {
-            if (!parkedRecovery.save(it.first, it.second)) {
-                DaemonLog.w(TAG, "could not preserve the parked session for restart")
-            }
-        }
         DaemonLog.e(TAG, "$reason; restarting recorder daemon")
     }
 
@@ -709,7 +709,6 @@ object CameraDaemon {
         val saved = parkedRecovery.consume(enabled, mode, arm) ?: return
         sentryMode = if (saved == "smart") SentryMode.SMART else SentryMode.CONTINUOUS
         wanted = false
-        parkedIntent = saved to arm
         DaemonLog.d("Sentry", "resuming parked surveillance after recorder recovery")
     }
 
