@@ -38,6 +38,9 @@
 
     var PER_PAGE = 20;
     var INVENTORY_RETRY_MS = 500;
+    var MAX_LOAD_RETRIES = 5;
+    var LOAD_RETRY_MS = 1000;
+    var MAX_LOAD_RETRY_MS = 8000;
     var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
@@ -122,6 +125,10 @@
         var refreshAfterLoad = false;
         var pendingLoad = false;
         var retryLoad = null;
+        var failedLoads = 0;
+        var loadRequest = null;
+        var loadGeneration = 0;
+        var retryButton = null;
         var departed = false;
         var query = '';
         var kind = 'all';
@@ -470,6 +477,8 @@
         }
 
         function load(force) {
+            if (Strike.session.leaving) return;
+            if (force === true) failedLoads = 0;
             if (loading) {
                 if (force === true) refreshAfterLoad = true;
                 return;
@@ -481,8 +490,14 @@
                 return;
             }
             loading = true;
-            Strike.core.get(plan.rows, function (fresh) {
+            pendingLoad = true;
+            retryButton.disabled = true;
+            var generation = ++loadGeneration;
+            loadRequest = Strike.core.get(plan.rows, function (fresh) {
+                if (generation !== loadGeneration || Strike.session.leaving) return;
                 loading = false;
+                loadRequest = null;
+                retryButton.disabled = false;
                 if (refreshAfterLoad) {
                     refreshAfterLoad = false;
                     load();
@@ -495,6 +510,8 @@
                     }
                     return;
                 }
+                failedLoads = 0;
+                retryButton.hidden = true;
                 if (place !== fresh.location || !fresh.mounted ||
                     (fresh.storageRevision != null && storageRevision !== fresh.storageRevision)) {
                     thumbnails.clear();
@@ -519,17 +536,42 @@
                     Strike.core.value('count', 'That clip is no longer available');
                 }
             }, function () {
+                if (generation !== loadGeneration || Strike.session.leaving) return;
                 loading = false;
+                loadRequest = null;
+                retryButton.disabled = false;
                 if (refreshAfterLoad) {
                     refreshAfterLoad = false;
                     load();
                     return;
                 }
-                pendingLoad = false;
-                reachable = false;
-                rows = [];
-                paint();
+                retryButton.hidden = false;
+                if (!payload) {
+                    reachable = false;
+                    paint();
+                }
+                pendingLoad = failedLoads < MAX_LOAD_RETRIES;
+                if (pendingLoad) {
+                    var delay = Math.min(MAX_LOAD_RETRY_MS, LOAD_RETRY_MS * Math.pow(2, failedLoads++));
+                    if (!departed && !document.hidden) retryLoad = setTimeout(load, delay);
+                }
             });
+        }
+
+        function pauseLoad() {
+            clearTimeout(retryLoad);
+            retryLoad = null;
+            if (!loading) return;
+            pendingLoad = true;
+            loading = false;
+            refreshAfterLoad = false;
+            loadGeneration++;
+            retryButton.disabled = false;
+            if (loadRequest) {
+                loadRequest.onreadystatechange = null;
+                loadRequest.abort();
+                loadRequest = null;
+            }
         }
 
         function disarm() {
@@ -964,6 +1006,12 @@
 
         function wire() {
             screen = native ? nativeScreen() : videoScreen();
+            retryButton = Strike.core.el('button', 'btn', 'Retry');
+            retryButton.type = 'button';
+            retryButton.hidden = true;
+            retryButton.setAttribute('aria-label', 'Retry loading ' + plan.many);
+            retryButton.onclick = function () { load(true); };
+            document.getElementById('count').parentNode.appendChild(retryButton);
 
             document.getElementById('kind').onclick = function (event) {
                 var button = Strike.core.buttonIn(event, this);
@@ -1041,14 +1089,12 @@
 
         wire();
         document.addEventListener('visibilitychange', function () {
-            clearTimeout(retryLoad);
-            retryLoad = null;
-            if (!document.hidden && pendingLoad) load();
+            if (document.hidden) pauseLoad();
+            else if (pendingLoad) load();
         });
         window.addEventListener('pagehide', function () {
             departed = true;
-            clearTimeout(retryLoad);
-            retryLoad = null;
+            pauseLoad();
         });
         window.addEventListener('pageshow', function () {
             departed = false;

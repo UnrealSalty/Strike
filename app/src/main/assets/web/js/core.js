@@ -26,6 +26,7 @@ Strike.core = {
             onOk(payload);
         };
         xhr.send();
+        return xhr;
     },
 
     post: function (path, body, onOk, onFail) {
