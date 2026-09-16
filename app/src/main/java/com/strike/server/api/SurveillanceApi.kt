@@ -20,11 +20,9 @@ import com.strike.server.rangeOf
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.io.IOException
 import java.util.Locale
 
 private const val MP4 = "video/mp4"
-private const val JPEG = "image/jpeg"
 
 class SurveillanceApi(context: Context, private val shell: Shell) {
 
@@ -35,7 +33,8 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
 
     // Storage publication belongs to Triggers; read requests must not remount or reprobe volumes.
     fun events(): Response {
-        if (events.volumeSnapshot().pending) return libraryPending()
+        val mounts = events.volumeSnapshot()
+        if (mounts.pending) return libraryPending()
         val rows = JSONArray()
         for (event in events.store().list()) {
             val row = JSONObject()
@@ -60,6 +59,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         val payload = JSONObject()
         payload.put("mounted", events.selected() != null)
         payload.put("location", events.location())
+        payload.put("storageRevision", mounts.revision)
         payload.put("enabled", Config.getBool(SurveillanceSettings.ENABLED, false))
         payload.put("mode", setting(SurveillanceSettings.MODE))
         payload.put("events", rows)
@@ -80,17 +80,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         val store = events.store()
         val boxed = store.hero(id)
         val clip = store.file(id) ?: return notFound()
-        val thumb = thumbs.of(clip, id)
-        if (boxed != null) {
-            val jpeg = try {
-                boxed.readBytes()
-            } catch (e: IOException) {
-                return notFound()
-            }
-            return Response(200, JPEG, jpeg, headers = thumbHeaders(thumb))
-        }
-        if (thumb == null) return notFound()
-        return Response(200, JPEG, thumb.jpeg, headers = thumbHeaders(thumb))
+        return thumbnailResponse(thumbs.of(clip, id, boxed))
     }
 
     fun delete(id: String): Response {

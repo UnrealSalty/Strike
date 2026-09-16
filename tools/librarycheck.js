@@ -7,6 +7,7 @@ var vm = require('node:vm');
 var root = process.argv[2] || path.join(__dirname, '..');
 var web = path.join(root, 'app/src/main/assets/web/js');
 var library = fs.readFileSync(process.argv[3] || path.join(web, 'library.js'), 'utf8');
+var thumbs = fs.readFileSync(path.join(process.argv[3] ? path.dirname(process.argv[3]) : web, 'thumbnail-loader.js'), 'utf8');
 
 function Element(tag) {
     this.tagName = tag.toUpperCase();
@@ -20,6 +21,8 @@ function Element(tag) {
     this.classList = { add: function () {}, remove: function () {} };
 }
 Element.prototype.appendChild = function (child) { child.parentNode = this; this.children.push(child); return child; };
+Element.prototype.insertBefore = function (child, before) { child.parentNode = this; this.children.splice(this.children.indexOf(before), 0, child); };
+Object.defineProperty(Element.prototype, 'firstChild', { get: function () { return this.children[0] || null; } });
 Element.prototype.setAttribute = function (key, value) { this.attributes[key] = String(value); };
 Element.prototype.getAttribute = function (key) { return this.attributes[key] || null; };
 Element.prototype.removeAttribute = function (key) { delete this.attributes[key]; };
@@ -43,6 +46,8 @@ Object.defineProperty(Element.prototype, 'textContent', {
 function harness() {
     var nodes = {};
     var requests = [];
+    var revoked = [];
+    var nextBlob = 0;
     var timers = {};
     var nextTimer = 0;
     var windowEvents = {};
@@ -66,16 +71,23 @@ function harness() {
     function Xhr() { requests.push(this); }
     Xhr.prototype.open = function (method, url) { this.method = method; this.url = url; };
     Xhr.prototype.send = function () {};
+    Xhr.prototype.abort = function () { this.aborted = true; };
+    Xhr.prototype.getResponseHeader = function (key) { return this.headers && this.headers[key] || null; };
     Xhr.prototype.respond = function (status, body) {
         this.status = status;
+        this.response = body;
         this.responseText = JSON.stringify(body);
         this.readyState = 4;
-        this.onreadystatechange();
+        if (this.onreadystatechange) this.onreadystatechange();
     };
     var context = {
         XMLHttpRequest: Xhr,
         location: { hash: '' },
-        URL: { revokeObjectURL: function () {} },
+        URL: {
+            createObjectURL: function () { return 'blob:' + (++nextBlob); },
+            revokeObjectURL: function (url) { revoked.push(url); }
+        },
+        scrollTo: function () {},
         setTimeout: function (callback, delay) {
             var id = ++nextTimer;
             timers[id] = { callback: callback, delay: delay };
@@ -103,10 +115,11 @@ function harness() {
     context.window = context;
     vm.createContext(context);
     vm.runInContext(fs.readFileSync(path.join(web, 'core.js'), 'utf8'), context);
+    vm.runInContext(thumbs, context);
     vm.runInContext(library, context);
     vm.runInContext(fs.readFileSync(path.join(web, 'clips.js'), 'utf8'), context);
     return {
-        nodes: nodes, timers: timers, requests: requests,
+        nodes: nodes, timers: timers, requests: requests, revoked: revoked,
         load: function (force) { context.Strike.list.load(force); },
         gets: function () { return requests.filter(function (request) { return request.method === 'GET' && request.url === '/api/recording/clips'; }); },
         retry: function () {
@@ -265,6 +278,82 @@ check('repeated forced refreshes replace an obsolete failed read with one fresh 
     assert.match(app.nodes.clips.textContent, /12:02/);
     assert.doesNotMatch(app.nodes.clips.textContent, /12:00/);
     assert.equal(Object.keys(app.timers).length, 0);
+});
+
+check('repainted rows retain their thumbnail request and receive duration and codec', function () {
+    var app = harness();
+    app.gets()[0].respond(200, ready(['12:00']));
+    var old = app.nodes.clips.getElementsByClassName('clip__shot')[0];
+    app.nodes.search.value = '';
+    app.nodes.search.oninput();
+    var thumbnails = app.requests.filter(function (xhr) { return xhr.url.indexOf('/thumbs/') === 0; });
+    assert.equal(thumbnails.length, 1);
+    thumbnails[0].headers = { 'X-Clip-Duration-Ms': '125000', 'X-Clip-Codec': 'h265' };
+    thumbnails[0].respond(200, {});
+    var current = app.nodes.clips.getElementsByClassName('clip__shot')[0];
+    assert.notEqual(current, old);
+    assert.equal(old.getElementsByTagName('img').length, 0);
+    assert.equal(current.getElementsByTagName('img')[0].src, 'blob:1');
+    assert.match(current.textContent, /2:05/);
+    assert.match(app.nodes.clips.textContent, /H\.265/);
+    app.visibility(true);
+    app.visibility(false);
+    assert.equal(current.getElementsByTagName('img').length, 1);
+});
+
+check('paging and filtering abort obsolete thumbnails while keeping the request bound', function () {
+    var app = harness(), times = [];
+    for (var i = 0; i < 25; i++) times.push('12:' + (i < 10 ? '0' : '') + i);
+    app.gets()[0].respond(200, ready(times));
+    var thumbs = app.requests.filter(function (xhr) { return xhr.url.indexOf('/thumbs/') === 0; });
+    assert.equal(thumbs.length, 2);
+    assert.equal(app.nodes.clips.getElementsByClassName('clip').length, 20);
+    app.nodes.clips.getElementsByTagName('button').filter(function (node) { return node.textContent === 'Next'; })[0].onclick();
+    assert.ok(thumbs[0].aborted && thumbs[1].aborted);
+    assert.equal(app.nodes.clips.getElementsByClassName('clip').length, 5);
+    var active = app.requests.filter(function (xhr) { return xhr.url.indexOf('/thumbs/') === 0 && !xhr.aborted; });
+    assert.equal(active.length, 2);
+    assert.match(active[0].url, /clip-20$/);
+    app.nodes.search.value = 'nothing matches';
+    app.nodes.search.oninput();
+    assert.ok(active[0].aborted && active[1].aborted);
+    active[0].respond(200, {});
+    assert.equal(app.nodes.clips.getElementsByTagName('img').length, 0);
+});
+
+check('storage revision and location changes revoke same-id cached thumbnails', function () {
+    var app = harness(), payload = ready(['12:00']);
+    payload.storageRevision = 1;
+    app.gets()[0].respond(200, payload);
+    app.requests.filter(function (xhr) { return xhr.url.indexOf('/thumbs/') === 0; })[0].respond(200, {});
+    app.load();
+    payload.storageRevision = 2;
+    app.gets()[1].respond(200, payload);
+    assert.deepEqual(app.revoked, ['blob:1']);
+    var thumbs = app.requests.filter(function (xhr) { return xhr.url.indexOf('/thumbs/') === 0; });
+    assert.equal(thumbs.length, 2);
+    thumbs[1].respond(200, {});
+    app.load();
+    payload.location = 'usb';
+    app.gets()[2].respond(200, payload);
+    assert.deepEqual(app.revoked, ['blob:1', 'blob:2']);
+    assert.match(app.nodes.clips.textContent, /USB/);
+    app.load();
+    app.gets()[3].respond(200, { mounted: false, location: 'usb', clips: [] });
+    assert.equal(app.requests.filter(function (xhr) { return xhr.url.indexOf('/thumbs/') === 0; })[2].aborted, true);
+    assert.match(app.nodes.clips.textContent, /No USB storage/);
+});
+
+check('a list response after pagehide paints no new thumbnail request until pageshow', function () {
+    var app = harness();
+    app.event('pagehide');
+    app.gets()[0].respond(200, ready(['12:00']));
+    assert.equal(app.requests.length, 1);
+    assert.match(app.nodes.clips.textContent, /12:00/);
+    app.event('pageshow');
+    assert.equal(app.requests.length, 2);
+    app.requests[1].respond(200, {});
+    assert.equal(app.nodes.clips.getElementsByTagName('img').length, 1);
 });
 
 console.log(checks + ' library checks passed');

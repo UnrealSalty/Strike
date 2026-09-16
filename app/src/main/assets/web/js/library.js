@@ -3,8 +3,6 @@
 
     window.Strike = window.Strike || {};
 
-    var DURATION = 'X-Clip-Duration-Ms';
-    var CODEC = 'X-Clip-Codec';
     var PLAY = 'M8 5l12 7-12 7z';
     var PAUSE = 'M7 5h4v14H7zM13 5h4v14h-4z';
     var GROW = 'M9 4H4v5M20 9V4h-5M15 20h5v-5M4 15v5h5';
@@ -118,6 +116,7 @@
         var reachable = true;
         var mounted = true;
         var place = 'internal';
+        var storageRevision = null;
         var payload = null;
         var loading = false;
         var refreshAfterLoad = false;
@@ -131,8 +130,7 @@
         var armed = false;
         var armedRow = null;
         var days = null;
-        var shots = {};
-        var asking = {};
+        var thumbnails = Strike.thumbnails(plan.thumbs, fill);
         var angle = 'all';
         var scrubbing = false;
         var scrubAt = 0;
@@ -174,7 +172,7 @@
             var coded = Strike.core.el('span', 'tag');
             coded.hidden = true;
             host.appendChild(coded);
-            var shot = shots[row.id];
+            var shot = thumbnails.peek(row.id, String(row.bytes));
             if (shot) {
                 showCodec(coded, shot.codec);
             }
@@ -238,7 +236,7 @@
             destroy(id);
         }
 
-        function item(row) {
+        function item(row, targets) {
             var host = Strike.core.el('div', 'clip');
             var button = Strike.core.el('button', 'row row--clip');
             button.type = 'button';
@@ -265,46 +263,16 @@
 
             host.appendChild(button);
             host.appendChild(acts(row));
-            preview(row.id, { box: box, img: img, len: len, coded: coded });
+            targets.push({ id: row.id, identity: String(row.bytes),
+                nodes: { box: box, img: img, len: len, coded: coded } });
             return host;
-        }
-
-        // Reuse thumbnail requests across list rebuilds and update only the current nodes.
-        function preview(id, nodes) {
-            if (shots[id]) {
-                fill(shots[id], nodes);
-                return;
-            }
-            if (asking[id]) {
-                asking[id] = nodes;
-                return;
-            }
-            asking[id] = nodes;
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', plan.thumbs + encodeURIComponent(id), true);
-            xhr.responseType = 'blob';
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState !== 4) {
-                    return;
-                }
-                if (xhr.status === 401) { Strike.session.signIn(); return; }
-                var waiting = asking[id];
-                delete asking[id];
-                // Resolve failed thumbnails so truncated clips do not leave a permanent loading state.
-                shots[id] = xhr.status === 200
-                    ? {
-                        url: URL.createObjectURL(xhr.response),
-                        durationMs: parseInt(xhr.getResponseHeader(DURATION) || '0', 10),
-                        codec: xhr.getResponseHeader(CODEC)
-                    }
-                    : { url: null, durationMs: 0, codec: null };
-                fill(shots[id], waiting);
-            };
-            xhr.send();
         }
 
         function fill(shot, nodes) {
             nodes.box.className = 'clip__shot';
+            nodes.box.innerHTML = '';
+            nodes.box.appendChild(nodes.len);
+            nodes.len.hidden = true;
             if (nodes.coded) {
                 showCodec(nodes.coded, shot.codec);
             }
@@ -336,10 +304,12 @@
             Strike.core.value('count', null);
 
             if (!reachable) {
+                thumbnails.show([]);
                 host.appendChild(empty('Cannot reach Strike', 'The app is not answering on this device.'));
                 return;
             }
             if (!mounted) {
+                thumbnails.show([]);
                 host.appendChild(empty(UNMOUNTED[place], plan.elsewhere));
                 return;
             }
@@ -351,6 +321,7 @@
                 }
             }
             if (!shown.length) {
+                thumbnails.show([]);
                 var copy = plan.nothing(rows.length > 0, payload);
                 host.appendChild(empty(copy.head, copy.note));
                 return;
@@ -367,6 +338,7 @@
             var onPage = shown.slice(from, from + PER_PAGE);
 
             var list = null;
+            var targets = [];
             var group = '';
             for (var j = 0; j < onPage.length; j++) {
                 if (onPage[j].date !== group) {
@@ -375,11 +347,12 @@
                     list = Strike.core.el('div', 'list');
                     host.appendChild(list);
                 }
-                list.appendChild(item(onPage[j]));
+                list.appendChild(item(onPage[j], targets));
             }
             if (pages > 1) {
                 host.appendChild(pager(pages));
             }
+            thumbnails.show(targets);
         }
 
         function pagesAround(at, pages) {
@@ -522,6 +495,11 @@
                     }
                     return;
                 }
+                if (place !== fresh.location || !fresh.mounted ||
+                    (fresh.storageRevision != null && storageRevision !== fresh.storageRevision)) {
+                    thumbnails.clear();
+                }
+                if (fresh.storageRevision != null) storageRevision = fresh.storageRevision;
                 reachable = true;
                 mounted = fresh.mounted;
                 place = fresh.location;
@@ -562,7 +540,7 @@
         }
 
         function codecOf(row) {
-            var shot = shots[row.id];
+            var shot = thumbnails.peek(row.id, String(row.bytes));
             return shot ? shot.codec : null;
         }
 
@@ -975,10 +953,7 @@
         }
 
         function destroy(id) {
-            if (shots[id]) {
-                URL.revokeObjectURL(shots[id].url);
-                delete shots[id];
-            }
+            thumbnails.forget(id);
             drop(id);
             Strike.core.del(plan.rows + '/' + encodeURIComponent(id), function () {
                 load(true);

@@ -9,7 +9,6 @@ import com.strike.recording.totalBytes
 import com.strike.recording.ClipThumbs
 import com.strike.recording.RecordingSettings
 import com.strike.recording.Storage
-import com.strike.recording.Thumb
 import com.strike.surveillance.EventStorage
 import com.strike.surveillance.reservedOn
 import com.strike.server.FileSlice
@@ -25,20 +24,6 @@ import java.io.File
 import java.util.Locale
 
 private const val MP4 = "video/mp4"
-private const val JPEG = "image/jpeg"
-
-internal const val DURATION_HEADER = "X-Clip-Duration-Ms"
-internal const val CODEC_HEADER = "X-Clip-Codec"
-
-// A clip Strike cannot read tells us nothing about itself, so it carries no codec.
-internal fun thumbHeaders(thumb: Thumb?): Map<String, String> {
-    val headers = HashMap<String, String>()
-    headers[DURATION_HEADER] = (thumb?.durationMs ?: 0L).toString()
-    val codec = thumb?.codec
-    if (codec != null) headers[CODEC_HEADER] = codec
-    return headers
-}
-
 class RecordingsApi(context: Context, private val shell: Shell) {
 
     private val bydApps = BydApps(context, shell)
@@ -68,6 +53,7 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         val payload = JSONObject()
         payload.put("mounted", volume != null)
         payload.put("location", location)
+        payload.put("storageRevision", mounts.revision)
         payload.put("mode", Config.getString(RecordingSettings.MODE, RecordingSettings.fallback(RecordingSettings.MODE)))
         payload.put("clips", rows)
         return Response(200, JSON, payload.toString().toByteArray())
@@ -90,8 +76,7 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         val volume = mounts.volumes[storage.location()]
             ?: return if (mounts.pending) libraryPending(503) else notFound()
         val file = storage.clipsOn(volume).file(id) ?: return notFound()
-        val thumb = thumbs.of(file, id) ?: return notFound()
-        return Response(200, JPEG, thumb.jpeg, headers = thumbHeaders(thumb))
+        return thumbnailResponse(thumbs.of(file, id))
     }
 
     fun delete(id: String): Response {

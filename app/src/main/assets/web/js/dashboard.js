@@ -8,11 +8,14 @@
     var readAtMs = 0;
     var LOCATION = { internal: 'Internal storage', sd: 'SD card', usb: 'USB storage' };
     var EVENTS = { person: 'Person', vehicle: 'Vehicle', watch: 'Continuous', event: 'Movement' };
-    var shownEvent = null;
     var requestedPreview = null;
     var image = document.getElementById('lastEventImage');
     var picture = document.getElementById('lastEventPicture');
     var empty = document.getElementById('lastEventEmpty');
+    var heroes = Strike.thumbnails('/heroes/', function (shot) {
+        if (shot.url === null) image.onerror();
+        else image.src = shot.url;
+    });
     var updateModal = document.getElementById('updateNotice');
     var updateClose = document.getElementById('updateNoticeClose');
     var updateAccept = document.getElementById('updateNoticeAccept');
@@ -194,18 +197,18 @@
         link.href = event ? '/surveillance#' + encodeURIComponent(event.id) : '/surveillance';
         picture.hidden = !event;
         if (!event) {
-            shownEvent = null;
+            requestedPreview = null;
+            heroes.clear();
             image.removeAttribute('src');
             image.hidden = true;
             empty.hidden = true;
             picture.removeAttribute('data-loading');
-        } else if (shownEvent !== event.id || (image.hidden && requestedPreview !== preview)) {
-            shownEvent = event.id;
+        } else if (requestedPreview !== preview) {
             requestedPreview = preview;
             image.hidden = true;
             empty.hidden = true;
             picture.setAttribute('data-loading', 'true');
-            image.src = '/heroes/' + encodeURIComponent(event.id);
+            heroes.show([{ id: event.id, identity: preview, nodes: null }]);
         }
         if (event) {
             say('lastEvent', (EVENTS[event.seen] || EVENTS[event.kind]) + ' \u00b7 ' + event.date + ' ' + event.time);
@@ -231,7 +234,7 @@
             footage(status.storage);
             say('eventCount', typeof status.eventCount === 'number' ? clips(status.eventCount) : null);
             daemons(status.daemons);
-            activity(status.lastEvent, status.recording);
+            activity(status.lastEvent, status.recording, typeof status.eventCount !== 'number');
         },
 
         clear: function () {
