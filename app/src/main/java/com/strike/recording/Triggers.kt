@@ -86,16 +86,17 @@ internal fun sentryMode(
     mode: String,
     snapshot: VehicleSnapshot?,
     arm: String = "off",
-    parkedForMs: Long = 0L
+    parkedForMs: Long = 0L,
+    wasWatching: Boolean = false
 ): String? {
     if (!enabled) return OFF
     if (snapshot?.accOn == true) return OFF
     if (snapshot?.gear != null && snapshot.gear != PARKED) return OFF
+    if (arm == "lock" && snapshot?.locked == false) return OFF
     if (snapshot == null || snapshot.accOn == null) return null
     if (arm == "lock") {
         if (snapshot.locked == true) return mode
-        if (snapshot.locked == false) return OFF
-        return if (parkedForMs >= LOCK_FALLBACK_MS) mode else OFF
+        return if (wasWatching || parkedForMs >= LOCK_FALLBACK_MS) mode else OFF
     }
     return mode
 }

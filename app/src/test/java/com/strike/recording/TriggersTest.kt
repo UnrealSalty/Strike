@@ -1,5 +1,6 @@
 package com.strike.recording
 
+import com.strike.daemon.AccMonitor
 import com.strike.surveillance.LOCK_FALLBACK_MS
 import com.strike.vehicle.VehicleSnapshot
 import org.junit.Assert.assertEquals
@@ -85,6 +86,39 @@ class TriggersTest {
         val parked = car(accOn = false, gear = "P", locked = null)
         assertEquals("off", sentryMode(true, "smart", parked, "lock", LOCK_FALLBACK_MS - 1))
         assertEquals("smart", sentryMode(true, "smart", parked, "lock", LOCK_FALLBACK_MS))
+    }
+
+    @Test
+    fun recoveredOnLockRecordingSurvivesFreshPowerWithoutALockReading() {
+        var nowMs = 1_000_000L
+        val parked = car(accOn = false, gear = "P")
+        val acc = AccMonitor({ parked }, { nowMs })
+        acc.poll()
+        nowMs += 2_000L
+        acc.poll()
+
+        assertEquals(0L, acc.parkedForMs())
+        for (mode in listOf("smart", "continuous")) {
+            assertEquals(mode, sentryMode(true, mode, acc.snapshot(), "lock", acc.parkedForMs(),
+                wasWatching = true))
+            assertEquals("off", sentryMode(true, mode, acc.snapshot(), "lock", acc.parkedForMs()))
+        }
+    }
+
+    @Test
+    fun recoveredOnLockRecordingStillStopsForUseUnlockAndDisable() {
+        for (mode in listOf("smart", "continuous")) {
+            for (snapshot in listOf(
+                car(accOn = true, gear = "P"),
+                car(accOn = false, gear = "D"),
+                car(accOn = false, gear = "P", locked = false),
+                car(accOn = null, gear = "P", locked = false)
+            )) {
+                assertEquals("off", sentryMode(true, mode, snapshot, "lock", wasWatching = true))
+            }
+            assertEquals("off", sentryMode(false, mode, car(accOn = false, gear = "P"), "lock",
+                wasWatching = true))
+        }
     }
 
     @Test

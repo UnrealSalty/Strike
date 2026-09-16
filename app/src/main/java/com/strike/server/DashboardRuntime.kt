@@ -1,7 +1,9 @@
 package com.strike.server
 
 import android.content.Context
+import com.strike.core.Logs
 import com.strike.core.Pin
+import com.strike.daemon.RecorderRecoveryPower
 import com.strike.daemon.Shell
 import com.strike.online.BrowserAccess
 import com.strike.online.CloudflareMethod
@@ -19,6 +21,8 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
     val pin = Pin(File(context.filesDir, "pin.json"))
     val browsers = BrowserGate(BrowserAccess(File(context.filesDir, "browser-access.json")))
     private val power = OnlinePower(context)
+    private val recorderPower = RecorderRecoveryPower.create(context)
+    private var recoveryPowerReady = true
     private val telemetry = vehicle ?: VehicleTelemetry(context)
     private val settings = OnlineSettings(File(context.filesDir, "online.json"))
     val online = Online(settings, browsers.access::isReady,
@@ -44,9 +48,15 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
         online.close()
         check(power.releasePanel()) { "The parked display is still held" }
         check(updates.awaitIdle(30_000L)) { "An update is still in progress" }
+        if (!recorderPower.close()) Logs.w("Recorder", "Could not release the recovery wake lock")
     }
 
-    fun maintainRecorder() = daemons.maintainRecorder()
+    fun maintainRecorder() {
+        val ready = recorderPower.refresh()
+        if (!ready && recoveryPowerReady) Logs.w("Recorder", "Could not keep recorder recovery awake")
+        recoveryPowerReady = ready
+        daemons.maintainRecorder()
+    }
 
     fun releasePanel(): Boolean = power.releasePanel()
 }

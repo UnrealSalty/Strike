@@ -76,24 +76,26 @@ internal class ParkedRecovery(
 
     @Synchronized
     fun consume(enabled: Boolean, mode: String, arm: String): String? {
+        val deadline = validUntilMs(enabled, mode, arm)
+        return if (file.delete() && deadline != null && !stopped.exists()) mode else null
+    }
+
+    @Synchronized
+    fun validUntilMs(enabled: Boolean, mode: String, arm: String): Long? {
         return try {
-            if (file.length() > 256L) {
-                file.delete()
-                return null
-            }
-            val bytes = file.readBytes()
-            if (!file.delete() || stopped.exists() || !enabled || !supported(mode, arm)) return null
+            if (stopped.exists() || !enabled || !supported(mode, arm) || file.length() > 256L) return null
             val boot = bootId?.takeIf { it.isNotEmpty() } ?: return null
-            DataInputStream(ByteArrayInputStream(bytes)).use {
+            DataInputStream(ByteArrayInputStream(file.readBytes())).use {
                 if (it.readInt() != 1 || it.readUTF() != boot) return null
-                val ageMs = nowMs() - it.readLong()
+                val recordedAtMs = it.readLong()
+                val ageMs = nowMs() - recordedAtMs
                 val recordedMode = it.readUTF()
                 val recordedArm = it.readUTF()
-                if (ageMs !in 0..RESUME_WITHIN_MS || recordedMode != mode || recordedArm != arm) null
-                else recordedMode
+                if (ageMs !in 0..RESUME_WITHIN_MS || recordedMode != mode || recordedArm != arm ||
+                    stopped.exists()) null
+                else recordedAtMs + RESUME_WITHIN_MS
             }
         } catch (e: IOException) {
-            file.delete()
             null
         }
     }

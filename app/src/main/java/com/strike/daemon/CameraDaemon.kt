@@ -398,7 +398,7 @@ object CameraDaemon {
         val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)
         val mode = Config.getString(SurveillanceSettings.MODE, SurveillanceSettings.fallback(SurveillanceSettings.MODE))
         val arm = Config.getString(SurveillanceSettings.ARM, SurveillanceSettings.fallback(SurveillanceSettings.ARM))
-        val next = sentryMode(enabled, mode, snapshot, arm, acc.parkedForMs())
+        val next = sentryMode(enabled, mode, snapshot, arm, acc.parkedForMs(), sentryMode != SentryMode.OFF)
         if (next != null) {
             sentryMode = when (next) {
                 "smart" -> SentryMode.SMART
@@ -709,6 +709,8 @@ object CameraDaemon {
         val saved = parkedRecovery.consume(enabled, mode, arm) ?: return
         sentryMode = if (saved == "smart") SentryMode.SMART else SentryMode.CONTINUOUS
         wanted = false
+        recoveryStateSaved = parkedRecovery.checkpoint(saved, arm)
+        if (!recoveryStateSaved) DaemonLog.w(TAG, "could not save parked recovery state")
         DaemonLog.d("Sentry", "resuming parked surveillance after recorder recovery")
     }
 

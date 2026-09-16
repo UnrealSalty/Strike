@@ -242,6 +242,66 @@ class ParkedRecoveryTest {
     }
 
     @Test
+    fun checkingTheDeadlineDoesNotConsumeOrExtendTheCheckpoint() {
+        assertTrue(recovery().save("smart", "off"))
+        val expectedDeadline = now + 180_000L
+        val original = saved.readBytes()
+        repeat(3) {
+            now += 60_000L
+            assertEquals(expectedDeadline, recovery().validUntilMs(true, "smart", "off"))
+            org.junit.Assert.assertArrayEquals(original, saved.readBytes())
+        }
+        assertEquals("smart", recovery().consume(true, "smart", "off"))
+    }
+
+    @Test
+    fun anExpiredCheckpointCannotKeepRecoveryAwake() {
+        assertTrue(recovery().save("smart", "off"))
+        now += 180_001L
+        assertNull(recovery().validUntilMs(true, "smart", "off"))
+        assertTrue(saved.exists())
+        assertNull(recovery().consume(true, "smart", "off"))
+        assertFalse(saved.exists())
+    }
+
+    @Test
+    fun deadlineChecksRejectDisabledChangedOrForeignIntent() {
+        assertTrue(recovery().save("smart", "off"))
+        assertNull(recovery().validUntilMs(false, "smart", "off"))
+        assertNull(recovery().validUntilMs(true, "continuous", "off"))
+        assertNull(recovery().validUntilMs(true, "smart", "lock"))
+        assertNull(recovery().validUntilMs(true, "off", "off"))
+        assertNull(recovery("boot-b").validUntilMs(true, "smart", "off"))
+        assertNull(recovery(null).validUntilMs(true, "smart", "off"))
+        assertTrue(saved.exists())
+        assertEquals("smart", recovery().consume(true, "smart", "off"))
+    }
+
+    @Test
+    fun aManualStopDuringDeadlineValidationIsRejected() {
+        assertTrue(recovery().save("smart", "off"))
+        val handoff = recovery(clock = {
+            stopped.writeText("stopped")
+            now
+        })
+        assertNull(handoff.validUntilMs(true, "smart", "off"))
+        assertNull(recovery().consume(true, "smart", "off"))
+    }
+
+    @Test
+    fun futureAndMalformedCheckpointsCannotKeepRecoveryAwake() {
+        assertNull(recovery().validUntilMs(true, "smart", "off"))
+        assertTrue(recovery().save("smart", "off"))
+        now--
+        assertNull(recovery().validUntilMs(true, "smart", "off"))
+        for (bytes in listOf(byteArrayOf(0, 0, 0, 1), ByteArray(257))) {
+            saved.writeBytes(bytes)
+            assertNull(recovery().validUntilMs(true, "smart", "off"))
+            org.junit.Assert.assertArrayEquals(bytes, saved.readBytes())
+        }
+    }
+
+    @Test
     fun anUnavailableDirectoryFailsWithoutSavingAnIntent() {
         val file = File(folder.root, "missing/cam.recovery")
         assertFalse(ParkedRecovery(file, stopped, "boot-a") { now }.save("smart", "off"))
