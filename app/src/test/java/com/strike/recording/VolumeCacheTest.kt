@@ -208,6 +208,21 @@ class VolumeCacheTest {
         assertEquals(listing("2222-BBBB"), fresh)
     }
 
+    @Test
+    fun anOlderPathReadCannotReplaceANewerDiscoveredCard() {
+        val resolved = cache.listing {
+            cache.snapshot { discovered("2222-BBBB") }
+            work.removeFirst().run()
+            listing("1111-AAAA") to null
+        }
+
+        assertEquals(listing("2222-BBBB"), resolved)
+        val current = cache.snapshot { reply }
+        assertFalse(current.pending)
+        assertEquals(File("/storage/2222-BBBB"), current.volumes.getValue("sd").dir)
+        assertTrue(work.isEmpty())
+    }
+
     private fun refresh(): VolumeSnapshot {
         assertTrue(cache.snapshot { reply }.pending)
         work.removeFirst().run()

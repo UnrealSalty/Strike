@@ -95,6 +95,7 @@ internal class VolumeCache(
                 if (generation != started) false else {
                     val now = nowMs()
                     if (found.listing != null) {
+                        generation++
                         listing = found.listing
                         listingGeneration = generation
                         answeredAtMs = now
