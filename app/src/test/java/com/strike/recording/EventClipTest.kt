@@ -75,7 +75,7 @@ class EventClipTest {
         val enqueue = Recorder::class.java.getDeclaredMethod("enqueue", Sample::class.java)
             .also { it.isAccessible = true }
         for (at in atMs) {
-            enqueue.invoke(recorder, Sample(ByteArray(1), at * 1000L, MediaCodec.BUFFER_FLAG_KEY_FRAME, false))
+            enqueue.invoke(recorder, Sample(ByteArray(1), at * 1000L, MediaCodec.BUFFER_FLAG_KEY_FRAME))
         }
     }
 

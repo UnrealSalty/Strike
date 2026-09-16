@@ -123,5 +123,5 @@ class SampleQueueTest {
     }
 
     private fun sample(atUs: Long, key: Boolean = false, rotate: Boolean = false) =
-        Sample(byteArrayOf(atUs.toByte()), atUs, if (key) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0, rotate)
+        Sample(byteArrayOf(atUs.toByte()), atUs, if (key) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0, if (rotate) 1L else 0L)
 }

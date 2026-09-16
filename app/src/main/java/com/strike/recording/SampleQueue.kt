@@ -8,24 +8,24 @@ internal enum class SampleAdmission { ACCEPTED, DROPPED, REQUEST_KEY_FRAME }
 internal class SampleQueue(capacity: Int) {
     private val held = ArrayBlockingQueue<Sample>(capacity)
     private var waitingForKeyFrame = false
-    private var rotationPending = false
+    private var rotationPending = 0L
 
     var dropped = 0L
         private set
 
     @Synchronized
     fun offer(sample: Sample): SampleAdmission {
-        rotationPending = rotationPending || sample.startsClip
+        if (sample.startsClip) rotationPending = sample.rotationId
         if (waitingForKeyFrame && !keyFrame(sample)) {
             dropped++
             return SampleAdmission.DROPPED
         }
-        val next = if (rotationPending && !sample.startsClip) {
-            Sample(sample.bytes, sample.timeUs, sample.flags, true)
+        val next = if (rotationPending != 0L && !sample.startsClip) {
+            Sample(sample.bytes, sample.timeUs, sample.flags, rotationPending)
         } else sample
         if (held.offer(next)) {
             waitingForKeyFrame = false
-            rotationPending = false
+            rotationPending = 0L
             return SampleAdmission.ACCEPTED
         }
         dropped++
@@ -42,7 +42,7 @@ internal class SampleQueue(capacity: Int) {
     fun clear() {
         held.clear()
         waitingForKeyFrame = false
-        rotationPending = false
+        rotationPending = 0L
         dropped = 0L
     }
 }

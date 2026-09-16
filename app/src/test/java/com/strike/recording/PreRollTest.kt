@@ -8,7 +8,7 @@ import org.junit.Test
 class PreRollTest {
 
     private fun frame(atMs: Long, key: Boolean = false) = Sample(
-        ByteArray(10), atMs * 1000L, if (key) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0, false
+        ByteArray(10), atMs * 1000L, if (key) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
     )
 
     private fun fill(ring: PreRoll, untilMs: Long) {

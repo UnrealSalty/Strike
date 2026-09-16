@@ -7,7 +7,7 @@ import org.junit.Test
 class ClipRotateTest {
 
     @Test
-    fun aSpliceSampleAlwaysOpensTheNextClip() {
+    fun aPendingBoundaryOpensTheNextClip() {
         assertTrue(clipShouldRotate(true, 0L, 120_000L, false))
     }
 

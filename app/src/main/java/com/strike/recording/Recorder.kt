@@ -176,6 +176,7 @@ class Recorder(
                     if (done != null) {
                         current = null
                         clip = null
+                        encoder.rotation.complete()
                         finish(done)
                     }
                     if (sample != null) ring?.add(sample)
@@ -185,6 +186,7 @@ class Recorder(
                 if (open == null) {
                     open = openClip(format, options.audio, preRoll = true) ?: break
                     current = open
+                    encoder.rotation.complete()
                 }
                 val audioReady = options.audio && !open.hasAudio && audio?.config != null
                 if (!audioReady) drainAudio(open, audioFromUs)
@@ -192,10 +194,11 @@ class Recorder(
                     if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
                     continue
                 }
-                if (running && shouldRotate(sample, open, clipLengthMs, audioReady)) {
+                if (running && shouldRotate(sample, open, clipLengthMs, audioReady, encoder.rotation)) {
                     val done = open
                     open = openClip(format, options.audio) ?: break
                     current = open
+                    encoder.rotation.complete()
                     finish(done)
                     if (audioReady && open.hasAudio) {
                         audioFromUs = sample.timeUs
@@ -269,9 +272,15 @@ class Recorder(
         }
     }
 
-    private fun shouldRotate(sample: Sample, writer: ClipWriter, clipLengthMs: Long, audioReady: Boolean): Boolean =
+    private fun shouldRotate(
+        sample: Sample,
+        writer: ClipWriter,
+        clipLengthMs: Long,
+        audioReady: Boolean,
+        rotation: ClipRotation
+    ): Boolean =
         clipShouldRotate(
-            sample.startsClip,
+            rotation.isPending(sample.rotationId),
             elapsed(writer),
             clipLengthMs,
             sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0,
@@ -338,13 +347,13 @@ class Recorder(
 
 /** A lost splice still rotates on the next keyframe once the clip is due. */
 internal fun clipShouldRotate(
-    startsClip: Boolean,
+    requestedBoundary: Boolean,
     elapsedMs: Long,
     clipLengthMs: Long,
     keyFrame: Boolean,
     audioReady: Boolean = false
 ): Boolean {
-    if (startsClip) return true
+    if (requestedBoundary) return true
     // Clip names have second precision; an early audio splice must use a new name.
     return keyFrame && (elapsedMs >= clipLengthMs || audioReady && elapsedMs >= 1_000L)
 }

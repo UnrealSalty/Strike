@@ -101,7 +101,7 @@ class AudioIngest {
                 continue
             }
             if (frames.remainingCapacity() == 0) frames.poll()
-            frames.offer(Sample(bytes, timeUs, 0, false))
+            frames.offer(Sample(bytes, timeUs, 0))
             counted++
             if (counted == 1L) DaemonLog.d(TAG, "first cabin audio frame, $length bytes")
         }

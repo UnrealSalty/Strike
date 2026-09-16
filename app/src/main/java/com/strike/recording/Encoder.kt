@@ -14,13 +14,12 @@ import java.io.IOException
 private const val TAG = "Encoder"
 private const val DEQUEUE_TIMEOUT_US = 10_000L
 
-/** A keyframe normally lands within a second; this only bounds the wait. */
-private const val SPLICE_DEADLINE_MS = 3_000L
-
 private const val STARTUP_WAIT_MS = 25_000L
 private const val OUTPUT_WAIT_MS = 10_000L
 
-class Sample(val bytes: ByteArray, val timeUs: Long, val flags: Int, val startsClip: Boolean)
+class Sample(val bytes: ByteArray, val timeUs: Long, val flags: Int, val rotationId: Long = 0L) {
+    val startsClip: Boolean get() = rotationId != 0L
+}
 
 // Surface input stays on the GPU; the drain thread returns encoded samples.
 class Encoder(
@@ -62,8 +61,7 @@ class Encoder(
             return dead
         }
 
-    @Volatile
-    private var rotateAskedAtMs = 0L
+    internal val rotation = ClipRotation()
 
     @Volatile private var codec: MediaCodec? = null
     private var inputSurface: Surface? = null
@@ -196,8 +194,7 @@ class Encoder(
     }
 
     fun splitAtNextKeyFrame() {
-        if (rotateAskedAtMs != 0L) return
-        rotateAskedAtMs = System.currentTimeMillis()
+        if (!rotation.request(SystemClock.elapsedRealtime())) return
         requestKeyFrame()
     }
 
@@ -290,11 +287,11 @@ class Encoder(
         DaemonLog.e(TAG, reason)
     }
 
-    private fun splits(keyFrame: Boolean): Boolean {
-        if (!splitsNow(keyFrame, rotateAskedAtMs, System.currentTimeMillis())) return false
-        rotateAskedAtMs = 0L
+    private fun splits(keyFrame: Boolean): Long {
+        val id = rotation.boundary(keyFrame, SystemClock.elapsedRealtime())
+        if (id == 0L) return 0L
         if (!keyFrame) DaemonLog.w(TAG, "split without a keyframe, the clip head may not draw")
-        return true
+        return id
     }
 
     private fun release() {
@@ -354,12 +351,6 @@ internal fun avcLevelFor(width: Int, height: Int): Int {
         if (macroblocks <= limit) return level
     }
     return MediaCodecInfo.CodecProfileLevel.AVCLevel52
-}
-
-// Rotate on a keyframe, with a bounded wait if the encoder stops producing them.
-internal fun splitsNow(keyFrame: Boolean, askedAtMs: Long, nowMs: Long): Boolean {
-    if (askedAtMs == 0L) return false
-    return keyFrame || nowMs - askedAtMs >= SPLICE_DEADLINE_MS
 }
 
 internal fun encoderStalled(startedAtMs: Long, lastOutputAtMs: Long, nowMs: Long): Boolean =
