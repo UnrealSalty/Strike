@@ -20,15 +20,7 @@ private const val STORAGE_ROOT = "/storage"
 private const val MMC_MAJOR = "179"
 private const val SCSI_MAJOR = "8"
 
-private const val REVALIDATE_MS = 15_000L
-
-// A probe that times out under load is not a removed card. Only an answered listing retires one.
-private const val GRACE_MS = 60_000L
-
-private val cacheLock = Any()
-private var readAtMs = 0L
-private var answeredAtMs = 0L
-private var held: Map<String, Volume> = emptyMap()
+private val mountedCache = VolumeCache()
 
 class Volume(
     val location: String,
@@ -40,30 +32,21 @@ class Volume(
 // Removable storage may be absent from the app's view; query mounts and capacity through shell.
 class Volumes(private val context: Context, private val shell: Shell) {
 
-    // Share volume probes across API requests to avoid repeated ADB round trips.
-    fun mounted(): Map<String, Volume> = synchronized(cacheLock) {
-        val now = System.currentTimeMillis()
-        if (now - readAtMs < REVALIDATE_MS) return held
-        val found = discover(now)
-        held = found
-        readAtMs = now
-        found
-    }
+    fun mounted(): Map<String, Volume> = snapshot().volumes
 
-    private fun discover(now: Long): Map<String, Volume> {
+    internal fun snapshot(): VolumeSnapshot = mountedCache.snapshot(::discover)
+
+    private fun discover(): VolumeDiscovery {
         val found = LinkedHashMap<String, Volume>()
         internal()?.let { found[INTERNAL] = it }
         val listing = shell.read(LIST_VOLUMES)
-        if (listing == null) {
-            if (now - answeredAtMs <= GRACE_MS) carryRemovable(found)
-            return found
-        }
-        answeredAtMs = now
-        for (mount in parseVolumes(listing, systemProperty(SD_UUID_PROP))) {
+        if (listing == null) return VolumeDiscovery(found, null)
+        val sdUuid = systemProperty(SD_UUID_PROP)
+        for (mount in parseVolumes(listing, sdUuid)) {
             if (found.containsKey(mount.location)) continue
-            found[mount.location] = measure(mount) ?: held[mount.location] ?: continue
+            found[mount.location] = measure(mount) ?: continue
         }
-        return found
+        return VolumeDiscovery(found, listing, sdUuid)
     }
 
     // Free space is the only reading df provides; keep the last one rather than drop the card.
@@ -77,16 +60,12 @@ class Volumes(private val context: Context, private val shell: Shell) {
         )
     }
 
-    private fun carryRemovable(found: LinkedHashMap<String, Volume>) {
-        for (volume in held.values) {
-            if (volume.location != INTERNAL) found[volume.location] = volume
-        }
-    }
-
     fun rootFor(location: String): File? {
-        mounted()[location]?.dir?.let { return it }
         if (location == INTERNAL) return Environment.getExternalStorageDirectory()
-        val listing = shell.read(LIST_VOLUMES) ?: return null
+        val listing = mountedCache.listing {
+            val answer = shell.read(LIST_VOLUMES) ?: return@listing null
+            answer to systemProperty(SD_UUID_PROP)
+        } ?: return null
         val path = volumePathFor(location, listing, systemProperty(SD_UUID_PROP)) ?: return null
         return File(path)
     }
@@ -140,9 +119,7 @@ internal fun mountIds(listing: String, uuid: String): List<String> {
     return ids
 }
 
-internal fun forgetMounted() = synchronized(cacheLock) {
-    readAtMs = 0L
-}
+internal fun forgetMounted() = mountedCache.invalidate()
 
 internal fun allPublicIds(listing: String): List<String> {
     val ids = ArrayList<String>()

@@ -35,6 +35,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
 
     // Storage publication belongs to Triggers; read requests must not remount or reprobe volumes.
     fun events(): Response {
+        if (events.volumeSnapshot().pending) return libraryPending()
         val rows = JSONArray()
         for (event in events.store().list()) {
             val row = JSONObject()
@@ -100,6 +101,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
     }
 
     fun settings(): Response {
+        if (events.volumeSnapshot().pending) return libraryPending()
         val payload = JSONObject()
         payload.put("values", values())
         payload.put("volumes", volumesPayload())
@@ -127,6 +129,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         }
         if (key == SurveillanceSettings.LOCATION || key == SurveillanceSettings.ENABLED) {
             events.publish(shell)
+            LibraryScan.forget()
         }
         return Response(200, JSON, "{}".toByteArray())
     }

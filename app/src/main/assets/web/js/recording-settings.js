@@ -4,6 +4,23 @@
     window.Strike = window.Strike || {};
 
     var SETTINGS = '/api/recording/settings';
+    var REFRESH_DELAY_MS = 500;
+    var modal = document.getElementById('settings');
+    var busy = false;
+    var refreshTimer = null;
+
+    function disableControls(disabled) {
+        var controls = modal.querySelectorAll('button, input');
+        for (var i = 0; i < controls.length; i++) {
+            if (controls[i].id !== 'settingsClose') controls[i].disabled = disabled;
+        }
+    }
+
+    function pending(active) {
+        busy = active;
+        modal.setAttribute('aria-busy', active ? 'true' : 'false');
+        if (active) disableControls(true);
+    }
 
     var storage = Strike.budget({
         location: 'storage.location',
@@ -41,21 +58,55 @@
     }
 
     function load() {
-        Strike.core.get(SETTINGS, paint, function () {});
+        if (modal.hidden || busy || refreshTimer !== null) return;
+        pending(true);
+        Strike.core.get(SETTINGS, function (payload) {
+            pending(false);
+            if (payload.pending === true) {
+                if (!modal.hidden) {
+                    modal.setAttribute('aria-busy', 'true');
+                    refreshTimer = window.setTimeout(function () {
+                        refreshTimer = null;
+                        load();
+                    }, REFRESH_DELAY_MS);
+                }
+                return;
+            }
+            disableControls(false);
+            paint(payload);
+        }, function () {
+            pending(false);
+            if (!modal.hidden) Strike.toast('Could not load recording settings', true);
+        });
+    }
+
+    function post(path, body, success, failure) {
+        if (busy) return;
+        pending(true);
+        Strike.core.post(path, body, function () {
+            pending(false);
+            load();
+            if (success) Strike.toast(success);
+        }, function () {
+            pending(false);
+            load();
+            Strike.toast(failure, true);
+        });
     }
 
     function save(key, value) {
         var body = 'key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value);
-        Strike.core.post(SETTINGS, body, function () {
-            load();
-            Strike.toast('Recording settings saved');
-        }, function () { load(); Strike.toast('Could not save recording settings', true); });
+        post(SETTINGS, body, 'Recording settings saved', 'Could not save recording settings');
     }
 
     function show(open) {
-        document.getElementById('settings').hidden = !open;
-        if (!open) {
-            Strike.list.load();
+        modal.hidden = !open;
+        if (open) {
+            load();
+        } else {
+            window.clearTimeout(refreshTimer);
+            refreshTimer = null;
+            Strike.list.load(true);
         }
     }
 
@@ -84,8 +135,7 @@
                 }
                 var on = toggle.getAttribute('aria-pressed') === 'true';
                 var body = 'enabled=' + (on ? 'false' : 'true');
-                Strike.core.post('/api/byd/' + this.getAttribute('data-app'), body, load,
-                    function () { load(); Strike.toast('Could not change the factory app', true); });
+                post('/api/byd/' + this.getAttribute('data-app'), body, null, 'Could not change the factory app');
             };
         }
 
@@ -110,5 +160,4 @@
     };
 
     wire();
-    load();
 }());

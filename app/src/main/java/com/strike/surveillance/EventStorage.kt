@@ -8,7 +8,7 @@ import com.strike.recording.MB
 import com.strike.recording.Retention
 import com.strike.recording.Volume
 import com.strike.recording.Volumes
-import com.strike.recording.forgetMounted
+import com.strike.recording.VolumeSnapshot
 import com.strike.recording.publicRoot
 import com.strike.recording.publishWriteDir
 import com.strike.recording.storageUuid
@@ -23,6 +23,8 @@ class EventStorage(context: Context, shell: Shell) {
     private val volumes = Volumes(context, shell)
 
     fun mounted(): Map<String, Volume> = volumes.mounted()
+
+    internal fun volumeSnapshot(): VolumeSnapshot = volumes.snapshot()
 
     fun location(): String =
         Config.getString(SurveillanceSettings.LOCATION, SurveillanceSettings.fallback(SurveillanceSettings.LOCATION))
@@ -47,7 +49,6 @@ class EventStorage(context: Context, shell: Shell) {
 
     // Publish the app-resolved volume path for the daemon.
     fun publish(shell: Shell) {
-        forgetMounted()
         val root = volumes.rootFor(location()) ?: return
         publishWriteDir(shell, File(publicRoot(root.path), EVENTS_DIR), SurveillanceSettings.EVENTS_DIR)
     }

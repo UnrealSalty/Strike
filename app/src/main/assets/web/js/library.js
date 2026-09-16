@@ -39,6 +39,7 @@
     };
 
     var PER_PAGE = 20;
+    var INVENTORY_RETRY_MS = 500;
     var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'];
@@ -118,6 +119,11 @@
         var mounted = true;
         var place = 'internal';
         var payload = null;
+        var loading = false;
+        var refreshAfterLoad = false;
+        var pendingLoad = false;
+        var retryLoad = null;
+        var departed = false;
         var query = '';
         var kind = 'all';
         var day = 'all';
@@ -490,8 +496,32 @@
             paint();
         }
 
-        function load() {
+        function load(force) {
+            if (loading) {
+                if (force === true) refreshAfterLoad = true;
+                return;
+            }
+            clearTimeout(retryLoad);
+            retryLoad = null;
+            if (departed || document.hidden) {
+                pendingLoad = true;
+                return;
+            }
+            loading = true;
             Strike.core.get(plan.rows, function (fresh) {
+                loading = false;
+                if (refreshAfterLoad) {
+                    refreshAfterLoad = false;
+                    load();
+                    return;
+                }
+                pendingLoad = fresh.pending === true;
+                if (pendingLoad) {
+                    if (!departed && !document.hidden) {
+                        retryLoad = setTimeout(load, INVENTORY_RETRY_MS);
+                    }
+                    return;
+                }
                 reachable = true;
                 mounted = fresh.mounted;
                 place = fresh.location;
@@ -511,6 +541,13 @@
                     Strike.core.value('count', 'That clip is no longer available');
                 }
             }, function () {
+                loading = false;
+                if (refreshAfterLoad) {
+                    refreshAfterLoad = false;
+                    load();
+                    return;
+                }
+                pendingLoad = false;
                 reachable = false;
                 rows = [];
                 paint();
@@ -944,10 +981,10 @@
             }
             drop(id);
             Strike.core.del(plan.rows + '/' + encodeURIComponent(id), function () {
-                load();
+                load(true);
                 Strike.settings.load();
                 Strike.toast('Clip deleted');
-            }, function () { load(); Strike.toast('Could not delete the clip', true); });
+            }, function () { load(true); Strike.toast('Could not delete the clip', true); });
         }
 
         function wire() {
@@ -1028,6 +1065,20 @@
         }
 
         wire();
+        document.addEventListener('visibilitychange', function () {
+            clearTimeout(retryLoad);
+            retryLoad = null;
+            if (!document.hidden && pendingLoad) load();
+        });
+        window.addEventListener('pagehide', function () {
+            departed = true;
+            clearTimeout(retryLoad);
+            retryLoad = null;
+        });
+        window.addEventListener('pageshow', function () {
+            departed = false;
+            if (pendingLoad) load();
+        });
         window.addEventListener('hashchange', function () {
             requested = window.location.hash.slice(1);
             if (playing) close();

@@ -15,7 +15,7 @@ class Storage(context: Context, shell: Shell) {
 
     private val volumes = Volumes(context, shell)
 
-    fun mounted(): Map<String, Volume> = volumes.mounted()
+    internal fun volumeSnapshot(): VolumeSnapshot = volumes.snapshot()
 
     fun location(): String =
         Config.getString(RecordingSettings.LOCATION, RecordingSettings.fallback(RecordingSettings.LOCATION))
@@ -24,14 +24,11 @@ class Storage(context: Context, shell: Shell) {
 
     fun clipsOn(volume: Volume): ClipStore = ClipStore(clipsDir(volume))
 
-    fun usedMb(volume: Volume): Int = (totalBytes(clipsOn(volume).list()) / MB).toInt()
-
     fun budgetMb(): Int =
         Config.getInt(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB)
 
     // The app resolves the volume and publishes its path for the daemon.
     fun publish(shell: Shell) {
-        forgetMounted()
         val root = volumes.rootFor(location()) ?: return
         publishWriteDir(shell, File(publicRoot(root.path), CLIPS_DIR), RecordingSettings.CLIPS_DIR)
     }

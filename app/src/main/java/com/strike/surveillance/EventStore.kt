@@ -49,7 +49,7 @@ internal fun bandsOf(marks: List<Mark>): List<Band> {
 }
 
 // Event metadata and detection stills share the clip's filename stem.
-class EventStore(private val root: File) : Reapable {
+class EventStore(internal val root: File) : Reapable {
 
     override fun list(): List<Event> {
         val files = root.listFiles() ?: return emptyList()

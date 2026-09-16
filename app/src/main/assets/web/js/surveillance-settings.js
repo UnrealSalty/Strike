@@ -6,6 +6,23 @@
     var SETTINGS = '/api/surveillance/settings';
     var PREVIEW = '/api/surveillance/preview';
     var PREVIEW_NOTE = 'The car has to be on for a preview. Parked, the daemon draws it over a dark screen.';
+    var REFRESH_DELAY_MS = 500;
+    var modal = document.getElementById('settings');
+    var busy = false;
+    var refreshTimer = null;
+
+    function disableControls(disabled) {
+        var controls = modal.querySelectorAll('button, input');
+        for (var i = 0; i < controls.length; i++) {
+            if (controls[i].id !== 'settingsClose') controls[i].disabled = disabled;
+        }
+    }
+
+    function pending(active) {
+        busy = active;
+        modal.setAttribute('aria-busy', active ? 'true' : 'false');
+        if (active) disableControls(true);
+    }
 
     var NEAR = {
         1: 'Touching the car',
@@ -59,21 +76,44 @@
     }
 
     function load() {
-        Strike.core.get(SETTINGS, paint, function () {});
+        if (busy || refreshTimer !== null) return;
+        pending(true);
+        Strike.core.get(SETTINGS, function (payload) {
+            pending(false);
+            if (payload.pending === true) {
+                if (!modal.hidden) {
+                    modal.setAttribute('aria-busy', 'true');
+                    refreshTimer = window.setTimeout(function () {
+                        refreshTimer = null;
+                        load();
+                    }, REFRESH_DELAY_MS);
+                }
+                return;
+            }
+            disableControls(false);
+            paint(payload);
+        }, function () { pending(false); });
     }
 
     function save(key, value) {
+        if (busy || refreshTimer !== null) return;
+        pending(true);
         var body = 'key=' + encodeURIComponent(key) + '&value=' + encodeURIComponent(value);
         Strike.core.post(SETTINGS, body, function () {
+            pending(false);
             load();
             Strike.toast('Surveillance settings saved');
-        }, function () { load(); Strike.toast('Could not save surveillance settings', true); });
+        }, function () { pending(false); load(); Strike.toast('Could not save surveillance settings', true); });
     }
 
     function show(open) {
-        document.getElementById('settings').hidden = !open;
-        if (!open) {
-            Strike.list.load();
+        modal.hidden = !open;
+        if (open) {
+            load();
+        } else {
+            window.clearTimeout(refreshTimer);
+            refreshTimer = null;
+            Strike.list.load(true);
         }
     }
 

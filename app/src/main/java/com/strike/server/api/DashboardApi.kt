@@ -18,6 +18,10 @@ class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsA
     private val storage = Storage(context, shell)
     private val events = EventStorage(context, shell)
 
+    init {
+        storage.volumeSnapshot()
+    }
+
     fun status(inCar: Boolean): Response {
         val payload = JSONObject()
         payload.put("inCar", inCar)
@@ -39,8 +43,8 @@ class DashboardApi(context: Context, shell: Shell, private val daemons: DaemonsA
         payload.put("daemons", daemonStatus.getJSONObject("daemons"))
         payload.put("recording", daemonStatus.getJSONObject("recording"))
         val summary = stats.events
-        payload.put("eventCount", if (!stats.eventsMounted) JSONObject.NULL else summary.clips)
-        val latest = summary.latest
+        payload.put("eventCount", summary?.clips ?: JSONObject.NULL)
+        val latest = summary?.latest
         payload.put("lastEvent", if (latest == null) JSONObject.NULL else JSONObject().apply {
             put("id", latest.id)
             put("date", latest.date)

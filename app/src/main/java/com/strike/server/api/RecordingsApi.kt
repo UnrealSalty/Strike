@@ -4,6 +4,8 @@ import android.content.Context
 import com.strike.core.Config
 import com.strike.daemon.BydApps
 import com.strike.daemon.Shell
+import com.strike.recording.MB
+import com.strike.recording.totalBytes
 import com.strike.recording.ClipThumbs
 import com.strike.recording.RecordingSettings
 import com.strike.recording.Storage
@@ -45,10 +47,15 @@ class RecordingsApi(context: Context, private val shell: Shell) {
     private val thumbs = ClipThumbs(File(context.cacheDir, "thumbs"))
 
     fun clips(): Response {
-        val volume = storage.selected()
+        val mounts = storage.volumeSnapshot()
+        if (mounts.pending) return libraryPending()
+        val location = storage.location()
+        val volume = mounts.volumes[location]
+        val inventory = volume?.let { LibraryScan.clips(it, mounts.revision) }
+        if (inventory?.pending == true) return libraryPending()
         val rows = JSONArray()
-        if (volume != null) {
-            for (clip in storage.clipsOn(volume).list()) {
+        if (inventory != null) {
+            for (clip in inventory.value.orEmpty()) {
                 val row = JSONObject()
                 row.put("id", clip.id)
                 row.put("kind", clip.mode.name.lowercase(Locale.US))
@@ -60,14 +67,16 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         }
         val payload = JSONObject()
         payload.put("mounted", volume != null)
-        payload.put("location", storage.location())
+        payload.put("location", location)
         payload.put("mode", Config.getString(RecordingSettings.MODE, RecordingSettings.fallback(RecordingSettings.MODE)))
         payload.put("clips", rows)
         return Response(200, JSON, payload.toString().toByteArray())
     }
 
     fun clip(id: String, range: String?): Response {
-        val volume = storage.selected() ?: return notFound()
+        val mounts = storage.volumeSnapshot()
+        val volume = mounts.volumes[storage.location()]
+            ?: return if (mounts.pending) libraryPending(503) else notFound()
         val file = storage.clipsOn(volume).file(id) ?: return notFound()
         val totalBytes = file.length()
         val wanted = rangeOf(range, totalBytes)
@@ -77,14 +86,18 @@ class RecordingsApi(context: Context, private val shell: Shell) {
     }
 
     fun thumb(id: String): Response {
-        val volume = storage.selected() ?: return notFound()
+        val mounts = storage.volumeSnapshot()
+        val volume = mounts.volumes[storage.location()]
+            ?: return if (mounts.pending) libraryPending(503) else notFound()
         val file = storage.clipsOn(volume).file(id) ?: return notFound()
         val thumb = thumbs.of(file, id) ?: return notFound()
         return Response(200, JPEG, thumb.jpeg, headers = thumbHeaders(thumb))
     }
 
     fun delete(id: String): Response {
-        val volume = storage.selected() ?: return notFound()
+        val mounts = storage.volumeSnapshot()
+        val volume = mounts.volumes[storage.location()]
+            ?: return if (mounts.pending) libraryPending(503) else notFound()
         if (!storage.clipsOn(volume).delete(id)) return notFound()
         thumbs.forget(id)
         LibraryScan.forget()
@@ -92,9 +105,10 @@ class RecordingsApi(context: Context, private val shell: Shell) {
     }
 
     fun settings(): Response {
+        val volumes = volumesPayload() ?: return libraryPending()
         val payload = JSONObject()
         payload.put("values", values())
-        payload.put("volumes", volumesPayload())
+        payload.put("volumes", volumes)
         payload.put("bydApps", bydAppStates())
         payload.put("bydAppsWritable", shell.isAuthorised())
         return Response(200, JSON, payload.toString().toByteArray())
@@ -118,7 +132,10 @@ class RecordingsApi(context: Context, private val shell: Shell) {
             storage.reap()
             LibraryScan.forget()
         }
-        if (key == RecordingSettings.LOCATION) storage.publish(shell)
+        if (key == RecordingSettings.LOCATION) {
+            storage.publish(shell)
+            LibraryScan.forget()
+        }
         return Response(200, JSON, "{}".toByteArray())
     }
 
@@ -135,8 +152,12 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         return values
     }
 
-    private fun volumesPayload(): JSONArray {
-        val mounted = storage.mounted()
+    private fun volumesPayload(): JSONArray? {
+        val mounts = storage.volumeSnapshot()
+        if (mounts.pending) return null
+        val inventories = mounts.volumes.mapValues { (_, volume) -> LibraryScan.clips(volume, mounts.revision) }
+        if (inventories.values.any { it.pending }) return null
+        val mounted = mounts.volumes
         val eventsLocation = events.location()
         val eventsBudgetMb = events.budgetMb()
         val rows = JSONArray()
@@ -146,7 +167,7 @@ class RecordingsApi(context: Context, private val shell: Shell) {
             val volume = mounted[location]
             row.put("mounted", volume != null)
             if (volume != null) {
-                val usedMb = storage.usedMb(volume)
+                val usedMb = (totalBytes(inventories.getValue(location).value.orEmpty()) / MB).toInt()
                 val reservedMb = reservedOn(location, eventsLocation, eventsBudgetMb)
                 row.put("freeMb", volume.freeMb)
                 row.put("totalMb", volume.totalMb)
