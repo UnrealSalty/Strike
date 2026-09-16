@@ -148,6 +148,29 @@ class ClipThumbCacheTest {
     }
 
     @Test
+    fun aSourceChangedBeforeQueuedWorkStartsSkipsDecodeAndCanBeRetried() {
+        val clip = source("clip")
+        val dir = folder.newFolder("thumbs")
+        var scans = 0
+        val thumbnails = ClipThumbs(dir, work, { nowMs }) { source, _ ->
+            scans++
+            Thumb(source.readBytes(), 1_000L, null)
+        }
+        assertSame(ThumbResult.Pending, thumbnails.of(clip, "clip"))
+        clip.writeBytes(byteArrayOf(2))
+        assertTrue(clip.setLastModified(1_002_000L))
+        work.runNext()
+        assertEquals(0, scans)
+        assertEquals(0, work.size)
+        assertFalse(File(dir, "clip.jpg").exists())
+        assertFalse(File(dir, "clip.facts").exists())
+        assertSame(ThumbResult.Pending, thumbnails.of(clip, "clip"))
+        work.runNext()
+        assertArrayEquals(byteArrayOf(2), ready(thumbnails.of(clip, "clip")).jpeg)
+        assertEquals(1, scans)
+    }
+
+    @Test
     fun aSourceChangedDuringDecodeCannotPublishTheOldFrame() {
         val clip = source("clip")
         val dir = folder.newFolder("thumbs")

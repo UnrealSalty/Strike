@@ -92,6 +92,8 @@ class ClipThumbs internal constructor(
         var thumb: Thumb? = null
         var obsolete = false
         try {
+            obsolete = fingerprint(clip, hero) != entry.fingerprint
+            if (obsolete) return
             thumb = cached(id, entry.fingerprint) ?: decode(clip, hero)
             obsolete = fingerprint(clip, hero) != entry.fingerprint || !current(id, entry)
             if (obsolete) return
