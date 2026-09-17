@@ -1,8 +1,10 @@
 package com.strike.recording
 
+import android.media.MediaFormat
 import com.strike.daemon.AudioIngest
 import java.lang.reflect.InvocationTargetException
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -101,6 +103,74 @@ class RecorderAudioTest {
 
         drain(recorder, writer)
 
+    }
+
+    @Test
+    fun idleVideoPollsLeaveSharedAudioQueuedUntilTheFirstVideoSample() {
+        val frames = ObservedFrames()
+        frames.add(sample(1))
+        frames.add(sample(2))
+        val recorder = Recorder(folder.root, RecordingMode.DRIVE, audio(frames)) {}
+        var turns = 0
+
+        writeVideoOnly(recorder) {
+            when (turns++) {
+                0 -> null
+                1 -> {
+                    assertEquals(2, frames.size)
+                    null
+                }
+                2 -> {
+                    assertEquals(2, frames.size)
+                    Sample(byteArrayOf(1), 0L, 1)
+                }
+                else -> {
+                    assertTrue(frames.isEmpty())
+                    set(recorder, "running", false)
+                    null
+                }
+            }
+        }
+
+        assertEquals(4, turns)
+    }
+
+    @Test
+    fun stoppingBeforeTheFirstVideoSampleLeavesSharedAudioUnconsumed() {
+        val frames = ObservedFrames()
+        val pending = sample(1)
+        frames.add(pending)
+        val recorder = Recorder(folder.root, RecordingMode.DRIVE, audio(frames)) {}
+        var turns = 0
+
+        writeVideoOnly(recorder) {
+            if (turns++ == 1) set(recorder, "running", false)
+            null
+        }
+
+        assertEquals(2, turns)
+        assertSame(pending, frames.peek())
+        assertTrue(frames.consumed.isEmpty())
+    }
+
+    private fun writeVideoOnly(recorder: Recorder, nextVideo: () -> Sample?) {
+        val encoder = Encoder(64, 64, 15, 1_000_000, "video/avc") {}
+        set(encoder, "format", MediaFormat())
+        set(recorder, "running", true)
+        val queue = Recorder::class.java.getDeclaredField("samples").also {
+            it.isAccessible = true
+        }.get(recorder) as SampleQueue
+        set(queue, "held", object : ArrayBlockingQueue<Sample>(1) {
+            override fun poll(timeout: Long, unit: TimeUnit): Sample? = nextVideo()
+        })
+        val method = Recorder::class.java.getDeclaredMethod(
+            "writeClips", Encoder::class.java, RecordingOptions::class.java
+        ).also { it.isAccessible = true }
+        try {
+            method.invoke(recorder, encoder, RecordingOptions(Long.MAX_VALUE, "standard", "h264", 15, false))
+        } catch (e: InvocationTargetException) {
+            throw e.targetException
+        }
     }
 
     private fun audio(frames: ArrayBlockingQueue<Sample>) = AudioIngest().also {

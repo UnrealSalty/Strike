@@ -189,7 +189,9 @@ class Recorder(
                     encoder.rotation.complete()
                 }
                 val audioReady = options.audio && !open.hasAudio && audio?.config != null
-                if (!audioReady) drainAudio(open, audioFromUs)
+                // The shared microphone can retain AAC from before this recording began.
+                if (audioFromUs == Long.MIN_VALUE && sample != null) audioFromUs = sample.timeUs
+                if (!audioReady && audioFromUs != Long.MIN_VALUE) drainAudio(open, audioFromUs)
                 if (sample == null) {
                     if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
                     continue
@@ -200,8 +202,8 @@ class Recorder(
                     current = open
                     encoder.rotation.complete()
                     finish(done)
+                    audioFromUs = sample.timeUs
                     if (audioReady && open.hasAudio) {
-                        audioFromUs = sample.timeUs
                         drainAudio(open, audioFromUs)
                         DaemonLog.d(TAG, "cabin audio joined recording")
                     }
