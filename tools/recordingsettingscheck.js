@@ -57,6 +57,14 @@ function harness() {
     var nextTimer = 0;
     var now = 0;
     var redirects = 0;
+    var events = { window: {}, document: {} };
+    function listen(owner, name, callback) {
+        var callbacks = events[owner][name] || (events[owner][name] = []);
+        callbacks.push(callback);
+    }
+    function fire(owner, name) {
+        (events[owner][name] || []).forEach(function (callback) { callback({ persisted: true }); });
+    }
     function node(tag, id, parent) {
         var element = new Element(tag, id);
         if (id) nodes[id] = element;
@@ -100,15 +108,16 @@ function harness() {
     Xhr.prototype.open = function (method, url) { this.method = method; this.url = url; };
     Xhr.prototype.setRequestHeader = function () {};
     Xhr.prototype.send = function (body) { this.body = body; this.started = now; };
+    Xhr.prototype.abort = function () { this.aborted = true; };
     Xhr.prototype.respond = function (status, body) {
         this.status = status;
         this.responseText = JSON.stringify(body);
         this.readyState = 4;
-        this.onreadystatechange();
+        if (this.onreadystatechange) this.onreadystatechange();
     };
     var context = {
         XMLHttpRequest: Xhr,
-        addEventListener: function () {},
+        addEventListener: function (name, callback) { listen('window', name, callback); },
         setTimeout: function (callback, delay) {
             var id = ++nextTimer;
             timers[id] = { callback: callback, delay: delay };
@@ -116,7 +125,9 @@ function harness() {
         },
         clearTimeout: function (id) { delete timers[id]; },
         document: {
-            addEventListener: function () {},
+            hidden: false,
+            documentElement: { classList: { add: function () {}, remove: function () {} } },
+            addEventListener: function (name, callback) { listen('document', name, callback); },
             getElementById: function (id) { return nodes[id]; },
             querySelectorAll: function (selector) {
                 if (selector === '.seg[data-key]') return [mode];
@@ -155,10 +166,12 @@ function harness() {
         timers: timers,
         core: context.Strike.core,
         redirects: function () { return redirects; },
+        visibility: function (hidden) { context.document.hidden = hidden; fire('document', 'visibilitychange'); },
+        event: function (name) { fire('window', name); },
         elapse: function (ms) {
             now += ms;
             requests.slice().forEach(function (xhr) {
-                if (xhr.readyState !== 4 && xhr.timeout && now - xhr.started >= xhr.timeout) xhr.respond(0);
+                if (!xhr.aborted && xhr.readyState !== 4 && xhr.timeout && now - xhr.started >= xhr.timeout) xhr.respond(0);
             });
         },
         retry: function () {
@@ -404,6 +417,69 @@ check('other POST callers keep their existing unbounded timeout', function () {
     assert.equal(completed, false);
     app.requests[0].respond(200);
     assert.equal(completed, true);
+});
+
+check('background pending reads stop and resume once after page restoration', function () {
+    var app = harness();
+    app.open();
+    app.requests[0].respond(200, { pending: true });
+    var lateTimer = app.timers[Object.keys(app.timers)[0]].callback;
+    app.visibility(true);
+    app.event('pagehide');
+    assert.equal(Object.keys(app.timers).length, 0);
+    lateTimer();
+    assert.equal(app.requests.length, 1);
+    app.visibility(false);
+    assert.equal(app.requests.length, 1);
+    app.event('pageshow');
+    app.event('pageshow');
+    app.visibility(false);
+    assert.equal(app.requests.length, 2);
+    app.requests[1].respond(200, payload(true, false));
+    assert.equal(app.audio.disabled, false);
+    assert.equal(Object.keys(app.timers).length, 0);
+});
+
+check('hidden reads abort and late replies cannot replace restored settings', function () {
+    var app = harness();
+    app.open();
+    var old = app.requests[0], late = old.onreadystatechange;
+    app.visibility(true);
+    assert.equal(old.aborted, true);
+    app.visibility(false);
+    app.requests[1].respond(200, payload(true, false));
+    old.respond(200, payload(false, true));
+    late();
+    assert.equal(app.audio.getAttribute('aria-pressed'), 'true');
+    assert.equal(app.apps[0].children[0].disabled, true);
+    assert.equal(app.modal.getAttribute('aria-busy'), 'false');
+    assert.equal(app.requests.length, 2);
+});
+
+['success', 'timeout'].forEach(function (outcome) {
+    check('background save ' + outcome + ' waits for visibility to reconcile without replay', function () {
+        var app = harness();
+        app.open();
+        app.requests[0].respond(200, payload(true, true));
+        app.click(app.audio);
+        var write = app.requests[1];
+        app.visibility(true);
+        app.event('pagehide');
+        assert.notEqual(write.aborted, true);
+        if (outcome === 'success') write.respond(200);
+        else app.elapse(8000);
+        assert.equal(app.requests.length, 2);
+        app.visibility(false);
+        assert.equal(app.requests.length, 2);
+        app.event('pageshow');
+        app.event('pageshow');
+        assert.equal(app.requests.length, 3);
+        assert.equal(app.requests[2].method, 'GET');
+        app.requests[2].respond(200, payload(false, true));
+        assert.equal(app.audio.getAttribute('aria-pressed'), 'false');
+        assert.equal(app.audio.disabled, false);
+        assert.equal(app.requests.filter(function (request) { return request.method === 'POST'; }).length, 1);
+    });
 });
 
 console.log(checks + ' recording settings checks passed');

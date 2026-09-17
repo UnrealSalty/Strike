@@ -15,6 +15,14 @@ function harness() {
     var nextTimer = 0;
     var now = 0;
     var redirects = 0;
+    var events = { window: {}, document: {} };
+    function listen(owner, name, callback) {
+        var callbacks = events[owner][name] || (events[owner][name] = []);
+        callbacks.push(callback);
+    }
+    function fire(owner, name) {
+        (events[owner][name] || []).forEach(function (callback) { callback({ persisted: true }); });
+    }
     function node(key) {
         if (!nodes[key]) nodes[key] = {
             id: key, hidden: false, disabled: false, value: '', textContent: '', attributes: {},
@@ -40,22 +48,25 @@ function harness() {
     Xhr.prototype.open = function (method, url) { this.method = method; this.url = url; };
     Xhr.prototype.setRequestHeader = function () {};
     Xhr.prototype.send = function (body) { this.body = body; this.started = now; };
+    Xhr.prototype.abort = function () { this.aborted = true; };
     Xhr.prototype.respond = function (status, body) {
         this.status = status;
         this.responseText = JSON.stringify(body);
         this.readyState = 4;
-        this.onreadystatechange();
+        if (this.onreadystatechange) this.onreadystatechange();
     };
     Xhr.prototype.success = function (body) { this.respond(200, body); };
     Xhr.prototype.failure = function () { this.respond(500); };
     var context = {
         XMLHttpRequest: Xhr,
-        addEventListener: function () {},
+        addEventListener: function (name, callback) { listen('window', name, callback); },
         setTimeout: function (callback, delay) { var id = ++nextTimer; timers[id] = { callback: callback, delay: delay }; return id; },
         clearTimeout: function (id) { delete timers[id]; },
         document: {
+            hidden: false,
+            documentElement: { classList: { add: function () {}, remove: function () {} } },
             activeElement: null,
-            addEventListener: function () {},
+            addEventListener: function (name, callback) { listen('document', name, callback); },
             getElementById: node,
             querySelectorAll: function (selector) {
                 if (selector === '.seg[data-key]') return [mode];
@@ -81,10 +92,12 @@ function harness() {
     return {
         nodes: nodes, requests: requests, timers: timers, modal: modal,
         redirects: function () { return redirects; },
+        visibility: function (hidden) { context.document.hidden = hidden; fire('document', 'visibilitychange'); },
+        event: function (name) { fire('window', name); },
         elapse: function (ms) {
             now += ms;
             requests.slice().forEach(function (xhr) {
-                if (xhr.readyState !== 4 && xhr.timeout && now - xhr.started >= xhr.timeout) xhr.respond(0);
+                if (!xhr.aborted && xhr.readyState !== 4 && xhr.timeout && now - xhr.started >= xhr.timeout) xhr.respond(0);
             });
         },
         open: function () { node('settingsOpen').onclick(); },
@@ -214,6 +227,68 @@ check('authentication expiry during a save redirects without refreshing or repla
     assert.equal(app.redirects(), 1);
     assert.equal(app.requests.length, 2);
     assert.equal(Object.keys(app.timers).length, 0);
+});
+
+check('background pending reads stop and resume once after page restoration', function () {
+    var app = harness();
+    app.open();
+    app.requests[0].success({ pending: true });
+    var lateTimer = app.timers[Object.keys(app.timers)[0]].callback;
+    app.visibility(true);
+    app.event('pagehide');
+    assert.equal(Object.keys(app.timers).length, 0);
+    lateTimer();
+    assert.equal(app.requests.length, 1);
+    app.visibility(false);
+    assert.equal(app.requests.length, 1);
+    app.event('pageshow');
+    app.event('pageshow');
+    app.visibility(false);
+    assert.equal(app.requests.length, 2);
+    app.requests[1].success(ready(true));
+    assert.equal(app.nodes['surveillance.enabled'].disabled, false);
+    assert.equal(Object.keys(app.timers).length, 0);
+});
+
+check('hidden reads abort and late replies cannot replace restored settings', function () {
+    var app = harness();
+    app.open();
+    var old = app.requests[0], late = old.onreadystatechange;
+    app.visibility(true);
+    assert.equal(old.aborted, true);
+    app.visibility(false);
+    app.requests[1].success(ready(true));
+    old.success(ready(false));
+    late();
+    assert.equal(app.nodes['surveillance.enabled'].getAttribute('aria-pressed'), 'true');
+    assert.equal(app.modal.getAttribute('aria-busy'), 'false');
+    assert.equal(app.requests.length, 2);
+});
+
+['success', 'timeout'].forEach(function (outcome) {
+    check('background save ' + outcome + ' waits for visibility to reconcile without replay', function () {
+        var app = harness();
+        app.open();
+        app.requests[0].success(ready(true));
+        app.nodes['surveillance.enabled'].onclick();
+        var write = app.requests[1];
+        app.visibility(true);
+        app.event('pagehide');
+        assert.notEqual(write.aborted, true);
+        if (outcome === 'success') write.success();
+        else app.elapse(8000);
+        assert.equal(app.requests.length, 2);
+        app.visibility(false);
+        assert.equal(app.requests.length, 2);
+        app.event('pageshow');
+        app.event('pageshow');
+        assert.equal(app.requests.length, 3);
+        assert.equal(app.requests[2].method, 'GET');
+        app.requests[2].success(ready(false));
+        assert.equal(app.nodes['surveillance.enabled'].getAttribute('aria-pressed'), 'false');
+        assert.equal(app.nodes['surveillance.enabled'].disabled, false);
+        assert.equal(app.requests.filter(function (request) { return request.method === 'POST'; }).length, 1);
+    });
 });
 
 console.log(checks + ' surveillance settings checks passed');

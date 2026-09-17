@@ -9,6 +9,10 @@
     var modal = document.getElementById('settings');
     var busy = false;
     var refreshTimer = null;
+    var readRequest = null;
+    var readGeneration = 0;
+    var readPending = false;
+    var departed = false;
 
     function disableControls(disabled) {
         var controls = modal.querySelectorAll('button, input');
@@ -60,8 +64,14 @@
 
     function load() {
         if (modal.hidden || busy || refreshTimer !== null) return;
+        if (document.hidden || departed) { readPending = true; return; }
         pending(true);
-        Strike.core.get(SETTINGS, function (payload) {
+        readPending = true;
+        var generation = ++readGeneration;
+        readRequest = Strike.core.get(SETTINGS, function (payload) {
+            if (generation !== readGeneration) return;
+            readRequest = null;
+            readPending = payload.pending === true;
             pending(false);
             if (payload.pending === true) {
                 if (!modal.hidden) {
@@ -76,9 +86,27 @@
             disableControls(false);
             paint(payload);
         }, function () {
+            if (generation !== readGeneration) return;
+            readRequest = null;
+            readPending = false;
             pending(false);
             if (!modal.hidden) Strike.toast('Could not load recording settings', true);
         });
+    }
+
+    function pauseRead() {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = null;
+        if (!readRequest) return;
+        readGeneration++;
+        readRequest.onreadystatechange = null;
+        readRequest.abort();
+        readRequest = null;
+        pending(false);
+    }
+
+    function resumeRead() {
+        if (!departed && !document.hidden && readPending) load();
     }
 
     function post(path, body, success, failure) {
@@ -107,6 +135,7 @@
         } else {
             window.clearTimeout(refreshTimer);
             refreshTimer = null;
+            if (!readRequest) readPending = false;
             Strike.list.load(true);
         }
     }
@@ -161,4 +190,10 @@
     };
 
     wire();
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) pauseRead();
+        else resumeRead();
+    });
+    window.addEventListener('pagehide', function () { departed = true; pauseRead(); });
+    window.addEventListener('pageshow', function () { departed = false; resumeRead(); });
 }());
