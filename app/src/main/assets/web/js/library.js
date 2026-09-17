@@ -121,6 +121,7 @@
         var place = 'internal';
         var storageRevision = null;
         var payload = null;
+        var deleting = Object.create(null);
         var loading = false;
         var refreshAfterLoad = false;
         var pendingLoad = false;
@@ -521,7 +522,7 @@
                 mounted = fresh.mounted;
                 place = fresh.location;
                 payload = fresh;
-                rows = fresh[plan.list];
+                rows = fresh[plan.list].filter(function (row) { return !deleting[row.id]; });
                 paintDays();
                 paint();
                 if (requested && mounted) {
@@ -995,13 +996,20 @@
         }
 
         function destroy(id) {
+            if (deleting[id]) return;
+            deleting[id] = true;
             thumbnails.forget(id);
             drop(id);
             Strike.core.del(plan.rows + '/' + encodeURIComponent(id), function () {
+                delete deleting[id];
                 load(true);
                 Strike.settings.load();
                 Strike.toast('Clip deleted');
-            }, function () { load(true); Strike.toast('Could not delete the clip', true); });
+            }, function () {
+                delete deleting[id];
+                load(true);
+                Strike.toast('Could not confirm deletion', true);
+            });
         }
 
         function wire() {

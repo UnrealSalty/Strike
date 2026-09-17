@@ -343,4 +343,113 @@ check('an explicit settings refresh cancels backoff and resets the retry delay',
     assert.match(app.nodes.clips.textContent, /12:00/);
 });
 
+check('a stale list cannot restore a pending deletion or submit it twice', function () {
+    var app = harness();
+    app.gets()[0].respond(200, ready(['12:00', '12:02']));
+    app.load();
+    var bin = app.nodes.clips.getElementsByTagName('button').filter(function (node) { return node.getAttribute('aria-label') === 'Delete'; })[0];
+    bin.onclick();
+    bin.onclick();
+    app.gets()[1].respond(200, ready(['12:00', '12:02']));
+    assert.doesNotMatch(app.nodes.clips.textContent, /12:00/);
+    assert.equal(app.nodes.count.textContent, '1 clip');
+    bin.onclick();
+    bin.onclick();
+    var deletes = app.requests.filter(function (request) { return request.method === 'DELETE'; });
+    assert.equal(deletes.length, 1);
+    assert.equal(app.requests.filter(function (request) { return request.url === '/thumbs/clip-0'; }).length, 1);
+    deletes[0].respond(200);
+    app.gets()[2].respond(200, ready(['12:02']));
+    assert.doesNotMatch(app.nodes.clips.textContent, /12:00/);
+    assert.equal(app.nodes.count.textContent, '1 clip');
+});
+
+check('failed deletion restores only that row while another deletion remains pending', function () {
+    var app = harness();
+    var both = ready(['12:00', '12:02']);
+    app.gets()[0].respond(200, both);
+    function removeFirst() {
+        var bin = app.nodes.clips.getElementsByTagName('button').filter(function (node) { return node.getAttribute('aria-label') === 'Delete'; })[0];
+        bin.onclick();
+        bin.onclick();
+    }
+    removeFirst();
+    removeFirst();
+    assert.equal(app.nodes.clips.getElementsByClassName('clip').length, 0);
+    app.load();
+    app.gets()[1].respond(200, both);
+    assert.equal(app.nodes.clips.getElementsByClassName('clip').length, 0);
+    var deletes = app.requests.filter(function (request) { return request.method === 'DELETE'; });
+    deletes[0].respond(500);
+    app.gets()[2].respond(200, both);
+    assert.match(app.nodes.clips.textContent, /12:00/);
+    assert.doesNotMatch(app.nodes.clips.textContent, /12:02/);
+    assert.equal(app.nodes.count.textContent, '1 clip');
+    deletes[1].respond(200);
+    app.gets()[3].respond(200, ready(['12:00']));
+    assert.equal(app.nodes.count.textContent, '1 clip');
+});
+
+check('a stalled deletion reconciles once and a later user deletion can succeed', function () {
+    var app = harness();
+    app.gets()[0].respond(200, ready(['12:00']));
+    function removeFirst() {
+        var bin = app.nodes.clips.getElementsByTagName('button').filter(function (node) { return node.getAttribute('aria-label') === 'Delete'; })[0];
+        bin.onclick();
+        bin.onclick();
+    }
+    removeFirst();
+    var deletes = function () { return app.requests.filter(function (request) { return request.method === 'DELETE'; }); };
+    assert.equal(deletes()[0].timeout, 8000);
+    app.elapse(7999);
+    assert.equal(app.gets().length, 1);
+    assert.equal(app.nodes.clips.getElementsByClassName('clip').length, 0);
+    app.elapse(1);
+    assert.equal(deletes().length, 1);
+    assert.equal(app.gets().length, 2);
+    assert.equal(app.notices[0].text, 'Could not confirm deletion');
+    app.gets()[1].respond(200, ready(['12:00']));
+    assert.equal(app.nodes.count.textContent, '1 clip');
+    removeFirst();
+    assert.equal(deletes().length, 2);
+    deletes()[1].respond(200);
+    var empty = ready([]);
+    app.gets()[2].respond(200, empty);
+    assert.equal(app.nodes.clips.getElementsByClassName('clip').length, 0);
+    assert.match(app.nodes.clips.textContent, /No clips yet/);
+});
+
+check('manual list retry recovers after both deletion and reconciliation time out', function () {
+    var app = harness();
+    app.gets()[0].respond(200, ready(['12:00']));
+    var bin = app.nodes.clips.getElementsByTagName('button').filter(function (node) { return node.getAttribute('aria-label') === 'Delete'; })[0];
+    bin.onclick();
+    bin.onclick();
+    app.elapse(8000);
+    app.elapse(8000);
+    assert.equal(app.gets().length, 2);
+    assert.equal(app.retryButton().hidden, false);
+    app.retryButton().onclick();
+    assert.equal(app.gets().length, 3);
+    app.gets()[2].respond(200, ready(['12:00']));
+    assert.equal(app.nodes.count.textContent, '1 clip');
+    assert.equal(app.retryButton().hidden, true);
+    assert.equal(app.requests.filter(function (request) { return request.method === 'DELETE'; }).length, 1);
+});
+
+check('authentication expiry during deletion stops reconciliation and never replays the write', function () {
+    var app = harness();
+    app.gets()[0].respond(200, ready(['12:00']));
+    var bin = app.nodes.clips.getElementsByTagName('button').filter(function (node) { return node.getAttribute('aria-label') === 'Delete'; })[0];
+    bin.onclick();
+    bin.onclick();
+    app.requests.filter(function (request) { return request.method === 'DELETE'; })[0].respond(401);
+    app.elapse(8000);
+    app.load(true);
+    assert.equal(app.redirects(), 1);
+    assert.equal(app.gets().length, 1);
+    assert.equal(app.notices.length, 0);
+    assert.equal(app.requests.filter(function (request) { return request.method === 'DELETE'; }).length, 1);
+});
+
 console.log(checks + ' library checks passed');

@@ -53,6 +53,8 @@ function harness() {
     var timers = {};
     var nextTimer = 0;
     var redirects = 0;
+    var now = 0;
+    var notices = [];
     var windowEvents = {};
     var documentEvents = {};
     function node(id) {
@@ -72,9 +74,9 @@ function harness() {
     var dayButton = node('day').appendChild(new Element('button'));
     dayButton.appendChild(new Element('span')).textContent = 'All days';
     node('day').appendChild(new Element('div')).className = 'pick__menu';
-    function Xhr() { requests.push(this); }
+    function Xhr() { this.timeout = 0; requests.push(this); }
     Xhr.prototype.open = function (method, url) { this.method = method; this.url = url; };
-    Xhr.prototype.send = function () {};
+    Xhr.prototype.send = function () { this.started = now; };
     Xhr.prototype.abort = function () { this.aborted = true; };
     Xhr.prototype.getResponseHeader = function (key) { return this.headers && this.headers[key] || null; };
     Xhr.prototype.respond = function (status, body) {
@@ -112,7 +114,7 @@ function harness() {
             native: { available: function () { return false; } },
             settings: { load: function () {}, close: function () {} },
             shell: { start: function () {} },
-            toast: function () {},
+            toast: function (text, error) { notices.push({ text: text, error: !!error }); },
             session: { leaving: false, signIn: function () { redirects++; this.leaving = true; } }
         }
     };
@@ -123,7 +125,14 @@ function harness() {
     vm.runInContext(asset('library.js'), context);
     vm.runInContext(fs.readFileSync(path.join(web, 'clips.js'), 'utf8'), context);
     return {
-        nodes: nodes, timers: timers, requests: requests, revoked: revoked,
+        nodes: nodes, timers: timers, requests: requests, revoked: revoked, notices: notices,
+        core: context.Strike.core,
+        elapse: function (ms) {
+            now += ms;
+            requests.slice().forEach(function (xhr) {
+                if (!xhr.aborted && xhr.readyState !== 4 && xhr.timeout && now - xhr.started >= xhr.timeout) xhr.respond(0);
+            });
+        },
         redirects: function () { return redirects; },
         retryButton: function () { return nodes.toolbar.getElementsByTagName('button')[0]; },
         load: function (force) { context.Strike.list.load(force); },

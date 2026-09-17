@@ -51,6 +51,7 @@ Strike.core = {
     del: function (path, onOk, onFail) {
         var xhr = new XMLHttpRequest();
         xhr.open('DELETE', path, true);
+        xhr.timeout = 8000;
         xhr.onreadystatechange = function () {
             if (xhr.readyState !== 4) {
                 return;
