@@ -1,6 +1,7 @@
 package com.strike.recording
 
 import java.io.File
+import java.io.IOException
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -34,7 +35,11 @@ class ClipStore(private val root: File) : Reapable {
 
     override fun delete(id: String): Boolean {
         val file = file(id) ?: return false
-        return file.delete()
+        return try {
+            withClipFileLock(file) { file.delete() }
+        } catch (e: IOException) {
+            false
+        }
     }
 }
 

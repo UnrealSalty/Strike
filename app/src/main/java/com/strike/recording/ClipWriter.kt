@@ -10,6 +10,7 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,14 +39,14 @@ class ClipWriter(private val dir: File) {
         private set
 
     fun open(mode: RecordingMode, format: MediaFormat, audio: AudioConfig? = null): Boolean {
-        val dest = writableDir(mode == RecordingMode.DRIVE || mode == RecordingMode.MANUAL)
-            ?: return false
-        out = dest
         val clip = clipName(mode, System.currentTimeMillis())
-        val file = File(dest, clip + WRITING)
         var fresh: MediaMuxer? = null
         return try {
-            fresh = MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val (file, opened) = openClipOutput(
+                dir, clip + WRITING, mode == RecordingMode.DRIVE || mode == RecordingMode.MANUAL
+            ) { MediaMuxer(it.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4) }
+            out = file.parentFile!!
+            fresh = opened
             track = fresh.addTrack(format)
             audioTrack = if (audio == null) -1 else fresh.addTrack(aacFormat(audio))
             fresh.start()
@@ -61,21 +62,6 @@ class ClipWriter(private val dir: File) {
             audioTrack = -1
             false
         }
-    }
-
-    // Remount before checking the FUSE path; isDirectory can be stale after ACC off.
-    private fun writableDir(mayUseInternal: Boolean): File? {
-        if (storageUuid(dir.path) != null) remountUntil(dir)
-        if (dir.exists() || ensureDir(dir)) return dir
-        if (mayUseInternal) {
-            val internal = File("/storage/emulated/0/Strike/clips")
-            if (internal != dir && (internal.exists() || ensureDir(internal))) {
-                DaemonLog.w(TAG, "cannot write $dir, writing to $internal")
-                return internal
-            }
-        }
-        DaemonLog.e(TAG, "cannot create $dir")
-        return null
     }
 
     fun write(sample: Sample) = writeTo(track, sample)
@@ -119,7 +105,13 @@ class ClipWriter(private val dir: File) {
             return null
         }
         val finished = File(out, clip)
-        if (!file.renameTo(finished)) {
+        val published = try {
+            withClipFileLock(finished) { file.renameTo(finished) }
+        } catch (e: IOException) {
+            DaemonLog.e(TAG, "cannot publish $clip: ${e.message}")
+            return null
+        }
+        if (!published) {
             DaemonLog.e(TAG, "cannot rename $clip into place")
             return null
         }
@@ -141,13 +133,37 @@ class ClipWriter(private val dir: File) {
 fun indexUpFront(finished: File) {
     val scratch = File(finished.parentFile, finished.name + FAST)
     val startedAt = System.currentTimeMillis()
-    val sizeMb = finished.length() / MB
-    if (moovToFront(finished, scratch) && swap(scratch, finished)) {
-        DaemonLog.d(TAG, "PROBE faststart ${finished.name} ${sizeMb}MB in ${System.currentTimeMillis() - startedAt}ms")
-        return
+    try {
+        val original = Files.readAttributes(finished.toPath(), BasicFileAttributes::class.java)
+        if (original.fileKey() != null && moovToFront(finished, scratch)) {
+            if (replaceIndexedClip(scratch, finished, original)) {
+                DaemonLog.d(TAG, "PROBE faststart ${finished.name} ${original.size() / MB}MB in ${System.currentTimeMillis() - startedAt}ms")
+            }
+            return
+        }
+        if (finished.exists()) {
+            DaemonLog.w(TAG, "clip ${finished.name} keeps its index at the end, the player may not start it")
+        }
+    } catch (e: IOException) {
+        if (finished.exists()) DaemonLog.w(TAG, "cannot move the index for ${finished.name}: ${e.message}")
+    } finally {
+        scratch.delete()
     }
-    scratch.delete()
-    DaemonLog.w(TAG, "clip ${finished.name} keeps its index at the end, the player may not start it")
+}
+
+internal fun replaceIndexedClip(
+    scratch: File, finished: File, original: BasicFileAttributes
+): Boolean = withClipFileLock(finished) {
+    val current = try {
+        Files.readAttributes(finished.toPath(), BasicFileAttributes::class.java)
+    } catch (e: java.nio.file.NoSuchFileException) {
+        return@withClipFileLock false
+    }
+    if (original.fileKey() == null || original.fileKey() != current.fileKey() ||
+        original.size() != current.size() || original.lastModifiedTime() != current.lastModifiedTime()
+    ) return@withClipFileLock false
+    if (!swap(scratch, finished)) throw IOException("cannot replace the clip index")
+    true
 }
 
 // rename(2) replaces the clip in one step either way, so no reader ever sees a missing file.
@@ -210,7 +226,9 @@ fun sweepUnfinished(dir: File, nowMs: Long) {
     for (file in files) {
         val leftover = file.name.endsWith(WRITING) || file.name.endsWith(BROKEN) ||
             file.name.endsWith(FAST)
-        if (leftover && nowMs - file.lastModified() > SWEEP_AGE_MS && file.delete()) swept++
+        if (!leftover || nowMs - file.lastModified() <= SWEEP_AGE_MS) continue
+        if (file.name.endsWith(WRITING) && !lacksClipIndex(file)) continue
+        if (file.delete()) swept++
     }
     if (swept > 0) DaemonLog.w(TAG, "$swept clip(s) were cut off mid-write and could not be played")
 }

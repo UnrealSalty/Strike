@@ -89,7 +89,7 @@ class ClipWriterTest {
 
     private fun write(name: String, modifiedAtMs: Long): File {
         val file = folder.newFile(name)
-        file.writeBytes(ByteArray(8))
+        file.writeBytes(byteArrayOf(0, 0, 0, 8, 102, 114, 101, 101))
         file.setLastModified(modifiedAtMs)
         return file
     }

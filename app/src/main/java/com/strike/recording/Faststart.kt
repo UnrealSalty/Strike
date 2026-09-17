@@ -29,6 +29,15 @@ internal fun moovToFront(source: File, target: File): Boolean = try {
     false
 }
 
+internal fun lacksClipIndex(file: File): Boolean = try {
+    RandomAccessFile(file, "r").use { source ->
+        val length = source.length()
+        length < HEADER_BYTES || topLevel(source, length)?.none { it.type == "moov" } == true
+    }
+} catch (e: IOException) {
+    false
+}
+
 private fun rewrite(source: RandomAccessFile, totalBytes: Long, target: File): Boolean {
     val boxes = topLevel(source, totalBytes) ?: return false
     val index = boxes.firstOrNull { it.type == "moov" } ?: return false

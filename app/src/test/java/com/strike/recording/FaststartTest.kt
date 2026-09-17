@@ -19,6 +19,50 @@ class FaststartTest {
     val folder = TemporaryFolder()
 
     @Test
+    fun aFinalizedClipWithAnUnrecognizedTrailingBoxIsPreserved() {
+        val source = clip(indexLast = true, tables = listOf(stco(listOf(FIRST_CHUNK))))
+        source.appendBytes(byteArrayOf(0, 0, 0, 0, 102, 114, 101, 101))
+        assertFalse(lacksClipIndex(source))
+    }
+
+    @Test
+    fun failedPublicationDoesNotMakeFinalizedFootageEligibleForCleanup() {
+        val source = clip(indexLast = true, tables = listOf(stco(listOf(FIRST_CHUNK))))
+        val writer = ClipWriter(folder.root)
+        assertTrue(writer.open(RecordingMode.DRIVE, android.media.MediaFormat()))
+        val staged = File(folder.root, writer.name!! + ".tmp")
+        source.copyTo(staged)
+        folder.newFolder(".strike-clips.lock")
+
+        org.junit.Assert.assertNull(writer.close())
+        val now = System.currentTimeMillis()
+        assertTrue(staged.setLastModified(now - 600_000))
+        sweepUnfinished(folder.root, now)
+
+        org.junit.Assert.assertArrayEquals(source.readBytes(), staged.readBytes())
+    }
+
+    @Test
+    fun aFinalizedTemporaryClipSurvivesTheUnfinishedFileSweep() {
+        val source = clip(indexLast = true, tables = listOf(stco(listOf(FIRST_CHUNK))))
+        val staged = File(folder.root, "drive_20260916_180500.mp4.tmp")
+        assertTrue(source.renameTo(staged))
+        val original = staged.readBytes()
+        val now = System.currentTimeMillis()
+        assertTrue(staged.setLastModified(now - 600_000))
+
+        sweepUnfinished(folder.root, now)
+
+        assertTrue(staged.exists())
+        org.junit.Assert.assertArrayEquals(original, staged.readBytes())
+    }
+
+    @Test
+    fun aMissingTemporaryClipIsNotClassifiedAsSafeToDiscard() {
+        assertFalse(lacksClipIndex(File(folder.root, "missing.tmp")))
+    }
+
+    @Test
     fun theIndexMovesAheadOfTheMediaData() {
         val source = clip(indexLast = true, tables = listOf(stco(listOf(FIRST_CHUNK))))
         val target = File(folder.root, "out.mp4")

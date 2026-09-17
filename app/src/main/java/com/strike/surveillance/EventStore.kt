@@ -4,6 +4,7 @@ import com.strike.recording.Kept
 import com.strike.recording.Reapable
 import com.strike.recording.keptIn
 import com.strike.recording.readStamp
+import com.strike.recording.withClipFileLock
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -88,10 +89,16 @@ class EventStore(internal val root: File) : Reapable {
 
     override fun delete(id: String): Boolean {
         val file = file(id) ?: return false
-        if (!file.delete()) return false
-        File(root, stem(id) + ".json").delete()
-        File(root, stem(id) + ".jpg").delete()
-        return true
+        return try {
+            withClipFileLock(file) {
+                if (!file.delete()) return@withClipFileLock false
+                File(root, stem(id) + ".json").delete()
+                File(root, stem(id) + ".jpg").delete()
+                true
+            }
+        } catch (e: IOException) {
+            false
+        }
     }
 
     // Sidecars written by shell UID 2000 must remain readable by the app.
