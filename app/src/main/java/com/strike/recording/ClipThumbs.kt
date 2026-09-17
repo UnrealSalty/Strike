@@ -94,10 +94,11 @@ class ClipThumbs internal constructor(
         try {
             obsolete = fingerprint(clip, hero) != entry.fingerprint
             if (obsolete) return
-            thumb = cached(id, entry.fingerprint) ?: decode(clip, hero)
+            val cached = cached(id, entry.fingerprint)
+            thumb = cached ?: decode(clip, hero)
             obsolete = fingerprint(clip, hero) != entry.fingerprint || !current(id, entry)
             if (obsolete) return
-            if (thumb != null) keep(id, entry.fingerprint, thumb)
+            if (cached == null && thumb != null) keep(id, entry.fingerprint, thumb)
         } catch (e: RuntimeException) {
             thumb = null
             Logs.w("Thumbnails", "Could not read clip thumbnail", e)
@@ -142,8 +143,10 @@ class ClipThumbs internal constructor(
     private fun keep(id: String, fingerprint: String, thumb: Thumb) {
         try {
             dir.mkdirs()
+            val facts = facts(id)
+            if (facts.exists() && !facts.delete()) return
             file(id).writeBytes(thumb.jpeg)
-            facts(id).writeText("${thumb.durationMs}\n${thumb.codec ?: ""}\n$fingerprint")
+            facts.writeText("${thumb.durationMs}\n${thumb.codec ?: ""}\n$fingerprint")
         } catch (e: IOException) {
             // The memory snapshot remains usable when the disk cache is unavailable.
         }
