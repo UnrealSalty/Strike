@@ -1,5 +1,6 @@
 package com.strike.daemon
 
+import com.strike.core.Logs
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -220,5 +221,102 @@ class RecorderMaintenanceTest {
         assertEquals(2, checks)
         assertEquals(Phase.RUNNING, recorder.phase)
         assertTrue(watched)
+    }
+
+    @Test
+    fun aPersistentRecoveryFailureRetriesWithoutRepeatingTheWarning() {
+        val after = Logs.recent().lastOrNull()?.sequence ?: 0L
+        onRecover = { throw IOException("Could not launch the watchdog") }
+
+        repeat(3) {
+            maintainNow()
+            nowMs += 60_000L
+        }
+
+        assertEquals(3, checks)
+        assertEquals(1, recoveryWarnings(after))
+        assertEquals(Phase.OFF, recorder.phase)
+        assertEquals(0, stops)
+    }
+
+    @Test
+    fun aNoOpProbeDoesNotResetAPersistentRecoveryWarning() {
+        val after = Logs.recent().lastOrNull()?.sequence ?: 0L
+        val failure = { throw IOException("Could not launch the watchdog") }
+        onRecover = failure
+        maintainNow()
+        nowMs += 60_000L
+        onRecover = {}
+        maintainNow()
+        nowMs += 60_000L
+        onRecover = failure
+        maintainNow()
+
+        assertEquals(3, checks)
+        assertEquals(1, recoveryWarnings(after))
+        assertEquals(Phase.OFF, recorder.phase)
+    }
+
+    @Test
+    fun aDifferentRecoveryFailureProducesANewWarning() {
+        val after = Logs.recent().lastOrNull()?.sequence ?: 0L
+        onRecover = { throw IOException("Shell unavailable") }
+        maintainNow()
+        nowMs += 60_000L
+        onRecover = { throw IOException("Could not launch the watchdog") }
+        maintainNow()
+        nowMs += 60_000L
+        onRecover = { throw IllegalStateException("Could not launch the watchdog") }
+        maintainNow()
+
+        assertEquals(3, checks)
+        assertEquals(3, recoveryWarnings(after))
+    }
+
+    @Test
+    fun aSuccessfulRecoveryAllowsTheSameFailureToBeReportedAgain() {
+        val after = Logs.recent().lastOrNull()?.sequence ?: 0L
+        val failure = { throw IOException("Could not launch the watchdog") }
+        onRecover = failure
+        maintainNow()
+        nowMs += 60_000L
+        onRecover = {}
+        recover = true
+        reply = JSONObject().put("uptimeMs", 3_000)
+        maintainNow()
+        assertEquals(Phase.RUNNING, recorder.phase)
+
+        nowMs += 60_000L
+        onRecover = failure
+        maintainNow()
+        assertEquals(2, recoveryWarnings(after))
+        assertEquals(Phase.RUNNING, recorder.phase)
+        assertEquals(0, stops)
+    }
+
+    @Test
+    fun explicitlyStartingTheRecorderAllowsANewRecoveryWarning() {
+        val after = Logs.recent().lastOrNull()?.sequence ?: 0L
+        onRecover = { throw IOException("Could not launch the watchdog") }
+        maintainNow()
+        reply = JSONObject().put("uptimeMs", 3_000)
+        recorder.start()
+        tasks.removeFirst().run()
+        assertEquals(Phase.RUNNING, recorder.phase)
+
+        nowMs += 60_000L
+        maintainNow()
+        assertEquals(2, recoveryWarnings(after))
+        assertEquals(Phase.RUNNING, recorder.phase)
+    }
+
+    private fun maintainNow() {
+        recorder.maintain()
+        tasks.removeFirst().run()
+    }
+
+    private fun recoveryWarnings(after: Long): Int = Logs.recent().count {
+        it.sequence > after && it.tag == "Recorder" &&
+            it.message == "Could not restore the recorder watchdog"
     }
 }

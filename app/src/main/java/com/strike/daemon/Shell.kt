@@ -53,9 +53,9 @@ class Shell internal constructor(
     fun isAuthorised(): Boolean = local || connect() != null
 
     /** The exit code, or null when there is no shell at all. */
-    fun run(command: String): Int? = synchronized(commands) {
+    fun run(command: String, logFailure: Boolean = true): Int? = synchronized(commands) {
         val exitCode = exec(command)?.exitCode
-        if (exitCode != null && exitCode != 0) {
+        if (logFailure && exitCode != null && exitCode != 0) {
             Logs.w(TAG, "$command exited $exitCode")
         }
         exitCode
@@ -98,7 +98,7 @@ class Shell internal constructor(
         return try {
             connection.shell(command)
         } catch (e: IOException) {
-            Logs.d(TAG, "shell lost during: $command")
+            Logs.d(TAG, "shell connection lost")
             drop(connection)
             null
         }

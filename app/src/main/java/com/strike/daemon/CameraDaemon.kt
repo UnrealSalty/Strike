@@ -153,7 +153,7 @@ object CameraDaemon {
     fun main(args: Array<String>) {
         DaemonLog.watchCrashes()
         DaemonLog.d(TAG, "starting as uid ${Process.myUid()}, pid ${Process.myPid()}, boot uptime ${SystemClock.elapsedRealtime() / 1000}s")
-        // A duplicate daemon must stop its watchdog without clearing the active daemon's lock.
+        // A duplicate exits without clearing the active daemon's lock.
         if (!lock.take()) exitProcess(EXIT_ALREADY_RUNNING)
         cameraProfile = CameraProfile.of(Config.getString(CAMERA_PROFILE, "auto")) ?: CameraProfile.AUTO
         DaemonLog.d(TAG, "camera profile: ${cameraProfile.label}")

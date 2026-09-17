@@ -15,30 +15,65 @@ class WatchdogTest {
     val temporary = TemporaryFolder()
 
     @Test
-    fun repeatedCrashesStopUntilTheOwnerRetries() {
-        val code = watchdog(List(5) { "137 1" })
+    fun repeatedCrashesKeepRetryingUntilTheCameraCanRunAgain() {
+        val code = watchdog(List(6) { "137 1" } + "137 300" + "0 300 stop")
 
-        assertEquals(1, code)
-        assertEquals("5", file("starts").readText().trim())
-        assertEquals(listOf("3", "6", "9", "12"), file("sleeps").readLines())
-        assertTrue(file("cam.disabled").readText().contains("exit 137"))
+        assertEquals(0, code)
+        assertEquals("8", file("starts").readText().trim())
+        assertEquals(listOf("3", "6", "9", "12", "15", "18", "3"), file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
         assertFalse(file("cam_watchdog.pid").exists())
     }
 
     @Test
-    fun repeatedShortCleanExitsAlsoStop() {
-        assertEquals(1, watchdog(List(5) { "0 1" }))
-        assertEquals("5", file("starts").readText().trim())
-        assertTrue(file("cam.disabled").exists())
+    fun repeatedShortCleanExitsKeepRetrying() {
+        assertEquals(0, watchdog(List(6) { "0 1" } + "0 300 stop"))
+        assertEquals("7", file("starts").readText().trim())
+        assertEquals(listOf("3", "6", "9", "12", "15", "18"), file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
     }
 
     @Test
-    fun aHealthyRunAllowsRecoveryFromLaterCrashes() {
-        val exits = List(4) { "137 1" } + "137 300" + List(4) { "137 1" } + "3 0"
+    fun aHealthyRunResetsTheBackoffAfterRepeatedCrashes() {
+        val exits = List(6) { "137 1" } + "137 300" + List(6) { "137 1" } + "0 300 stop"
         assertEquals(0, watchdog(exits))
 
-        assertEquals("10", file("starts").readText().trim())
-        assertFalse(file("cam.disabled").exists())
+        assertEquals("14", file("starts").readText().trim())
+        val retries = listOf("3", "6", "9", "12", "15", "18")
+        assertEquals(retries + "3" + retries, file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
+    }
+
+    @Test
+    fun prolongedFailuresNeverDelayRecoveryMoreThanOneMinute() {
+        assertEquals(0, watchdog(List(25) { "137 1" } + "0 300 stop"))
+
+        assertEquals("26", file("starts").readText().trim())
+        val delays = (1..20).map { (it * 3).toString() } + List(5) { "60" }
+        assertEquals(delays, file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
+    }
+
+    @Test
+    fun prolongedCameraLockFailuresBackOffWithoutDisablingRecovery() {
+        assertEquals(0, watchdog(List(25) { "3 1" } + "0 300 stop"))
+
+        assertEquals("26", file("starts").readText().trim())
+        val delays = (1..20).map { (it * 3).toString() } + List(5) { "60" }
+        assertEquals(delays, file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
+        assertFalse(file("cam_watchdog.pid").exists())
+    }
+
+    @Test
+    fun manualStopStillWinsAfterTheBackoffReachesItsCap() {
+        assertEquals(0, watchdog(List(20) { "137 1" },
+            afterSleep = "if [ \"\$1\" -eq 60 ]; then : > cam.disabled; fi"))
+
+        assertEquals("20", file("starts").readText().trim())
+        assertEquals("60", file("sleeps").readLines().last())
+        assertTrue(file("cam.disabled").exists())
+        assertFalse(file("cam_watchdog.pid").exists())
     }
 
     @Test
@@ -67,7 +102,7 @@ class WatchdogTest {
     @Test
     fun anUnrelatedProcessReusingTheCameraPidCannotBlockRecovery() {
         cameraOwner("unrelated")
-        assertEquals(0, watchdog(listOf("3 0")))
+        assertEquals(0, watchdog(listOf("0 300 stop")))
         assertEquals("1", file("starts").readText().trim())
         assertFalse(file("sleeps").exists())
         assertEquals("777", file("cam.lock").readText())
@@ -76,23 +111,51 @@ class WatchdogTest {
     @Test
     fun aSimilarProcessNameDoesNotOwnTheCamera() {
         cameraOwner("${CAM_PROCESS}_other")
-        assertEquals(0, watchdog(listOf("3 0")))
+        assertEquals(0, watchdog(listOf("0 300 stop")))
         assertEquals("1", file("starts").readText().trim())
         assertFalse(file("sleeps").exists())
     }
 
-    private fun cameraOwner(name: String) {
-        file("cam.lock").writeText("777")
-        val cmdline = file("proc/777/cmdline")
-        cmdline.parentFile!!.mkdirs()
-        cmdline.writeBytes((name + "\u0000ignored\u0000").toByteArray())
+    @Test
+    fun aRunningCameraIsAdoptedWithoutALockFile() {
+        cameraOwner(CAM_PROCESS)
+        assertTrue(file("cam.lock").delete())
+        assertEquals(0, watchdog(emptyList(), afterSleep = ": > cam.disabled"))
+        assertFalse(file("starts").exists())
+        assertEquals(listOf("10"), file("sleeps").readLines())
     }
 
     @Test
-    fun losingTheCameraLockRaceStopsTheExtraWatchdog() {
-        assertEquals(0, watchdog(listOf("3 0")))
-        assertEquals("1", file("starts").readText().trim())
-        assertFalse(file("cam.disabled").exists())
+    fun aRunningCameraIsAdoptedWithInvalidLockMetadata() {
+        cameraOwner(CAM_PROCESS)
+        file("cam.lock").writeText("incomplete")
+        assertEquals(0, watchdog(emptyList(), afterSleep = ": > cam.disabled"))
+        assertFalse(file("starts").exists())
+        assertEquals(listOf("10"), file("sleeps").readLines())
+        assertEquals("incomplete", file("cam.lock").readText())
+    }
+
+    private fun cameraOwner(name: String) {
+        file("cam.lock").writeText("777")
+        file("camera-name").writeText(name)
+    }
+
+    @Test
+    fun aDuplicateLaunchStillGuardsTheCameraAndRestartsItAfterItExits() {
+        val processes = """
+            PID_CHECKS=0
+            pidof() {
+              PID_CHECKS=${'$'}((PID_CHECKS + 1))
+              [ "${'$'}PID_CHECKS" -gt 1 ] && [ ! -f camera-gone ]
+            }
+        """.trimIndent()
+        assertEquals(0, watchdog(listOf("3 0", "0 300 stop"), setup = processes,
+            afterSleep = "if [ \"\$1\" -eq 10 ]; then : > camera-gone; fi"))
+
+        assertEquals("2", file("starts").readText().trim())
+        assertEquals(listOf("3", "10"), file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
+        assertFalse(file("cam_watchdog.pid").exists())
     }
 
     @Test
@@ -111,7 +174,7 @@ class WatchdogTest {
 
     @Test
     fun theLaunchPassesTheCameraJarAndExtractedLibraries() {
-        assertEquals(0, watchdog(listOf("3 0")))
+        assertEquals(0, watchdog(listOf("0 300 stop")))
 
         assertTrue(file("classpath").readText().startsWith("/system/framework/bmmcamera.jar:"))
         assertTrue(file("classpath").readText().trim().endsWith("/base.apk"))
@@ -199,7 +262,7 @@ class WatchdogTest {
     @Test
     fun automaticCrashRecoveryKeepsTheParkedIntentForTheNextDaemon() {
         file("cam.recovery").writeText("parked recording intent")
-        assertEquals(0, watchdog(listOf("137 300", "3 0")))
+        assertEquals(0, watchdog(listOf("137 300", "0 300 stop")))
         assertEquals("2", file("starts").readText().trim())
         assertEquals("parked recording intent", file("cam.recovery").readText())
     }
@@ -211,6 +274,7 @@ class WatchdogTest {
         val commands = """
             pm() { printf 'package:%s/base.apk\n' "${'$'}PWD"; }
             awk() { cat uptime; }
+            pidof() { [ "${'$'}(cat camera-name 2>/dev/null)" = "${'$'}1" ] && echo 777; }
             app_process() {
               echo "${'$'}CLASSPATH" > classpath
               printf '%s\n' "${'$'}@" > arguments
@@ -218,9 +282,11 @@ class WatchdogTest {
               RUN=${'$'}((RUN + 1))
               echo ${'$'}RUN > starts
               set -- ${'$'}(sed -n "${'$'}{RUN}p" exits)
+              if [ "${'$'}#" -lt 2 ]; then echo unexpected launch > cam.disabled; exit 99; fi
               UPTIME=${'$'}(cat uptime)
-              echo ${'$'}((UPTIME + ${'$'}{2:-0})) > uptime
-              exit ${'$'}{1:-3}
+              echo ${'$'}((UPTIME + ${'$'}2)) > uptime
+              if [ "${'$'}{3:-}" = stop ]; then echo stopped by fixture > cam.disabled; fi
+              exit ${'$'}1
             }
             sleep() {
               if [ "${'$'}1" -eq 3600 ]; then exec sleep 30; fi

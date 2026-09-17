@@ -5,65 +5,60 @@ import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
 import java.nio.channels.FileLock
+import java.nio.channels.OverlappingFileLockException
 
 private const val TAG = "Lock"
 
-// Recover stale PID locks after SIGKILL without admitting a second camera owner.
-class SingletonLock {
+// The kernel lock owns the camera; PID contents only identify its process.
+class SingletonLock(private val path: File = File(CAM_LOCK_PATH)) {
 
     private var file: RandomAccessFile? = null
     private var lock: FileLock? = null
 
+    @Synchronized
     fun take(): Boolean {
-        val path = File(CAM_LOCK_PATH)
+        if (lock?.isValid == true) return true
+        var handle: RandomAccessFile? = null
+        var acquired = false
         try {
-            var handle = RandomAccessFile(path, "rw")
-            var held = handle.channel.tryLock()
+            handle = RandomAccessFile(path, "rw")
+            val held = try {
+                handle.channel.tryLock()
+            } catch (e: OverlappingFileLockException) {
+                null
+            }
             if (held == null) {
-                val owner = pidIn(handle)
-                if (owner != null && owner != Process.myPid() && File("/proc/$owner").exists()) {
-                    DaemonLog.w(TAG, "another daemon holds the camera, pid $owner")
-                    handle.close()
-                    return false
-                }
-                handle.close()
-                path.delete()
-                handle = RandomAccessFile(path, "rw")
-                held = handle.channel.tryLock()
-                if (held == null) {
-                    DaemonLog.w(TAG, "cannot take the camera lock")
-                    handle.close()
-                    return false
-                }
+                DaemonLog.w(TAG, "another daemon holds the camera")
+                return false
             }
             handle.setLength(0)
             handle.writeBytes(Process.myPid().toString())
             path.setReadable(true, false)
             file = handle
             lock = held
+            acquired = true
             return true
         } catch (e: IOException) {
-            DaemonLog.e(TAG, "camera lock failed: ${e.message}")
+            DaemonLog.e(TAG, "camera lock failed: " + e.message)
             return false
+        } finally {
+            if (!acquired) close(handle)
         }
     }
 
+    @Synchronized
     fun release() {
+        val handle = file
+        lock = null
+        file = null
+        close(handle)
+    }
+
+    private fun close(handle: RandomAccessFile?) {
         try {
-            lock?.release()
-            file?.close()
+            handle?.close()
         } catch (e: IOException) {
             DaemonLog.w(TAG, "camera lock release failed")
         }
-        lock = null
-        file = null
-        File(CAM_LOCK_PATH).delete()
-    }
-
-    private fun pidIn(handle: RandomAccessFile): Int? = try {
-        handle.seek(0)
-        handle.readLine()?.trim()?.toIntOrNull()
-    } catch (e: IOException) {
-        null
     }
 }

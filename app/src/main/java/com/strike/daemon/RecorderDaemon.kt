@@ -70,6 +70,7 @@ class RecorderDaemon internal constructor(
     private var request = 0L
     private var nextWatchdogCheckMs = 0L
     private var checkingWatchdog = false
+    private var recoveryError: String? = null
 
     @Synchronized
     fun maintain() {
@@ -87,6 +88,7 @@ class RecorderDaemon internal constructor(
                 if (!recoverWatchdog()) return@execute
                 synchronized(this) {
                     if (current != request) return@execute
+                    recoveryError = null
                     phase = Phase.STARTING
                     canStop = true
                     failure = ""
@@ -97,7 +99,14 @@ class RecorderDaemon internal constructor(
                 if (isStarting(current)) {
                     fail(current, "The recorder could not restart", cleanup = false, keepStop = true, error = e)
                 } else {
-                    Logs.w(TAG, "Could not restore the recorder watchdog", e)
+                    synchronized(this) {
+                        if (current != request) return@execute
+                        val reason = e.javaClass.name + ": " + e.message
+                        if (reason != recoveryError) {
+                            recoveryError = reason
+                            Logs.w(TAG, "Could not restore the recorder watchdog", e)
+                        }
+                    }
                 }
             } finally {
                 synchronized(this) { checkingWatchdog = false }
@@ -129,6 +138,7 @@ class RecorderDaemon internal constructor(
     fun start() {
         if (phase == Phase.STARTING || phase == Phase.RUNNING || phase == Phase.STOPPING) return
         val current = ++request
+        recoveryError = null
         phase = Phase.STARTING
         canStop = true
         failure = ""
@@ -184,6 +194,7 @@ class RecorderDaemon internal constructor(
     @Synchronized
     fun resumeAfterUpdate() {
         val current = ++request
+        recoveryError = null
         phase = Phase.STARTING
         canStop = true
         step = "Restarting after update"

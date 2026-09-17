@@ -1,5 +1,6 @@
 package com.strike.daemon
 
+import com.strike.core.Logs
 import dadb.AdbShellResponse
 import dadb.Dadb
 import org.junit.Assert.assertEquals
@@ -169,7 +170,16 @@ class ShellTest {
     fun losingTheTransportClearsAuthorisationAndAllowsRecovery() {
         authorise()
         command = { throw IOException("connection reset") }
-        assertNull(shell.read("echo ready"))
+        val after = Logs.recent().lastOrNull()?.sequence ?: 0L
+        val interruptedCommand = "echo interrupted-command-marker"
+
+        assertNull(shell.read(interruptedCommand))
+
+        val messages = Logs.recent().filter {
+            it.sequence > after && it.tag == "Shell"
+        }.map { it.message }
+        assertEquals(listOf("shell connection lost"), messages)
+        assertTrue(messages.none { it.contains(interruptedCommand) })
         assertEquals(1, closed)
         assertFalse(shell.isAuthorised())
         assertTrue(shell.isPending)
@@ -188,6 +198,35 @@ class ShellTest {
         assertFalse(shell.check("test -f /missing"))
         assertNull(shell.read("cat /missing"))
         assertEquals(1, shell.run("cat /missing"))
+        assertTrue(shell.isAuthorised())
+        assertEquals(0, closed)
+    }
+
+    @Test
+    fun aFailedCommandLogsItsExitByDefault() {
+        authorise()
+        command = { AdbShellResponse("", "missing file", 2) }
+        val after = Logs.recent().lastOrNull()?.sequence ?: 0L
+
+        assertEquals(2, shell.run("cat /missing"))
+
+        val warnings = Logs.recent().filter {
+            it.sequence > after && it.tag == "Shell" && it.level == "warn"
+        }
+        assertEquals(listOf("cat /missing exited 2"), warnings.map { it.message })
+    }
+
+    @Test
+    fun aCallerCanHandleTheExitWithoutLoggingTheCommand() {
+        authorise()
+        command = { AdbShellResponse("", "watchdog did not start", 2) }
+        val after = Logs.recent().lastOrNull()?.sequence ?: 0L
+
+        assertEquals(2, shell.run("start recorder watchdog", logFailure = false))
+
+        assertTrue(Logs.recent().none {
+            it.sequence > after && it.tag == "Shell"
+        })
         assertTrue(shell.isAuthorised())
         assertEquals(0, closed)
     }
