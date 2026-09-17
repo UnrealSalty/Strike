@@ -32,10 +32,14 @@ class Consumer(
     val surface: Surface,
     val view: CameraView,
     val frame: Frame,
-    private val onSurfaceFailure: (() -> Unit)? = null
+    private val onSurfaceFailure: (() -> Unit)? = null,
+    frameRateFps: Int = 0
 ) {
+    private val pacing = if (frameRateFps > 0) FramePacing(frameRateFps) else null
     private var rejectedFrames = 0
     private var failed = false
+
+    internal fun wantsFrame(timestampNs: Long): Boolean = pacing?.take(timestampNs) ?: true
 
     internal fun accepted() {
         if (rejectedFrames != 0) rejectedFrames = 0
@@ -305,6 +309,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
     private fun paint(timestampNs: Long) {
         val program = shader ?: return
         for (consumer in consumers) {
+            if (!consumer.wantsFrame(timestampNs)) continue
             val target = targetFor(consumer) ?: continue
             if (!EGL14.eglMakeCurrent(display, target, target, context)) {
                 fault(consumer, "cannot be drawn on")

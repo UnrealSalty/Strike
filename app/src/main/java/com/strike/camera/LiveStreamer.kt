@@ -47,7 +47,7 @@ class LiveStreamer(private val relay: PacketRelay) {
             ::relay
         )
         val surface = fresh.start() ?: return false
-        bus.add(Consumer(CONSUMER, surface, view, frame))
+        bus.add(Consumer(CONSUMER, surface, view, frame, frameRateFps = frameRateFps))
         this.bus = bus
         this.view = view
         this.bitrateBps = bitrateBps

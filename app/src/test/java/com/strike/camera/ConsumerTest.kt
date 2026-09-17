@@ -4,9 +4,24 @@ import android.opengl.EGL14
 import android.graphics.SurfaceTexture
 import android.view.Surface
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConsumerTest {
+    @Test
+    fun livePacingLeavesRecorderAndDetectorFramesUnchanged() {
+        val recorder = consumer {}
+        val detector = Consumer("detector", Surface(null as SurfaceTexture?), CameraView.ALL, Frame(64, 64))
+        val live = Consumer("live", Surface(null as SurfaceTexture?), CameraView.ALL, Frame(64, 64), frameRateFps = 12)
+        assertTrue(live.wantsFrame(0L))
+        assertFalse(live.wantsFrame(1_000_000L))
+        for (timestampNs in listOf(0L, 1_000_000L, 1_000_000L, 2_000_000L)) {
+            assertTrue(recorder.wantsFrame(timestampNs))
+            assertTrue(detector.wantsFrame(timestampNs))
+        }
+    }
+
     @Test
     fun threeConsecutiveBadSurfacesFailOnlyThatConsumer() {
         var recorderFailures = 0
