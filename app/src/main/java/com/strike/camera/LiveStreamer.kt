@@ -81,7 +81,6 @@ class LiveStreamer(private val relay: PacketRelay) {
         val keyFrame = sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
         frames++
         if (frames == 1L) DaemonLog.d(TAG, "first live frame, ${sample.bytes.size} bytes")
-        if (frames % 240 == 0L) DaemonLog.d(TAG, "$frames live frames encoded")
         if (keyFrame || !sentConfig) {
             val config = parameterSets(header)
             if (config != null) {

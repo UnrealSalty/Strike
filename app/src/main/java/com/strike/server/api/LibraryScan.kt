@@ -1,6 +1,5 @@
 package com.strike.server.api
 
-import com.strike.core.Logs
 import com.strike.recording.Clip
 import com.strike.recording.ClipStore
 import com.strike.recording.MB
@@ -37,13 +36,7 @@ object LibraryScan {
     private val worker = Executors.newSingleThreadExecutor { task ->
         Thread(task, "library-scan").apply { isDaemon = true }
     }
-    private val recordings = DirectoryInventory({ root ->
-        val startedAt = System.nanoTime()
-        val clips = ClipStore(root).list()
-        val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
-        Logs.d("Library", "PROBE clips ${clips.size} ${totalBytes(clips) / MB}MB in ${elapsedMs}ms")
-        clips
-    }, worker)
+    private val recordings = DirectoryInventory({ root -> ClipStore(root).list() }, worker)
     private val summaries = DirectoryInventory({ root -> EventStore(root).summary() }, worker)
 
     internal fun clips(volume: Volume, revision: Long): DirectorySnapshot<List<Clip>> =

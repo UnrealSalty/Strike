@@ -94,7 +94,7 @@ cameras awake, so a fixed number of days is not promised.
 
 ## Built lean
 
-- 📦 **One APK, about 14 MB.** No companion app, no Play services, no installer.
+- 📦 **One APK.** No companion app, no Play services, no installer.
 - 🧩 **Four dependencies.** core-ktx, coroutines, `dadb` for the local ADB
 connection, and TensorFlow Lite for detection.
 - ⚡ **An interface of about 230 KB.** Plain HTML, CSS, and JavaScript. No
@@ -161,10 +161,10 @@ when the head unit identifies itself only as "BYD AUTO".
 
 Hardware details
 
-The current camera path uses BYD's `AVMCamera` interface with a horizontal strip
-of four views. Different layouts need additional handling. The AIS/QCarCam path
-used by some DiLink 5 units is not implemented. A phone or emulator can show the
-interface but cannot provide the car's cameras.
+The legacy camera path uses BYD's `AVMCamera` interface. Initial AIS/QCarCam
+support is included for compatible DiLink 5 head units, but still needs testing
+on those cars. A phone or emulator can show the interface but cannot provide the
+car's cameras.
 
 Automatic parked operation requires working ignition readings. Local ADB must be
 available on port 5555 and authorized on the head unit.

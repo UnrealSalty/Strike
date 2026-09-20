@@ -84,7 +84,6 @@ class LivePackets(private val viewers: LiveStream) {
                 }
                 Logs.d(TAG, "first live $kind reached the browser, $length bytes")
             }
-            if (forwarded % 240 == 0L) Logs.d(TAG, "$forwarded live frames sent to the browser")
         }
     }
 }
