@@ -74,6 +74,10 @@ internal fun watchdogRecoveryGuard(installation: String): String =
         "WATCHDOG_PID=\$(cat '$CAM_WATCHDOG_PID_PATH' 2>/dev/null); " +
         "if " + watchdogAliveLine() + "; then exit 1; fi"
 
+internal fun recorderRunningLine(): String =
+    "pidof $CAM_PROCESS >/dev/null 2>&1 || (" +
+        "WATCHDOG_PID=\$(cat '$CAM_WATCHDOG_PID_PATH' 2>/dev/null); " + watchdogAliveLine() + ")"
+
 private fun watchdogAliveLine(): String =
     "(case \"\$WATCHDOG_PID\" in ''|*[!0-9]*) exit 1;; esac; " +
         "kill -0 \"\$WATCHDOG_PID\" 2>/dev/null && " +

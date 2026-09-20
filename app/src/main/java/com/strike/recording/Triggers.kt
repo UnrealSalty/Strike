@@ -101,3 +101,8 @@ internal fun sentryMode(
     return mode
 }
 
+
+internal fun parkedStartupReady(enabled: Boolean, arm: String, snapshot: VehicleSnapshot?, awake: Boolean): Boolean =
+    !enabled || awake || snapshot?.accOn == true ||
+        (snapshot?.gear != null && snapshot.gear != PARKED) ||
+        (arm == "lock" && snapshot?.locked == false)

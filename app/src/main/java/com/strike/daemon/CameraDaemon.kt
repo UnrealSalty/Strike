@@ -42,6 +42,7 @@ import com.strike.recording.storageUuid
 import com.strike.recording.shouldRecord
 import com.strike.recording.driveWanted
 import com.strike.recording.sentryMode
+import com.strike.recording.parkedStartupReady
 import com.strike.surveillance.EVENT_CLIP_CAP_MS
 import com.strike.surveillance.EventStore
 import com.strike.surveillance.Flag
@@ -258,6 +259,11 @@ object CameraDaemon {
         payload.put("events", watching?.events ?: 0)
         payload.put("deterrent", screen.isShowing)
         payload.put("rails", ParkedRails.isHeld)
+        payload.put("bootReady", parkedStartupReady(
+            Config.getBool(SurveillanceSettings.ENABLED, false),
+            Config.getString(SurveillanceSettings.ARM, SurveillanceSettings.fallback(SurveillanceSettings.ARM)),
+            acc.snapshot(), ParkedRails.isAwake
+        ))
         payload.put("live", streamer.isStreaming)
         payload.put("liveView", streamer.view.id)
         payload.put("uptimeMs", System.currentTimeMillis() - startedAtMs)

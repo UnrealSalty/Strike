@@ -14,12 +14,13 @@ internal const val CAM_RECOVERY_PATH = "$STRIKE_DIR/cam.recovery"
 private const val RESUME_WITHIN_MS = 180_000L
 private const val CHECKPOINT_EVERY_MS = 60_000L
 
-// Carries recording intent across a daemon restart, never vehicle state.
+// Carries recent recording intent across restarts, never vehicle state.
 internal class ParkedRecovery(
     private val file: File = File(CAM_RECOVERY_PATH),
     private val stopped: File = File(CAM_SENTINEL_PATH),
     private val bootId: String? = readBootId(),
-    private val nowMs: () -> Long = { SystemClock.elapsedRealtime() }
+    private val nowMs: () -> Long = { SystemClock.elapsedRealtime() },
+    private val wallNowMs: () -> Long = System::currentTimeMillis
 ) {
     private var checkpointAtMs: Long? = null
     private var checkpointMode: String? = null
@@ -56,9 +57,10 @@ internal class ParkedRecovery(
         val temporary = File(file.path + ".tmp")
         return try {
             DataOutputStream(temporary.outputStream()).use {
-                it.writeInt(1)
+                it.writeInt(2)
                 it.writeUTF(boot)
                 it.writeLong(nowMs())
+                it.writeLong(wallNowMs())
                 it.writeUTF(mode)
                 it.writeUTF(arm)
             }
@@ -86,14 +88,19 @@ internal class ParkedRecovery(
             if (stopped.exists() || !enabled || !supported(mode, arm) || file.length() > 256L) return null
             val boot = bootId?.takeIf { it.isNotEmpty() } ?: return null
             DataInputStream(ByteArrayInputStream(file.readBytes())).use {
-                if (it.readInt() != 1 || it.readUTF() != boot) return null
+                val version = it.readInt()
+                if (version != 1 && version != 2) return null
+                val sameBoot = it.readUTF() == boot
                 val recordedAtMs = it.readLong()
-                val ageMs = nowMs() - recordedAtMs
+                val recordedWallMs = if (version == 2) it.readLong() else null
+                val now = nowMs()
+                val ageMs = if (sameBoot) now - recordedAtMs
+                    else wallNowMs() - (recordedWallMs ?: return null)
                 val recordedMode = it.readUTF()
                 val recordedArm = it.readUTF()
                 if (ageMs !in 0..RESUME_WITHIN_MS || recordedMode != mode || recordedArm != arm ||
                     stopped.exists()) null
-                else recordedAtMs + RESUME_WITHIN_MS
+                else now + (RESUME_WITHIN_MS - ageMs)
             }
         } catch (e: IOException) {
             null

@@ -183,6 +183,58 @@ class WatchdogRecoveryTest {
         assertTrue(!file("cam.log").exists() || !file("cam.log").readText().contains("watchdog restarted"))
     }
 
+    @Test
+    fun aStoppedRecorderDoesNotMistakeAReusedPidForItsWatchdog() {
+        file("cam.disabled").writeText("stopped from the app")
+
+        assertEquals(1, running(listOf("unrelated")))
+
+        assertEquals("stopped from the app", file("cam.disabled").readText())
+        assertFalse(file("start_cam.sh").exists())
+        assertFalse(file("launches").exists())
+    }
+
+    @Test
+    fun mentioningTheScriptDoesNotKeepAnInactiveRecorderRunning() {
+        assertEquals(1, running(listOf("sh", "-c", "echo ${scriptPath()}")))
+        assertFalse(file("start_cam.sh").exists())
+    }
+
+    @Test
+    fun theWatchdogIdentityKeepsTheRecorderRunningWhileItsCameraStarts() {
+        assertEquals(0, running(listOf("/system/bin/sh", "-x", scriptPath())))
+        assertFalse(file("camera-alive").exists())
+    }
+
+    @Test
+    fun missingOrMalformedWatchdogPidsDoNotKeepTheRecorderRunning() {
+        assertEquals(1, running())
+        for (pid in listOf("", "not-a-pid", "123 456", "-1", "999999")) {
+            assertEquals("Invalid watchdog pid $pid", 1, running(pid = pid))
+        }
+        assertFalse(file("launches").exists())
+    }
+
+    @Test
+    fun aLiveCameraKeepsTheRecorderRunningWithoutAWatchdogPid() {
+        file("camera-alive").writeText("")
+
+        assertEquals(0, running())
+
+        assertFalse(file("cam_watchdog.pid").exists())
+        assertFalse(file("launches").exists())
+    }
+
+    private fun running(arguments: List<String>? = null, pid: String? = null): Int {
+        val owner = when {
+            arguments != null -> "echo \"\$\$\" > cam_watchdog.pid; mkdir -p \"proc/\$\$\"; " +
+                "printf '%s\\000' ${arguments.joinToString(" ") { quote(it) }} > \"proc/\$\$/cmdline\"\n"
+            pid != null -> "printf '%s\\n' ${quote(pid)} > cam_watchdog.pid\n"
+            else -> ""
+        }
+        return execute("pidof() { [ -f camera-alive ]; }\n" + owner + recorderRunningLine())
+    }
+
     private fun assertUntouched() {
         assertEquals(original, file("start_cam.sh").readText())
         assertFalse(file("launches").exists())
@@ -191,6 +243,9 @@ class WatchdogRecoveryTest {
 
     private fun recover(before: String = "", watchdog: List<String>? = null): Int {
         assertTrue("A POSIX shell is required", shell.isFile)
+        val apk = file("new/base.apk")
+        apk.parentFile!!.mkdirs()
+        apk.writeText("")
         file("owned-pids").writeText("")
         file("capture.sh").writeText("""
             echo ${'$'}${'$'} >> owned-pids
@@ -203,7 +258,10 @@ class WatchdogRecoveryTest {
             mkdir -p "proc/${'$'}${'$'}"
             printf '%s\000' sh "${'$'}0" > "proc/${'$'}${'$'}/cmdline"
             echo launched >> launches
-            pm() { echo package:/new/base.apk; }
+            pm() {
+                if [ "${'$'}1" = path ]; then printf 'package:%s/new/base.apk\n' "${'$'}PWD"
+                else echo package:com.strike; fi
+            }
             app_process() { exec sh capture.sh "${'$'}@"; }
             pidof() { [ -f camera-alive ]; }
             sleep() {
@@ -213,7 +271,7 @@ class WatchdogRecoveryTest {
                 wait "${'$'}SLEEP_PID"
             }
         """.trimIndent().lines()
-        val lines = watchdog ?: watchdogScript("com.strike", "/new/base.apk", "/new/lib/arm64",
+        val lines = watchdog ?: watchdogScript("com.strike", apk.absolutePath.replace('\\', '/'), "/new/lib/arm64",
             "com.strike.daemon.CameraDaemon", installation)
         val tracked = lines.flatMap { line ->
             if (line.trim() == "ROTATE_PID=\$!") listOf(line, "echo \"\$ROTATE_PID\" >> owned-pids")

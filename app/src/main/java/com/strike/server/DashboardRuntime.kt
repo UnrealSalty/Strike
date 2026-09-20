@@ -51,6 +51,10 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
         if (!recorderPower.close()) Logs.w("Recorder", "Could not release the recovery wake lock")
     }
 
+    fun restoreAfterBoot(start: Boolean): Boolean = synchronized(updates) {
+        !updates.isInstalling() && daemons.restoreAfterBoot(start)
+    }
+
     fun maintainRecorder() {
         val ready = recorderPower.refresh()
         if (!ready && recoveryPowerReady) Logs.w("Recorder", "Could not keep recorder recovery awake")

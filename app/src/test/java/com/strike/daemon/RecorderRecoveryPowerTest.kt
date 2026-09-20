@@ -66,7 +66,7 @@ class RecorderRecoveryPowerTest {
     fun disablingOrChangingSurveillanceReleasesTheHold() {
         val file = File(folder.root, "cam.recovery")
         val stopped = File(folder.root, "cam.disabled")
-        val recovery = ParkedRecovery(file, stopped, "boot-a") { now }
+        val recovery = ParkedRecovery(file, stopped, "boot-a", nowMs = { now })
         assertTrue(recovery.save("smart", "off"))
         var enabled = true
         var mode = "smart"
@@ -86,7 +86,7 @@ class RecorderRecoveryPowerTest {
     fun manualStopReleasesEvenWhenTheCheckpointIsStillFresh() {
         val file = File(folder.root, "cam.recovery")
         val stopped = File(folder.root, "cam.disabled")
-        val recovery = ParkedRecovery(file, stopped, "boot-a") { now }
+        val recovery = ParkedRecovery(file, stopped, "boot-a", nowMs = { now })
         assertTrue(recovery.save("smart", "off"))
         val power = power { recovery.validUntilMs(true, "smart", "off") }
         assertTrue(power.refresh())
@@ -100,13 +100,49 @@ class RecorderRecoveryPowerTest {
     @Test
     fun clearingTheParkedCheckpointReleasesTheHold() {
         val file = File(folder.root, "cam.recovery")
-        val recovery = ParkedRecovery(file, File(folder.root, "cam.disabled"), "boot-a") { now }
+        val recovery = ParkedRecovery(file, File(folder.root, "cam.disabled"), "boot-a", nowMs = { now })
         assertTrue(recovery.checkpoint("smart", "lock"))
         val power = power { recovery.validUntilMs(true, "smart", "lock") }
         assertTrue(power.refresh())
         assertTrue(recovery.checkpoint(null, null))
         assertTrue(power.refresh())
         assertEquals(1, releases)
+    }
+
+    @Test
+    fun aNewBootJournalHoldsOnlyItsRemainingTimeAndStillHonoursManualStop() {
+        val file = File(folder.root, "cam.recovery")
+        val stopped = File(folder.root, "cam.disabled")
+        for (manualStop in listOf(false, true)) {
+            now = 1_000_000L
+            var wall = 1_700_000_000_000L
+            val previous = ParkedRecovery(file, stopped, "boot-a", nowMs = { now }, wallNowMs = { wall })
+            assertTrue(previous.save("smart", "off"))
+            now = 5_000L
+            wall += 40_000L
+            val recovery = ParkedRecovery(file, stopped, "boot-b", nowMs = { now }, wallNowMs = { wall })
+            val budgets = mutableListOf<Long>()
+            var released = 0
+            val power = RecorderRecoveryPower(
+                { recovery.validUntilMs(true, "smart", "off") }, { budgets.add(it) }, { released++ }, { now }
+            )
+            assertTrue(power.refresh())
+            repeat(3) {
+                now += 30_000L
+                wall += 30_000L
+                assertTrue(power.refresh())
+            }
+            assertEquals(listOf(140_000L), budgets)
+            assertEquals(0, released)
+            if (manualStop) stopped.writeText("stopped") else {
+                now += 50_000L
+                wall += 50_000L
+            }
+            assertTrue(power.refresh())
+            assertTrue(power.refresh())
+            assertEquals(1, released)
+            assertEquals(listOf(140_000L), budgets)
+        }
     }
 
     @Test

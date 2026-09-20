@@ -95,6 +95,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
 
     fun maintainRecorder() = recorder.maintain()
 
+    fun restoreAfterBoot(start: Boolean): Boolean = recorder.restoreAfterBoot(start)
+
     fun pauseForUpdate(beforeStop: (Boolean) -> Unit) = recorder.pauseForUpdate(beforeStop)
 
     fun resumeAfterUpdate() {

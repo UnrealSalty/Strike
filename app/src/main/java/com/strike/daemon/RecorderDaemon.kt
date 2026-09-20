@@ -46,8 +46,7 @@ class RecorderDaemon internal constructor(
         },
         haltForUpdate = { daemon.stop(client::shutdown, force = false) },
         resumeDaemon = daemon::resume,
-        watchdogRunning = { shell.check("pidof $CAM_PROCESS >/dev/null || " +
-            "kill -0 \$(cat $CAM_WATCHDOG_PID_PATH 2>/dev/null) 2>/dev/null") },
+        watchdogRunning = { shell.check(recorderRunningLine()) },
         recoverWatchdog = daemon::recover
     )
 
@@ -73,10 +72,10 @@ class RecorderDaemon internal constructor(
     private var recoveryError: String? = null
 
     @Synchronized
-    fun maintain() {
+    fun maintain(force: Boolean = false) {
         if (checkingWatchdog || phase == Phase.STARTING || phase == Phase.STOPPING) return
         val now = nowMs()
-        if (now < nextWatchdogCheckMs) return
+        if (!force && now < nextWatchdogCheckMs) return
         nextWatchdogCheckMs = now + WATCHDOG_CHECK_MS
         checkingWatchdog = true
         val current = request
@@ -111,6 +110,24 @@ class RecorderDaemon internal constructor(
             } finally {
                 synchronized(this) { checkingWatchdog = false }
             }
+        }
+    }
+
+    fun restoreAfterBoot(start: Boolean): Boolean {
+        val current = synchronized(this) { request }
+        if (start) maintain(force = true)
+        val reply = readStatus()
+        val inactive = synchronized(this) {
+            if (current != request || phase == Phase.STOPPING) return false
+            if (reply != null && reply.optLong("uptimeMs") >= STABLE_UPTIME_MS &&
+                reply.optBoolean("bootReady")) return true
+            if (checkingWatchdog || phase == Phase.FAILED || recoveryError != null) return false
+            phase == Phase.OFF && !canStop
+        }
+        if (reply != null || !inactive || watchdogRunning()) return false
+        return synchronized(this) {
+            current == request && phase == Phase.OFF && !canStop &&
+                !checkingWatchdog && recoveryError == null
         }
     }
 
@@ -158,6 +175,7 @@ class RecorderDaemon internal constructor(
                 if (current != request) return@execute
                 phase = if (stopped) Phase.OFF else Phase.FAILED
                 canStop = !stopped
+                if (stopped) recoveryError = null
                 step = ""
                 failure = if (stopped) "" else "The recorder could not be stopped. Try Stop again"
                 if (!stopped) Logs.w(TAG, failure)

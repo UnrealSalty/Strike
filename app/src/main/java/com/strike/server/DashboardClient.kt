@@ -3,6 +3,7 @@ package com.strike.server
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import com.strike.core.Logs
 import com.strike.core.PinSession
 import com.strike.daemon.Shell
@@ -40,6 +41,28 @@ internal class DashboardClient(private val context: Context, private val shell: 
         main.post { completed(ready) }
     }
 
+    fun restoreAfterBoot(active: () -> Boolean, completed: (Boolean) -> Unit) = worker.execute {
+        if (!active()) return@execute
+        val ready = try {
+            shell.retry()
+            val deadline = SystemClock.elapsedRealtime() + 60_000L
+            while (active() && !shell.isAuthorised() && shell.isPending && SystemClock.elapsedRealtime() < deadline) {
+                Thread.sleep(500L)
+            }
+            active() && shell.isAuthorised() && connect(active = active) && bootstrap == null &&
+                awaitBootRecovery(active, { start ->
+                    exchange(JSONObject().put("op", "boot").put("start", start))?.optBoolean("ready") == true
+                })
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        } catch (e: Exception) {
+            Logs.w("Boot", "Could not restore Strike after head unit restart", e)
+            false
+        }
+        main.post { completed(ready) }
+    }
+
     fun resume(callback: (Boolean) -> Unit) = worker.execute {
         val reply = exchange(JSONObject().put("op", "resume"))
         val set = reply?.optBoolean("pinSet", true) ?: bootstrap?.pin?.isSet() ?: true
@@ -55,9 +78,11 @@ internal class DashboardClient(private val context: Context, private val shell: 
         exchange(JSONObject().put("op", "acc").put("on", on))
     }
 
-    private fun connect(force: Boolean = false): Boolean {
+    private fun connect(force: Boolean = false, active: () -> Boolean = { true }): Boolean {
+        if (!active()) return false
         try {
             val current = exchange(JSONObject().put("op", "attach"))
+            if (!active()) return false
             if (current != null) {
                 finish(current, force)
                 return true
@@ -81,9 +106,12 @@ internal class DashboardClient(private val context: Context, private val shell: 
                 local.close()
             }
             bootstrap = null
+            if (!active()) return false
             check(launchDashboard(context, shell)) { "Could not start the dashboard daemon" }
             repeat(30) {
+                if (!active()) return false
                 val opened = exchange(JSONObject().put("op", "attach"))
+                if (!active()) return false
                 if (opened != null) {
                     finish(opened, force)
                     return true
@@ -132,4 +160,22 @@ internal class DashboardClient(private val context: Context, private val shell: 
             logsThrough = maxOf(logsThrough, it.optLong("logsThrough"))
         }
     }
+}
+
+internal fun awaitBootRecovery(
+    active: () -> Boolean,
+    ready: (Boolean) -> Boolean,
+    nowMs: () -> Long = { SystemClock.elapsedRealtime() },
+    pause: (Long) -> Unit = { Thread.sleep(it) }
+): Boolean {
+    val deadline = nowMs() + 30_000L
+    var start = true
+    while (active() && nowMs() <= deadline) {
+        if (ready(start)) return active()
+        start = false
+        val remainingMs = deadline - nowMs()
+        if (!active() || remainingMs <= 0L) return false
+        pause(minOf(500L, remainingMs))
+    }
+    return false
 }

@@ -39,7 +39,9 @@ object ParkedRails {
     var isHeld = false
         private set
 
-    private var wakeLock: PowerManager.WakeLock? = null
+    @Volatile private var wakeLock: PowerManager.WakeLock? = null
+
+    internal val isAwake: Boolean get() = wakeLock?.isHeld == true
     private var power: Any? = null
     private var special: Any? = null
     private var looked = false

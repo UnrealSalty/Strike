@@ -81,7 +81,7 @@ object DashboardDaemon {
             override fun run() {
                 val current = try {
                     base.packageManager.getApplicationInfo("com.strike", 0)
-                } catch (e: PackageManager.NameNotFoundException) { exitProcess(0) }
+                } catch (e: PackageManager.NameNotFoundException) { exitProcess(1) }
                 if (current.uid != uid) exitProcess(0)
                 if (current.sourceDir != apk) exitProcess(42)
                 host.maintainRecorder()
@@ -164,7 +164,9 @@ private class DashboardHost(private val context: Context, private val uid: Int, 
                 }
             }
             else -> {
+                var bootReady: Boolean? = null
                 when (request.optString("op")) {
+                    "boot" -> bootReady = runtime?.restoreAfterBoot(request.optBoolean("start")) == true
                     "attach" -> { PinSession.lock(); runtime?.updates?.resume() }
                     "resume" -> runtime?.updates?.resume()
                     "acc" -> {
@@ -173,7 +175,7 @@ private class DashboardHost(private val context: Context, private val uid: Int, 
                         if (!on) PinSession.lock()
                     }
                 }
-                session()
+                session().apply { bootReady?.let { put("ready", it) } }
             }
         }
         request.optJSONObject("logs")?.let {

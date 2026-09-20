@@ -1,5 +1,7 @@
 package com.strike.daemon
 
+import com.strike.recording.sentryMode
+import com.strike.vehicle.VehicleSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -7,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.DataOutputStream
 import java.io.File
 
 class ParkedRecoveryTest {
@@ -14,9 +17,10 @@ class ParkedRecoveryTest {
     private val saved: File get() = File(folder.root, "cam.recovery")
     private val stopped: File get() = File(folder.root, "cam.disabled")
     private var now = 1_000_000L
+    private var wall = 1_700_000_000_000L
 
     private fun recovery(boot: String? = "boot-a", clock: () -> Long = { now }) =
-        ParkedRecovery(saved, stopped, boot, clock)
+        ParkedRecovery(saved, stopped, boot, nowMs = clock, wallNowMs = { wall })
 
     @Test
     fun eachParkedRecordingModeResumesOnlyOnce() {
@@ -45,10 +49,106 @@ class ParkedRecoveryTest {
     }
 
     @Test
-    fun anotherBootCannotResumeThePreviousPark() {
+    fun eachParkedModeAndArmingConditionResumesOnlyOnceAfterAReboot() {
+        for (mode in listOf("smart", "continuous")) for (arm in listOf("off", "lock")) {
+            now = 1_000_000L
+            assertTrue(recovery().save(mode, arm))
+            now = 5_000L
+            wall += 30_000L
+            assertEquals(now + 150_000L, recovery("boot-b").validUntilMs(true, mode, arm))
+            assertEquals(mode, recovery("boot-b").consume(true, mode, arm))
+            assertFalse(saved.exists())
+            assertNull(recovery("boot-b").consume(true, mode, arm))
+        }
+    }
+
+    @Test
+    fun anotherBootRejectsExpiredAndFutureWallTimestamps() {
+        for (age in listOf(-1L, 180_001L)) {
+            assertTrue(recovery().save("smart", "off"))
+            wall += age
+            assertNull(recovery("boot-b").validUntilMs(true, "smart", "off"))
+            assertNull(recovery("boot-b").consume(true, "smart", "off"))
+            assertFalse(saved.exists())
+        }
+    }
+
+    @Test
+    fun anotherBootAcceptsTheDeadlineRegardlessOfItsUptime() {
+        for (uptime in listOf(1L, 2_000_000L)) {
+            assertTrue(recovery().save("continuous", "lock"))
+            now = uptime
+            wall += 180_000L
+            assertEquals(now, recovery("boot-b").validUntilMs(true, "continuous", "lock"))
+            assertEquals("continuous", recovery("boot-b").consume(true, "continuous", "lock"))
+        }
+    }
+
+    @Test
+    fun wallClockChangesCannotShortenOrExtendSameBootRecovery() {
+        for (jump in listOf(-86_400_000L, 86_400_000L)) {
+            assertTrue(recovery().save("smart", "off"))
+            wall += jump
+            now += 60_000L
+            assertEquals(now + 120_000L, recovery().validUntilMs(true, "smart", "off"))
+            now += 120_001L
+            assertNull(recovery().consume(true, "smart", "off"))
+        }
+    }
+
+    @Test
+    fun checkingAnotherBootsDeadlineDoesNotRenewTheRemainingTime() {
         assertTrue(recovery().save("smart", "off"))
-        assertNull(recovery("boot-b").consume(true, "smart", "off"))
-        assertFalse(saved.exists())
+        val original = saved.readBytes()
+        now = 5_000L
+        wall += 30_000L
+        val expectedDeadline = now + 150_000L
+        repeat(3) {
+            now += 50_000L
+            wall += 50_000L
+            assertEquals(expectedDeadline, recovery("boot-b").validUntilMs(true, "smart", "off"))
+            org.junit.Assert.assertArrayEquals(original, saved.readBytes())
+        }
+        now++
+        wall++
+        assertNull(recovery("boot-b").validUntilMs(true, "smart", "off"))
+    }
+
+    @Test
+    fun legacyJournalsRecoverOnlyWithinTheirOriginalBoot() {
+        for (boot in listOf("boot-a", "boot-b")) {
+            DataOutputStream(saved.outputStream()).use {
+                it.writeInt(1)
+                it.writeUTF("boot-a")
+                it.writeLong(now - 60_000L)
+                it.writeUTF("smart")
+                it.writeUTF("off")
+            }
+            val handoff = recovery(boot)
+            assertEquals(if (boot == "boot-a") now + 120_000L else null,
+                handoff.validUntilMs(true, "smart", "off"))
+            assertEquals(if (boot == "boot-a") "smart" else null, handoff.consume(true, "smart", "off"))
+            assertFalse(saved.exists())
+        }
+    }
+
+    @Test
+    fun recoveredIntentDoesNotInventVehicleReadingsOrOverrideFreshUse() {
+        for (mode in listOf("smart", "continuous")) for (arm in listOf("off", "lock")) {
+            assertTrue(recovery().save(mode, arm))
+            val recovered = recovery("boot-b").consume(true, mode, arm)
+            assertEquals(mode, recovered)
+            assertNull(sentryMode(true, mode, null, arm, wasWatching = recovered != null))
+            assertTrue(accUnsafe(null, now, now))
+            val readings = mutableListOf(
+                VehicleSnapshot(null, null, null, null, null, "P", true, null),
+                VehicleSnapshot(null, null, null, null, null, "D", null, null)
+            )
+            if (arm == "lock") readings.add(VehicleSnapshot(null, null, null, null, null, "P", null, false))
+            for (reading in readings) {
+                assertEquals("off", sentryMode(true, mode, reading, arm, wasWatching = recovered != null))
+            }
+        }
     }
 
     @Test
@@ -191,7 +291,7 @@ class ParkedRecoveryTest {
     fun failedCheckpointsRetryOnceAMinute() {
         val dir = File(folder.root, "unavailable")
         val file = File(dir, "cam.recovery")
-        val handoff = ParkedRecovery(file, stopped, "boot-a") { now }
+        val handoff = ParkedRecovery(file, stopped, "boot-a", nowMs = { now }, wallNowMs = { wall })
         assertFalse(handoff.checkpoint("smart", "off"))
         assertTrue(dir.mkdir())
         now += 59_999L
@@ -199,7 +299,7 @@ class ParkedRecoveryTest {
         assertFalse(file.exists())
         now++
         assertTrue(handoff.checkpoint("smart", "off"))
-        assertEquals("smart", ParkedRecovery(file, stopped, "boot-a") { now }
+        assertEquals("smart", ParkedRecovery(file, stopped, "boot-a", nowMs = { now }, wallNowMs = { wall })
             .consume(true, "smart", "off"))
     }
 
@@ -265,13 +365,17 @@ class ParkedRecoveryTest {
     }
 
     @Test
-    fun deadlineChecksRejectDisabledChangedOrForeignIntent() {
+    fun deadlineChecksRejectDisabledChangedOrStoppedIntentAcrossBoots() {
         assertTrue(recovery().save("smart", "off"))
-        assertNull(recovery().validUntilMs(false, "smart", "off"))
-        assertNull(recovery().validUntilMs(true, "continuous", "off"))
-        assertNull(recovery().validUntilMs(true, "smart", "lock"))
-        assertNull(recovery().validUntilMs(true, "off", "off"))
-        assertNull(recovery("boot-b").validUntilMs(true, "smart", "off"))
+        for (boot in listOf("boot-a", "boot-b")) {
+            assertNull(recovery(boot).validUntilMs(false, "smart", "off"))
+            assertNull(recovery(boot).validUntilMs(true, "continuous", "off"))
+            assertNull(recovery(boot).validUntilMs(true, "smart", "lock"))
+            assertNull(recovery(boot).validUntilMs(true, "off", "off"))
+            stopped.writeText("stopped")
+            assertNull(recovery(boot).validUntilMs(true, "smart", "off"))
+            assertTrue(stopped.delete())
+        }
         assertNull(recovery(null).validUntilMs(true, "smart", "off"))
         assertTrue(saved.exists())
         assertEquals("smart", recovery().consume(true, "smart", "off"))
@@ -304,7 +408,7 @@ class ParkedRecoveryTest {
     @Test
     fun anUnavailableDirectoryFailsWithoutSavingAnIntent() {
         val file = File(folder.root, "missing/cam.recovery")
-        assertFalse(ParkedRecovery(file, stopped, "boot-a") { now }.save("smart", "off"))
+        assertFalse(ParkedRecovery(file, stopped, "boot-a", nowMs = { now }, wallNowMs = { wall }).save("smart", "off"))
         assertFalse(file.exists())
     }
 }

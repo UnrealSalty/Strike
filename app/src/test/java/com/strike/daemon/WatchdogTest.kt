@@ -166,10 +166,101 @@ class WatchdogTest {
     }
 
     @Test
-    fun missingApkStopsWithAnExplanation() {
-        assertEquals(1, watchdog(emptyList(), setup = "pm() { return 1; }; rm -f base.apk"))
+    fun packageServiceOutageDoesNotDisableRecorderRecovery() {
+        val setup = "pm() { return 20; }; rm -f base.apk"
+        val restored = """
+            if [ "$(wc -l < sleeps)" -eq 3 ]; then : > base.apk; fi
+        """.trimIndent()
+        assertEquals(0, watchdog(listOf("0 300 stop"), setup = setup, afterSleep = restored))
+
+        assertEquals("1", file("starts").readText().trim())
+        assertEquals(listOf("10", "10", "10"), file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
+        assertEquals(1, file("cam.log").readLines().count { it.contains("waiting for Strike") })
+        assertFalse(file("cam_watchdog.pid").exists())
+    }
+
+    @Test
+    fun anInstalledPackageWithAnUnavailableApkKeepsRetrying() {
+        val setup = """
+            rm -f base.apk
+            pm() {
+              if [ "$1" = path ]; then printf 'package:%s/base.apk\n' "${'$'}PWD"
+              else echo package:com.strike; fi
+            }
+        """.trimIndent()
+        assertEquals(0, watchdog(listOf("0 300 stop"), setup = setup, afterSleep = ": > base.apk"))
+        assertEquals("1", file("starts").readText().trim())
+        assertEquals(listOf("10"), file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
+    }
+
+    @Test
+    fun anExistingApkRunsWhilePackageServiceIsUnavailable() {
+        assertEquals(0, watchdog(listOf("0 300 stop"), setup = "pm() { return 20; }"))
+        assertEquals("1", file("starts").readText().trim())
+        assertFalse(file("sleeps").exists())
+    }
+
+    @Test
+    fun aMissingResolvedApkUsesTheExistingFallback() {
+        val setup = """pm() { echo package:/missing/base.apk; }"""
+        assertEquals(0, watchdog(listOf("0 300 stop"), setup = setup))
+        assertEquals("1", file("starts").readText().trim())
+        assertTrue(file("classpath").readText().trim().endsWith(
+            file("base.apk").absolutePath.replace('\\', '/')))
+        assertFalse(file("sleeps").exists())
+    }
+
+    @Test
+    fun theLastResolvedApkSurvivesALaterPackageServiceOutage() {
+        val setup = """
+            mkdir changed
+            : > changed/base.apk
+            pm() { printf 'package:%s/changed/base.apk\n' "${'$'}PWD"; }
+        """.trimIndent()
+        assertEquals(0, watchdog(listOf("137 1", "0 300 stop"), setup = setup,
+            afterSleep = "rm -f base.apk; pm() { return 20; }"))
+        assertEquals("2", file("starts").readText().trim())
+        assertTrue(file("classpath").readText().trim().endsWith("/changed/base.apk"))
+        assertEquals(listOf("3"), file("sleeps").readLines())
+        assertEquals("stopped by fixture", file("cam.disabled").readText().trim())
+    }
+
+    @Test
+    fun manualStopWinsWhileWaitingForTheApk() {
+        assertEquals(0, watchdog(emptyList(), setup = "pm() { return 20; }; rm -f base.apk",
+            afterSleep = "echo stopped by user > cam.disabled"))
         assertFalse(file("starts").exists())
-        assertTrue(file("cam.disabled").readText().contains("apk is unavailable"))
+        assertEquals(listOf("10"), file("sleeps").readLines())
+        assertEquals("stopped by user", file("cam.disabled").readText().trim())
+        assertFalse(file("cam_watchdog.pid").exists())
+    }
+
+    @Test
+    fun aReplacementWatchdogWinsWhileWaitingForTheApk() {
+        assertEquals(0, watchdog(emptyList(), setup = "pm() { return 20; }; rm -f base.apk",
+            afterSleep = "echo replacement > cam_watchdog.pid"))
+        assertFalse(file("starts").exists())
+        assertFalse(file("cam.disabled").exists())
+        assertEquals(listOf("10"), file("sleeps").readLines())
+        assertEquals("replacement", file("cam_watchdog.pid").readText().trim())
+    }
+
+    @Test
+    fun aConfirmedUninstallStopsWithoutDisablingAFutureInstallation() {
+        val setup = """
+            rm -f base.apk
+            pm() {
+              if [ "$1" = list ]; then echo package:com.strike.other
+              else return 20; fi
+            }
+        """.trimIndent()
+        assertEquals(0, watchdog(emptyList(), setup = setup))
+        assertFalse(file("starts").exists())
+        assertFalse(file("cam.disabled").exists())
+        assertFalse(file("sleeps").exists())
+        assertFalse(file("cam_watchdog.pid").exists())
     }
 
     @Test
