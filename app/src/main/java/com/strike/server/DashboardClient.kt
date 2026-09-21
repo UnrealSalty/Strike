@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.strike.prepareBootAccess
 import com.strike.core.Logs
 import com.strike.core.PinSession
 import com.strike.daemon.Shell
@@ -18,8 +19,10 @@ internal class DashboardClient(private val context: Context, private val shell: 
     private val main = Handler(Looper.getMainLooper())
     private val identityFile = File(context.filesDir, "dashboard.identity")
     private val migrated = File(context.filesDir, "dashboard.migrated")
-    private val identity = if (identityFile.isFile) identityFile.readText() else
+    private val identity = if (identityFile.isFile) identityFile.readText() else {
+        check(!context.isDeviceProtectedStorage) { "The saved boot dashboard identity is unavailable" }
         UUID.randomUUID().toString().also { atomicDashboardWrite(identityFile, it) }
+    }
     private var bootstrap: DashboardRuntime? = null
     private var onSession: ((String, Boolean) -> Unit)? = null
     private var session: JSONObject? = null
@@ -87,7 +90,7 @@ internal class DashboardClient(private val context: Context, private val shell: 
                 finish(current, force)
                 return true
             }
-            if (bootstrap == null && !migrated.isFile) {
+            if (bootstrap == null && !migrated.isFile && !context.isDeviceProtectedStorage) {
                 bootstrap = DashboardRuntime(context, shell).also { it.start(false) }
                 publish(JSONObject().put("cookie", bootstrap!!.browsers.nativeCookie())
                     .put("pinSet", bootstrap!!.pin.isSet()))
@@ -129,11 +132,13 @@ internal class DashboardClient(private val context: Context, private val shell: 
         bootstrap?.close()
         bootstrap = null
         val opened = if (reply.optBoolean("seedNeeded")) {
+            check(!context.isDeviceProtectedStorage) { "Dashboard setup must finish after Android unlocks" }
             exchange(JSONObject().put("seed", dashboardSeed(context.filesDir)))
                 ?: throw IOException("Dashboard setup was interrupted")
         } else reply
         check(!opened.optBoolean("seedNeeded"))
         if (!migrated.isFile) atomicDashboardWrite(migrated, identity)
+        if (!context.isDeviceProtectedStorage) prepareBootAccess(context)
         publish(opened, force)
     }
 

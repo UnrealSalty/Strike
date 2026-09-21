@@ -51,14 +51,16 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name=".BootCompleted" android:exported="false">
+        <receiver android:name=".BootCompleted" android:exported="false" android:directBootAware="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
         <service
             android:name=".BootRecovery"
+            android:directBootAware="true"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="true" />
 

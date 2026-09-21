@@ -203,6 +203,7 @@ private fun adbOpener(context: Context): () -> Dadb? {
         val privateKey = File(context.filesDir, "adbkey")
         val publicKey = File(context.filesDir, "adbkey.pub")
         if (!privateKey.exists() || !publicKey.exists()) {
+            check(!context.isDeviceProtectedStorage) { "The saved boot ADB identity is unavailable" }
             AdbKeyPair.generate(privateKey, publicKey)
         }
         AdbKeyPair.read(privateKey, publicKey)

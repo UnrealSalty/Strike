@@ -18,7 +18,7 @@ class BootRecoveryTest {
     }
 
     @Test fun missingDashboardHandoverOrEitherAdbKeyPreventsAutomaticSetup() {
-        for (name in listOf("dashboard.migrated", "adbkey", "adbkey.pub")) {
+        for (name in listOf("dashboard.migrated", "dashboard.identity", "adbkey", "adbkey.pub")) {
             configured()
             assertTrue(File(temporary.root, name).delete())
             assertFalse("Missing $name must keep boot startup off", canRecoverAfterBoot(temporary.root))
@@ -115,7 +115,7 @@ class BootRecoveryTest {
     }
 
     private fun configured() {
-        for (name in listOf("dashboard.migrated", "adbkey", "adbkey.pub")) {
+        for (name in listOf("dashboard.migrated", "dashboard.identity", "adbkey", "adbkey.pub")) {
             File(temporary.root, name).writeText("")
         }
     }

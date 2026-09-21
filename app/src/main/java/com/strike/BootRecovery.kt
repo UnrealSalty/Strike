@@ -7,8 +7,8 @@ class BootRecovery : JobService() {
     @Volatile private var request = 0L
 
     override fun onStartJob(params: JobParameters?): Boolean {
-        if (!canRecoverAfterBoot(filesDir)) return false
-        recover((application as StrikeApp).dashboard::restoreAfterBoot) { retry ->
+        if (!canRecoverAfterBoot(this)) return false
+        recover((application as StrikeApp)::restoreAfterBoot) { retry ->
             jobFinished(params, retry)
         }
         return true
