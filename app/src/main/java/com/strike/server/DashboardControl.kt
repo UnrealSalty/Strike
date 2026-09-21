@@ -32,6 +32,16 @@ object DashboardControl {
         }
     }
 
+    internal fun holdRecorderPower(apk: String): Boolean {
+        val request = JSONObject().put("op", "recorder.power").put("apk", apk).toString().toByteArray()
+        return try {
+            val reply = exchange(request, 1_000) ?: return false
+            JSONObject(reply.toString(Charsets.UTF_8)).optBoolean("held")
+        } catch (e: IOException) {
+            false
+        }
+    }
+
     private fun exchange(request: ByteArray, timeoutMs: Int): ByteArray? = LocalSocket().use { socket ->
         socket.connect(LocalSocketAddress(DASHBOARD_SOCKET))
         if (socket.peerCredentials.uid != 2000) return null

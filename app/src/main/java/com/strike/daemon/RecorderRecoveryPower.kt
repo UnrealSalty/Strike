@@ -10,10 +10,14 @@ internal class RecorderRecoveryPower(
     private val validUntilMs: () -> Long?,
     private val acquire: (Long) -> Unit,
     private val release: () -> Unit,
-    private val nowMs: () -> Long = { SystemClock.elapsedRealtime() }
+    private val nowMs: () -> Long = { SystemClock.elapsedRealtime() },
+    private val maintain: () -> Unit = {}
 ) {
     private var heldUntilMs: Long? = null
+    private var acquired = false
     private var closed = false
+
+    val isHeld: Boolean get() = synchronized(this) { acquired }
 
     @Synchronized
     fun refresh(): Boolean {
@@ -23,9 +27,20 @@ internal class RecorderRecoveryPower(
         return try {
             if (remainingMs <= 0L) {
                 releaseHeld()
-            } else if (deadline != heldUntilMs) {
-                acquire(remainingMs)
-                heldUntilMs = deadline
+            } else {
+                if (!acquired || deadline != heldUntilMs) {
+                    heldUntilMs = deadline
+                    try {
+                        acquire(remainingMs)
+                        acquired = true
+                    } catch (e: RuntimeException) {
+                        acquired = false
+                        releaseHeld()
+                        throw e
+                    }
+                }
+                val current = validUntilMs()
+                if (current == null || current <= nowMs()) releaseHeld() else maintain()
             }
             true
         } catch (e: RuntimeException) {
@@ -47,6 +62,7 @@ internal class RecorderRecoveryPower(
     private fun releaseHeld() {
         if (heldUntilMs == null) return
         release()
+        acquired = false
         heldUntilMs = null
     }
 
@@ -64,8 +80,15 @@ internal class RecorderRecoveryPower(
                         Config.getString(SurveillanceSettings.ARM, SurveillanceSettings.fallback(SurveillanceSettings.ARM))
                     )
                 },
-                acquire = lock::acquire,
-                release = { if (lock.isHeld) lock.release() }
+                acquire = { remainingMs ->
+                    lock.acquire(remainingMs)
+                    check(ParkedRails.holdRecovery()) { "Could not claim parked power for recorder recovery" }
+                },
+                release = {
+                    check(ParkedRails.releaseRecovery()) { "Could not release recorder recovery power" }
+                    if (lock.isHeld) lock.release()
+                },
+                maintain = ParkedRails::tickRecovery
             )
         }
     }

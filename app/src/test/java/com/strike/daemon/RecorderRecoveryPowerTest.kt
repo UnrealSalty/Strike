@@ -153,10 +153,12 @@ class RecorderRecoveryPowerTest {
             acquired.add(it)
         }, { releases++ }, { now })
         assertFalse(power.refresh())
+        assertFalse(power.isHeld)
+        assertEquals(1, releases)
         assertTrue(power.refresh())
         assertEquals(listOf(180_000L), acquired)
         assertTrue(power.close())
-        assertEquals(1, releases)
+        assertEquals(2, releases)
     }
 
     @Test
@@ -207,4 +209,118 @@ class RecorderRecoveryPowerTest {
             executor.shutdownNow()
         }
     }
+    @Test
+    fun recoveryClaimKeepsCameraPowerUntilReplacementTakesOver() {
+        val file = folder.newFile()
+        val camera = ParkedLease(file, 1)
+        val bridge = ParkedLease(file, 3)
+        val replacement = ParkedLease(file, 1)
+        var powered = true
+        deadline = now + 180_000L
+        val power = RecorderRecoveryPower({ deadline }, {
+            check(bridge.acquire())
+            acquired.add(it)
+        }, {
+            check(bridge.release { powered = false })
+            releases++
+        }, { now }, {
+            check(bridge.isHeld)
+        })
+        assertTrue(camera.acquire())
+        assertTrue(power.refresh())
+        assertTrue(camera.release { powered = false })
+        now += 60_000L
+        assertTrue(power.refresh())
+        assertTrue(powered)
+        assertTrue(bridge.isHeld)
+        assertEquals(listOf(180_000L), acquired)
+        assertTrue(replacement.acquire())
+        deadline = null
+        assertTrue(power.refresh())
+        assertFalse(power.isHeld)
+        assertFalse(bridge.isHeld)
+        assertTrue(powered)
+        assertTrue(replacement.release { powered = false })
+        assertFalse(powered)
+    }
+
+    @Test
+    fun stopDuringAcquisitionReleasesBeforeAnyMaintenance() {
+        deadline = now + 180_000L
+        val file = folder.newFile()
+        val bridge = ParkedLease(file, 3)
+        var maintenance = 0
+        val power = RecorderRecoveryPower({ deadline }, {
+            check(bridge.acquire())
+            deadline = null
+        }, {
+            check(bridge.release { releases++ })
+        }, { now }, { maintenance++ })
+        assertTrue(power.refresh())
+        assertFalse(power.isHeld)
+        assertFalse(bridge.isHeld)
+        assertEquals(1, releases)
+        assertEquals(0, maintenance)
+        assertTrue(power.close())
+        assertEquals(1, releases)
+    }
+
+    @Test
+    fun failureAfterClaimingPowerReleasesThePartialAcquisition() {
+        deadline = now + 180_000L
+        val bridge = ParkedLease(folder.newFile(), 3)
+        val power = RecorderRecoveryPower({ deadline }, {
+            check(bridge.acquire())
+            throw IllegalStateException("power service unavailable")
+        }, {
+            check(bridge.release { releases++ })
+        }, { now })
+        assertFalse(power.refresh())
+        assertFalse(power.isHeld)
+        assertFalse(bridge.isHeld)
+        assertEquals(1, releases)
+        deadline = null
+        assertTrue(power.refresh())
+        assertEquals(1, releases)
+    }
+
+    @Test
+    fun aPartialAcquireWithFailedCleanupMustAcquireAgainBeforeReportingHeld() {
+        deadline = now + 180_000L
+        var attempts = 0
+        val power = RecorderRecoveryPower({ deadline }, {
+            if (++attempts == 1) throw IllegalStateException("service unavailable")
+            acquired.add(it)
+        }, {
+            if (++releases == 1) throw IllegalStateException("claim still busy")
+        }, { now })
+        assertFalse(power.refresh())
+        assertFalse(power.isHeld)
+        assertTrue(power.refresh())
+        assertTrue(power.isHeld)
+        assertEquals(listOf(180_000L), acquired)
+        assertTrue(power.close())
+        assertFalse(power.isHeld)
+        assertEquals(2, releases)
+    }
+
+    @Test
+    fun hardwareMaintenanceCanRetryWithoutLosingTheExistingHold() {
+        deadline = now + 180_000L
+        var maintenance = 0
+        val power = RecorderRecoveryPower({ deadline }, { acquired.add(it) }, { releases++ }, { now }, {
+            if (++maintenance == 1) throw IllegalStateException("service unavailable")
+        })
+        assertFalse(power.refresh())
+        assertTrue(power.isHeld)
+        now += 15_000L
+        assertTrue(power.refresh())
+        assertTrue(power.isHeld)
+        assertEquals(listOf(180_000L), acquired)
+        now += 165_000L
+        assertTrue(power.refresh())
+        assertFalse(power.isHeld)
+        assertEquals(1, releases)
+    }
+
 }

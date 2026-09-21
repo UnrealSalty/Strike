@@ -130,4 +130,52 @@ class ParkedLeaseTest {
         assertTrue(replacement.acquire())
         assertTrue(replacement.release {})
     }
+    @Test fun recoveryKeepsPowerAcrossCameraReplacementAndOnlineStop() {
+        val file = temporary.newFile()
+        val camera = ParkedLease(file, 1)
+        val online = ParkedLease(file, 2)
+        val recovery = ParkedLease(file, 3)
+        var releases = 0
+        assertTrue(camera.acquire())
+        assertTrue(recovery.acquire())
+        assertTrue(online.acquire())
+        assertTrue(camera.release { releases++ })
+        assertTrue(online.release { releases++ })
+        assertEquals(0, releases)
+        val replacement = ParkedLease(file, 1)
+        assertTrue(replacement.acquire())
+        assertTrue(recovery.release { releases++ })
+        assertEquals(0, releases)
+        assertTrue(replacement.release { releases++ })
+        assertEquals(1, releases)
+    }
+
+    @Test fun everyOwnerReleaseOrderClearsPowerExactlyOnce() {
+        for (first in 1..3) for (second in 1..3) {
+            if (first == second) continue
+            val last = 6 - first - second
+            val file = temporary.newFile()
+            val owners = (1..3).associateWith { ParkedLease(file, it) }
+            owners.values.forEach { assertTrue(it.acquire()) }
+            var releases = 0
+            assertTrue(owners.getValue(first).release { releases++ })
+            assertTrue(owners.getValue(second).release { releases++ })
+            assertEquals(0, releases)
+            assertTrue(owners.getValue(last).release { releases++ })
+            assertEquals(1, releases)
+        }
+    }
+
+    @Test fun recoveryDoesNotPretendTheOnlinePanelIsHeld() {
+        val file = temporary.newFile()
+        val camera = ParkedLease(file, 1)
+        val recovery = ParkedLease(file, 3)
+        assertTrue(recovery.acquire())
+        assertTrue(camera.otherHeld)
+        assertTrue(camera.heldBy(3))
+        assertFalse(camera.heldBy(2))
+        assertTrue(recovery.release {})
+        assertFalse(camera.otherHeld)
+    }
+
 }

@@ -301,7 +301,10 @@ object CameraDaemon {
             if (sentryMode != SentryMode.OFF) {
                 if (!ParkedRails.isHeld) {
                     ParkedRails.hold { sentryMode != SentryMode.OFF }
-                    if (ParkedRails.isHeld) screen.sleepPanel()
+                    if (ParkedRails.isHeld) {
+                        handoffParkedPower()
+                        screen.sleepPanel()
+                    }
                 }
                 if (sentryMode != SentryMode.OFF && !ParkedRails.isHeld) {
                     Thread.sleep(SUPERVISE_EVERY_MS)
@@ -658,6 +661,7 @@ object CameraDaemon {
     }
 
     private fun finish() {
+        handoffParkedPower()
         alive = false
         supervisor?.join()
         stopRecording()
@@ -694,13 +698,22 @@ object CameraDaemon {
 
     private fun restart(reason: String) {
         if (!alive || File(CAM_SENTINEL_PATH).exists() || !restarting.compareAndSet(false, true)) return
-        alive = false
         // A stuck log write or shutdown hook must not prevent the shell watchdog from taking over.
         Thread({
             Thread.sleep(2_000L)
             killRecorder()
         }, "recorder-exit").also { it.isDaemon = true; it.start() }
+        handoffParkedPower()
+        alive = false
         DaemonLog.e(TAG, "$reason; restarting recorder daemon")
+    }
+
+    private fun handoffParkedPower() {
+        if (!ParkedRails.isHeld || sentryMode == SentryMode.OFF || File(CAM_SENTINEL_PATH).exists()) return
+        val apk = screen.apkPath ?: return
+        if (!DashboardControl.holdRecorderPower(apk)) {
+            DaemonLog.w(TAG, "The dashboard could not take the recorder recovery power hold")
+        }
     }
 
     private fun killRecorder() {
@@ -712,11 +725,9 @@ object CameraDaemon {
         val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)
         val mode = Config.getString(SurveillanceSettings.MODE, SurveillanceSettings.fallback(SurveillanceSettings.MODE))
         val arm = Config.getString(SurveillanceSettings.ARM, SurveillanceSettings.fallback(SurveillanceSettings.ARM))
-        val saved = parkedRecovery.consume(enabled, mode, arm) ?: return
+        val saved = parkedRecovery.resume(enabled, mode, arm) ?: return
         sentryMode = if (saved == "smart") SentryMode.SMART else SentryMode.CONTINUOUS
         wanted = false
-        recoveryStateSaved = parkedRecovery.checkpoint(saved, arm)
-        if (!recoveryStateSaved) DaemonLog.w(TAG, "could not save parked recovery state")
         DaemonLog.d("Sentry", "resuming parked surveillance after recorder recovery")
     }
 

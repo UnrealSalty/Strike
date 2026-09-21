@@ -26,6 +26,7 @@ internal class ParkedRecovery(
     private var checkpointMode: String? = null
     private var checkpointArm: String? = null
     private var checkpointSaved = true
+    private var resumeAttempted = false
 
     @Synchronized
     fun checkpoint(mode: String?, arm: String?): Boolean {
@@ -77,9 +78,23 @@ internal class ParkedRecovery(
     }
 
     @Synchronized
-    fun consume(enabled: Boolean, mode: String, arm: String): String? {
-        val deadline = validUntilMs(enabled, mode, arm)
-        return if (file.delete() && deadline != null && !stopped.exists()) mode else null
+    fun resume(enabled: Boolean, mode: String, arm: String): String? {
+        if (resumeAttempted) return null
+        resumeAttempted = true
+        if (validUntilMs(enabled, mode, arm) == null) {
+            file.delete()
+            return null
+        }
+        val resumedAtMs = nowMs()
+        if (!save(mode, arm)) {
+            if (stopped.exists()) file.delete()
+            return null
+        }
+        checkpointAtMs = resumedAtMs
+        checkpointMode = mode
+        checkpointArm = arm
+        checkpointSaved = true
+        return mode
     }
 
     @Synchronized

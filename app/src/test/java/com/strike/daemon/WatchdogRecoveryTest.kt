@@ -258,6 +258,16 @@ class WatchdogRecoveryTest {
             mkdir -p "proc/${'$'}${'$'}"
             printf '%s\000' sh "${'$'}0" > "proc/${'$'}${'$'}/cmdline"
             echo launched >> launches
+            cmd() {
+                [ "$1" = package ] || exit 98
+                shift
+                pm "$@"
+            }
+            timeout() {
+                [ "$1" = -s ] && [ "$2" = KILL ] && [ "$3" -gt 0 ] || exit 98
+                shift 3
+                "$@"
+            }
             pm() {
                 if [ "${'$'}1" = path ]; then printf 'package:%s/new/base.apk\n' "${'$'}PWD"
                 else echo package:com.strike; fi

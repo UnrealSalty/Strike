@@ -6,27 +6,33 @@ import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.StandardOpenOption
 
-internal class ParkedLease(private val file: File, private val slot: Int) {
-    init { require(slot in 1..2) }
+internal class ParkedLease(file: File, private val slot: Int) {
+    init { require(slot in 1..3) }
 
-    private var channel: FileChannel? = null
+    private val path = file.absoluteFile.normalize().toPath()
+    private var shared: SharedChannel? = null
     private var claim: FileLock? = null
 
-    val isHeld: Boolean get() = synchronized(this) { claim?.isValid == true }
+    val isHeld: Boolean get() = synchronized(channels) { claim?.isValid == true }
 
-    val otherHeld: Boolean get() = synchronized(this) {
+    val otherHeld: Boolean get() = synchronized(channels) {
         try {
-            val other = lock(open(), (3 - slot).toLong()) ?: return@synchronized true
-            other.use { false }
+            val opened = open()
+            (1..3).any { it != slot && occupied(opened, it) }
         } finally { closeUnclaimed() }
     }
 
-    @Synchronized
-    fun acquire(): Boolean {
+    fun heldBy(owner: Int): Boolean = synchronized(channels) {
+        require(owner in 1..3)
+        if (owner == slot) return isHeld
+        try { occupied(open(), owner) } finally { closeUnclaimed() }
+    }
+
+    fun acquire(): Boolean = synchronized(channels) {
         if (isHeld) return true
         closeUnclaimed()
         val opened = open()
-        return try {
+        try {
             val gate = lock(opened, 0) ?: return false
             gate.use {
                 claim = lock(opened, slot.toLong())
@@ -35,20 +41,20 @@ internal class ParkedLease(private val file: File, private val slot: Int) {
         } finally { closeUnclaimed() }
     }
 
-    @Synchronized
-    fun release(onLast: () -> Unit): Boolean {
-        val opened = channel ?: return true
-        return try {
+    fun release(onLast: () -> Unit): Boolean = synchronized(channels) {
+        val held = shared ?: return true
+        try {
             val gate = try {
-                opened.lock(0, 1, false)
+                held.channel.lock(0, 1, false)
             } catch (busy: OverlappingFileLockException) {
                 return false
             }
             gate.use {
-                claim?.release()
-                claim = null
-                val other = lock(opened, (3 - slot).toLong())
-                other?.use { onLast() }
+                claim?.let {
+                    it.release()
+                    claim = null
+                }
+                if ((1..3).none { it != slot && occupied(held.channel, it) }) onLast()
                 true
             }
         } finally { closeUnclaimed() }
@@ -57,19 +63,36 @@ internal class ParkedLease(private val file: File, private val slot: Int) {
     private fun closeUnclaimed() {
         if (isHeld) return
         claim = null
-        val unused = channel
-        channel = null
-        unused?.close()
+        val unused = shared ?: return
+        shared = null
+        unused.references--
+        if (unused.references == 0) {
+            channels.remove(path)
+            unused.channel.close()
+        }
     }
 
-    private fun open(): FileChannel = channel ?: FileChannel.open(file.toPath(),
-        StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE)
-        .also { channel = it }
+    private fun open(): FileChannel {
+        val opened = shared ?: channels.getOrPut(path) {
+            SharedChannel(FileChannel.open(path,
+                StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE))
+        }.also { shared = it; it.references++ }
+        return opened.channel
+    }
 
-    // Separate claims outlive hardware work; the gate prevents a new claim overtaking the last release.
+    private fun occupied(opened: FileChannel, owner: Int): Boolean =
+        lock(opened, owner.toLong())?.use { false } ?: true
+
     private fun lock(opened: FileChannel, byte: Long): FileLock? = try {
         opened.tryLock(byte, 1L, false)
     } catch (busy: OverlappingFileLockException) {
         null
+    }
+
+    private class SharedChannel(val channel: FileChannel, var references: Int = 0)
+
+    companion object {
+        // Closing another descriptor to this file can drop every POSIX lock held by this process.
+        private val channels = HashMap<java.nio.file.Path, SharedChannel>()
     }
 }

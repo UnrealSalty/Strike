@@ -56,10 +56,15 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
     }
 
     fun maintainRecorder() {
+        holdRecorderPower()
+        daemons.maintainRecorder()
+    }
+
+    fun holdRecorderPower(): Boolean {
         val ready = recorderPower.refresh()
         if (!ready && recoveryPowerReady) Logs.w("Recorder", "Could not keep recorder recovery awake")
         recoveryPowerReady = ready
-        daemons.maintainRecorder()
+        return ready && recorderPower.isHeld
     }
 
     fun releasePanel(): Boolean = power.releasePanel()

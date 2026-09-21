@@ -21,6 +21,31 @@ class DashboardLaunchTest {
     }
 
     @Test
+    fun aPackageLookupTimeoutStillLaunchesTheKnownDashboardApk() {
+        val setup = """
+            pm() { : > unbounded-pm; return 20; }
+            timeout() { return 137; }
+        """.trimIndent()
+        assertEquals(0, watchdog(listOf("0 1"), setup = setup))
+        assertEquals(1, file("classpaths").readLines().size)
+        assertFalse(file("unbounded-pm").exists())
+        assertFalse(file("sleeps").exists())
+    }
+
+    @Test
+    fun aPackageListTimeoutKeepsWaitingForTheDashboardApk() {
+        val setup = """
+            rm -f initial/base.apk
+            pm() { : > unbounded-pm; return 20; }
+            timeout() { return 137; }
+        """.trimIndent()
+        assertEquals(0, watchdog(listOf("0 1"), setup = setup, afterSleep = ": > initial/base.apk"))
+        assertEquals(1, file("classpaths").readLines().size)
+        assertEquals(listOf("3"), file("sleeps").readLines())
+        assertFalse(file("unbounded-pm").exists())
+    }
+
+    @Test
     fun moreThanFiveFailedStartsStillReachTheNextHealthyRun() {
         assertEquals(0, watchdog(List(6) { "1 1" } + "0 300"))
         assertEquals(7, file("classpaths").readLines().size)
@@ -136,6 +161,16 @@ class DashboardLaunchTest {
         file("exits").writeText(exits.joinToString("\n"))
         file("clock").writeText("0")
         val commands = """
+            cmd() {
+                [ "$1" = package ] || exit 98
+                shift
+                pm "$@"
+            }
+            timeout() {
+                [ "$1" = -s ] && [ "$2" = KILL ] && [ "$3" -gt 0 ] || exit 98
+                shift 3
+                "$@"
+            }
             pm() {
                 [ -f unavailable ] && return 20
                 if [ "$1" = path ]; then

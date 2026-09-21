@@ -139,6 +139,13 @@ private class DashboardHost(private val context: Context, private val uid: Int, 
         val bytes = ByteArray(length)
         input.readFully(bytes)
         val request = JSONObject(bytes.toString(Charsets.UTF_8))
+        if (request.optString("op") == "recorder.power") {
+            val held = request.optString("apk") == context.applicationInfo.sourceDir &&
+                runtime?.holdRecorderPower() == true
+            val reply = JSONObject().put("held", held).toString().toByteArray()
+            DataOutputStream(client.outputStream).apply { writeInt(reply.size); write(reply); flush() }
+            return
+        }
         if (request.optString("op") == "panel.release") {
             val released = request.optString("apk") == context.applicationInfo.sourceDir &&
                 (runtime?.releasePanel() ?: true)

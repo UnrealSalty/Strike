@@ -28,9 +28,6 @@ private const val ISP_NEED = 0x4090103E
 private const val ISP_WORK = 0x4090103C
 
 private const val SETTLE_MS = 1_000L
-private const val ACTIVITY_MS = 10_000L
-private const val VOTE_MS = 5 * 60_000L
-private const val WAKE_MS = 8 * 60_000L
 
 // Hold the MCU/ISP rails and AP awake for parked capture, matching Overdrive's AccSentry.
 object ParkedRails {
@@ -42,13 +39,12 @@ object ParkedRails {
     @Volatile private var wakeLock: PowerManager.WakeLock? = null
 
     internal val isAwake: Boolean get() = wakeLock?.isHeld == true
-    private var power: Any? = null
-    private var special: Any? = null
-    private var looked = false
-    private var activityAtMs = 0L
-    private var voteAtMs = 0L
-    private var wakeAtMs = 0L
+    private val devices = ParkedDevices(::findPower, ::findSpecial, SystemClock::elapsedRealtime)
+    private val maintenance = ParkedMaintenance(SystemClock::elapsedRealtime)
+    private var powerUnavailable = false
+    private var specialUnavailable = false
     private var lease: ParkedLease? = null
+    private val recoveryLease = ParkedLease(File("$STRIKE_DIR/parked-power.lock"), 3)
     private var cameraOwner = true
     private var leaseFailed = false
 
@@ -95,19 +91,55 @@ object ParkedRails {
     @Synchronized
     fun tick(): Boolean {
         if (!isHeld) return false
-        val now = System.currentTimeMillis()
-        if (now - activityAtMs >= ACTIVITY_MS) {
-            activityAtMs = now
+        return maintain(cameraOwner)
+    }
+
+    @Synchronized
+    internal fun holdRecovery(): Boolean {
+        if (recoveryLease.isHeld) return true
+        return try {
+            if (!recoveryLease.acquire()) return false
+            if (!isHeld) {
+                wakeMcu()
+                vote()
+                userActivity()
+            }
+            true
+        } catch (e: IOException) {
+            false
+        }
+    }
+
+    @Synchronized
+    internal fun tickRecovery() {
+        if (recoveryLease.isHeld && !isHeld) maintain(wakeDisplay = false)
+    }
+
+    @Synchronized
+    internal fun releaseRecovery(): Boolean = try {
+        recoveryLease.release { releaseVotes() }
+    } catch (e: IOException) {
+        false
+    }
+
+    private fun maintain(wakeDisplay: Boolean): Boolean {
+        val power = devices.power
+        val special = devices.special
+        devices.refresh()
+        if (devices.power !== power || devices.special !== special) {
+            wakeMcu()
+            vote()
             userActivity()
         }
-        if (now - voteAtMs >= VOTE_MS) {
-            voteAtMs = now
+        if (maintenance.activityDue) {
+            userActivity()
+        }
+        if (maintenance.voteDue) {
             vote()
         }
-        if (now - wakeAtMs >= WAKE_MS) {
-            wakeAtMs = now
+        if (maintenance.wakeDue) {
             wakeMcu()
-            if (cameraOwner) wakeAp()
+            if (wakeDisplay) wakeAp()
             return true
         }
         return false
@@ -134,7 +166,7 @@ object ParkedRails {
 
     @Synchronized
     internal fun onlineHeld(): Boolean = try {
-        claim(camera = true).otherHeld
+        claim(camera = true).heldBy(2)
     } catch (e: IOException) {
         if (!leaseFailed) DaemonLog.w(TAG, "Could not read the Online parked power claim")
         leaseFailed = true
@@ -155,7 +187,7 @@ object ParkedRails {
     }
 
     private fun vote(): Int {
-        voteAtMs = System.currentTimeMillis()
+        maintenance.didVote()
         var landed = 0
         if (writePower(MCU_HOLD, 1)) landed++
         if (writeSpecial(SENTRY_ENTER, 1)) landed++
@@ -188,7 +220,7 @@ object ParkedRails {
     }
 
     private fun userActivity() {
-        activityAtMs = System.currentTimeMillis()
+        maintenance.didActivity()
         val pm = powerManager() ?: return
         val whenMs = SystemClock.uptimeMillis()
         if (invoke(pm, "userActivity", arrayOf(Long::class.java, Int::class.java, Int::class.java), whenMs, 0, 1)) {
@@ -209,7 +241,7 @@ object ParkedRails {
     }
 
     private fun wakeMcu() {
-        wakeAtMs = System.currentTimeMillis()
+        maintenance.didWake()
         val device = powerDevice() ?: return
         try {
             val method = device.javaClass.getMethod("wakeUpMcu")
@@ -283,28 +315,40 @@ object ParkedRails {
     }
 
     private fun powerDevice(): Any? {
-        findDevices()
-        return power
+        devices.refresh()
+        return devices.power
     }
 
     private fun specialDevice(): Any? {
-        findDevices()
-        return special
+        devices.refresh()
+        return devices.special
     }
 
-    @Synchronized
-    private fun findDevices() {
-        if (looked) return
-        if (Looper.myLooper() == null) Looper.prepare()
-        val ctx = context() ?: return
-        looked = true
-        power = instance(POWER, ctx)
-        if (power == null) DaemonLog.w(TAG, "no power device, MCU will not be held")
+    private fun findPower(): Any? {
+        val ctx = hardwareContext() ?: return null
+        val found = instance(POWER, ctx)
+        if (found == null && !powerUnavailable) DaemonLog.w(TAG, "no power device, MCU will not be held")
+        if (found != null && powerUnavailable) DaemonLog.d(TAG, "power device is available")
+        powerUnavailable = found == null
+        return found
+    }
+
+    private fun findSpecial(): Any? {
+        val ctx = hardwareContext() ?: return null
+        var found: Any? = null
         for (name in SPECIAL) {
-            special = instance(name, ctx)
-            if (special != null) break
+            found = instance(name, ctx)
+            if (found != null) break
         }
-        if (special == null) DaemonLog.w(TAG, "no special device, camera rail votes will not land")
+        if (found == null && !specialUnavailable) DaemonLog.w(TAG, "no special device, camera rail votes will not land")
+        if (found != null && specialUnavailable) DaemonLog.d(TAG, "camera power device is available")
+        specialUnavailable = found == null
+        return found
+    }
+
+    private fun hardwareContext(): Context? {
+        if (Looper.myLooper() == null) Looper.prepare()
+        return context()
     }
 
     private fun instance(className: String, ctx: Context): Any? {
@@ -317,7 +361,6 @@ object ParkedRails {
         return try {
             cls.getMethod("getInstance", Context::class.java).invoke(null, wrapped)
         } catch (e: ReflectiveOperationException) {
-            DaemonLog.w(TAG, "$className would not start: ${e.javaClass.simpleName}")
             null
         }
     }

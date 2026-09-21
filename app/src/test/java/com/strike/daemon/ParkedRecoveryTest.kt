@@ -2,6 +2,7 @@ package com.strike.daemon
 
 import com.strike.recording.sentryMode
 import com.strike.vehicle.VehicleSnapshot
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -23,42 +24,104 @@ class ParkedRecoveryTest {
         ParkedRecovery(saved, stopped, boot, nowMs = clock, wallNowMs = { wall })
 
     @Test
-    fun eachParkedRecordingModeResumesOnlyOnce() {
+    fun eachParkedRecordingModeResumesOncePerDaemon() {
         for (mode in listOf("smart", "continuous")) {
             assertTrue(recovery().save(mode, "lock"))
             now += 3_000L
-            assertEquals(mode, recovery().consume(true, mode, "lock"))
-            assertFalse(saved.exists())
-            assertNull(recovery().consume(true, mode, "lock"))
+            val resumed = recovery()
+            assertEquals(mode, resumed.resume(true, mode, "lock"))
+            assertEquals(now + 180_000L, recovery().validUntilMs(true, mode, "lock"))
+            val renewed = saved.readBytes()
+            now += 3_000L
+            assertNull(resumed.resume(true, mode, "lock"))
+            assertArrayEquals(renewed, saved.readBytes())
+            assertEquals(mode, recovery().resume(true, mode, "lock"))
         }
+    }
+
+    @Test
+    fun acceptedResumeKeepsThePowerHoldersJournalUntilReplacementIsReady() {
+        assertTrue(recovery().save("smart", "off"))
+        val previousDeadline = now + 180_000L
+        now += 60_000L
+        val powerHolder = recovery()
+        var observedBeforePublish = false
+        val resumed = ParkedRecovery(saved, stopped, "boot-a", nowMs = { now }, wallNowMs = {
+            assertTrue(saved.isFile)
+            assertTrue(File(saved.path + ".tmp").isFile)
+            assertEquals(previousDeadline, powerHolder.validUntilMs(true, "smart", "off"))
+            observedBeforePublish = true
+            wall
+        })
+        assertEquals("smart", resumed.resume(true, "smart", "off"))
+        assertTrue(observedBeforePublish)
+        assertEquals(now + 180_000L, powerHolder.validUntilMs(true, "smart", "off"))
+        val renewed = saved.readBytes()
+        now += 59_999L
+        assertTrue(resumed.checkpoint("smart", "off"))
+        assertArrayEquals(renewed, saved.readBytes())
+    }
+
+    @Test
+    fun failedRenewalDoesNotEraseOrExtendThePreviousJournal() {
+        assertTrue(recovery().save("smart", "off"))
+        val previous = saved.readBytes()
+        val previousDeadline = now + 180_000L
+        now += 60_000L
+        val temporary = File(saved.path + ".tmp")
+        assertTrue(temporary.mkdir())
+        val child = File(temporary, "busy")
+        child.writeText("held")
+        assertNull(recovery().resume(true, "smart", "off"))
+        assertArrayEquals(previous, saved.readBytes())
+        assertEquals(previousDeadline, recovery().validUntilMs(true, "smart", "off"))
+        assertTrue(child.delete())
+        assertTrue(temporary.delete())
+        assertEquals("smart", recovery().resume(true, "smart", "off"))
+    }
+
+    @Test
+    fun aManualStopDuringResumeCannotPublishRenewedIntent() {
+        assertTrue(recovery().save("smart", "off"))
+        val resumed = ParkedRecovery(saved, stopped, "boot-a", nowMs = { now }, wallNowMs = {
+            stopped.writeText("stopped")
+            wall
+        })
+        assertNull(resumed.resume(true, "smart", "off"))
+        assertFalse(saved.exists())
+        assertTrue(stopped.delete())
+        assertNull(recovery().resume(true, "smart", "off"))
     }
 
     @Test
     fun recoveryAtTheDeadlineIsAccepted() {
         assertTrue(recovery().save("smart", "off"))
         now += 180_000L
-        assertEquals("smart", recovery().consume(true, "smart", "off"))
+        assertEquals("smart", recovery().resume(true, "smart", "off"))
     }
 
     @Test
     fun expiredIntentIsDiscarded() {
         assertTrue(recovery().save("smart", "off"))
         now += 180_001L
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(true, "smart", "off"))
         assertFalse(saved.exists())
     }
 
     @Test
-    fun eachParkedModeAndArmingConditionResumesOnlyOnceAfterAReboot() {
+    fun eachParkedModeAndArmingConditionRenewsAfterAReboot() {
         for (mode in listOf("smart", "continuous")) for (arm in listOf("off", "lock")) {
             now = 1_000_000L
             assertTrue(recovery().save(mode, arm))
             now = 5_000L
             wall += 30_000L
             assertEquals(now + 150_000L, recovery("boot-b").validUntilMs(true, mode, arm))
-            assertEquals(mode, recovery("boot-b").consume(true, mode, arm))
-            assertFalse(saved.exists())
-            assertNull(recovery("boot-b").consume(true, mode, arm))
+            val resumed = recovery("boot-b")
+            assertEquals(mode, resumed.resume(true, mode, arm))
+            assertEquals(now + 180_000L, recovery("boot-b").validUntilMs(true, mode, arm))
+            assertNull(resumed.resume(true, mode, arm))
+            now += 3_000L
+            assertEquals(mode, recovery("boot-b").resume(true, mode, arm))
         }
     }
 
@@ -68,7 +131,7 @@ class ParkedRecoveryTest {
             assertTrue(recovery().save("smart", "off"))
             wall += age
             assertNull(recovery("boot-b").validUntilMs(true, "smart", "off"))
-            assertNull(recovery("boot-b").consume(true, "smart", "off"))
+            assertNull(recovery("boot-b").resume(true, "smart", "off"))
             assertFalse(saved.exists())
         }
     }
@@ -80,7 +143,7 @@ class ParkedRecoveryTest {
             now = uptime
             wall += 180_000L
             assertEquals(now, recovery("boot-b").validUntilMs(true, "continuous", "lock"))
-            assertEquals("continuous", recovery("boot-b").consume(true, "continuous", "lock"))
+            assertEquals("continuous", recovery("boot-b").resume(true, "continuous", "lock"))
         }
     }
 
@@ -92,7 +155,7 @@ class ParkedRecoveryTest {
             now += 60_000L
             assertEquals(now + 120_000L, recovery().validUntilMs(true, "smart", "off"))
             now += 120_001L
-            assertNull(recovery().consume(true, "smart", "off"))
+            assertNull(recovery().resume(true, "smart", "off"))
         }
     }
 
@@ -107,7 +170,7 @@ class ParkedRecoveryTest {
             now += 50_000L
             wall += 50_000L
             assertEquals(expectedDeadline, recovery("boot-b").validUntilMs(true, "smart", "off"))
-            org.junit.Assert.assertArrayEquals(original, saved.readBytes())
+            assertArrayEquals(original, saved.readBytes())
         }
         now++
         wall++
@@ -127,8 +190,8 @@ class ParkedRecoveryTest {
             val handoff = recovery(boot)
             assertEquals(if (boot == "boot-a") now + 120_000L else null,
                 handoff.validUntilMs(true, "smart", "off"))
-            assertEquals(if (boot == "boot-a") "smart" else null, handoff.consume(true, "smart", "off"))
-            assertFalse(saved.exists())
+            assertEquals(if (boot == "boot-a") "smart" else null, handoff.resume(true, "smart", "off"))
+            assertEquals(boot == "boot-a", saved.exists())
         }
     }
 
@@ -136,7 +199,7 @@ class ParkedRecoveryTest {
     fun recoveredIntentDoesNotInventVehicleReadingsOrOverrideFreshUse() {
         for (mode in listOf("smart", "continuous")) for (arm in listOf("off", "lock")) {
             assertTrue(recovery().save(mode, arm))
-            val recovered = recovery("boot-b").consume(true, mode, arm)
+            val recovered = recovery("boot-b").resume(true, mode, arm)
             assertEquals(mode, recovered)
             assertNull(sentryMode(true, mode, null, arm, wasWatching = recovered != null))
             assertTrue(accUnsafe(null, now, now))
@@ -154,22 +217,22 @@ class ParkedRecoveryTest {
     @Test
     fun disabledSurveillanceDiscardsTheIntent() {
         assertTrue(recovery().save("smart", "off"))
-        assertNull(recovery().consume(false, "smart", "off"))
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(false, "smart", "off"))
+        assertNull(recovery().resume(true, "smart", "off"))
     }
 
     @Test
     fun changedRecordingModeDiscardsTheIntent() {
         assertTrue(recovery().save("smart", "off"))
-        assertNull(recovery().consume(true, "continuous", "off"))
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(true, "continuous", "off"))
+        assertNull(recovery().resume(true, "smart", "off"))
     }
 
     @Test
     fun changedArmingConditionDiscardsTheIntent() {
         assertTrue(recovery().save("smart", "off"))
-        assertNull(recovery().consume(true, "smart", "lock"))
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(true, "smart", "lock"))
+        assertNull(recovery().resume(true, "smart", "off"))
     }
 
     @Test
@@ -183,9 +246,9 @@ class ParkedRecoveryTest {
     fun aManualStopAfterSavingDiscardsTheIntent() {
         assertTrue(recovery().save("continuous", "lock"))
         stopped.writeText("stopped")
-        assertNull(recovery().consume(true, "continuous", "lock"))
+        assertNull(recovery().resume(true, "continuous", "lock"))
         assertTrue(stopped.delete())
-        assertNull(recovery().consume(true, "continuous", "lock"))
+        assertNull(recovery().resume(true, "continuous", "lock"))
     }
 
     @Test
@@ -202,7 +265,7 @@ class ParkedRecoveryTest {
     fun aFutureTimestampCannotResume() {
         assertTrue(recovery().save("smart", "off"))
         now--
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(true, "smart", "off"))
         assertFalse(saved.exists())
     }
 
@@ -211,7 +274,7 @@ class ParkedRecoveryTest {
         assertFalse(recovery(null).save("smart", "off"))
         assertFalse(recovery("").save("smart", "off"))
         assertTrue(recovery().save("smart", "off"))
-        assertNull(recovery(null).consume(true, "smart", "off"))
+        assertNull(recovery(null).resume(true, "smart", "off"))
         assertFalse(saved.exists())
     }
 
@@ -227,7 +290,7 @@ class ParkedRecoveryTest {
     fun truncatedAndOversizedIntentIsDiscarded() {
         for (bytes in listOf(byteArrayOf(0, 0, 0, 1), ByteArray(257))) {
             saved.writeBytes(bytes)
-            assertNull(recovery().consume(true, "smart", "off"))
+            assertNull(recovery().resume(true, "smart", "off"))
             assertFalse(saved.exists())
         }
     }
@@ -237,7 +300,7 @@ class ParkedRecoveryTest {
         assertTrue(recovery().save("smart", "off"))
         now += 2_000L
         assertTrue(recovery().save("continuous", "lock"))
-        assertEquals("continuous", recovery().consume(true, "continuous", "lock"))
+        assertEquals("continuous", recovery().resume(true, "continuous", "lock"))
     }
 
     @Test
@@ -248,13 +311,13 @@ class ParkedRecoveryTest {
             val previous = saved.readBytes()
             now += 59_999L
             assertTrue(handoff.checkpoint("smart", "off"))
-            org.junit.Assert.assertArrayEquals(previous, saved.readBytes())
+            assertArrayEquals(previous, saved.readBytes())
             now++
             assertTrue(handoff.checkpoint("smart", "off"))
             assertFalse(previous.contentEquals(saved.readBytes()))
         }
         now += 120_000L
-        assertEquals("smart", recovery().consume(true, "smart", "off"))
+        assertEquals("smart", recovery().resume(true, "smart", "off"))
     }
 
     @Test
@@ -263,7 +326,7 @@ class ParkedRecoveryTest {
         assertTrue(handoff.checkpoint("smart", "off"))
         now++
         assertTrue(handoff.checkpoint("continuous", "lock"))
-        assertEquals("continuous", recovery().consume(true, "continuous", "lock"))
+        assertEquals("continuous", recovery().resume(true, "continuous", "lock"))
     }
 
     @Test
@@ -274,10 +337,10 @@ class ParkedRecoveryTest {
         assertTrue(handoff.checkpoint(null, null))
         assertFalse(saved.exists())
         assertFalse(File(saved.path + ".tmp").exists())
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(true, "smart", "off"))
         now++
         assertTrue(handoff.checkpoint("smart", "off"))
-        assertEquals("smart", recovery().consume(true, "smart", "off"))
+        assertEquals("smart", recovery().resume(true, "smart", "off"))
     }
 
     @Test
@@ -300,7 +363,7 @@ class ParkedRecoveryTest {
         now++
         assertTrue(handoff.checkpoint("smart", "off"))
         assertEquals("smart", ParkedRecovery(file, stopped, "boot-a", nowMs = { now }, wallNowMs = { wall })
-            .consume(true, "smart", "off"))
+            .resume(true, "smart", "off"))
     }
 
     @Test
@@ -310,7 +373,7 @@ class ParkedRecoveryTest {
         stopped.writeText("stopped")
         now += 60_000L
         assertFalse(handoff.checkpoint("smart", "off"))
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(true, "smart", "off"))
         assertFalse(saved.exists())
     }
 
@@ -349,9 +412,9 @@ class ParkedRecoveryTest {
         repeat(3) {
             now += 60_000L
             assertEquals(expectedDeadline, recovery().validUntilMs(true, "smart", "off"))
-            org.junit.Assert.assertArrayEquals(original, saved.readBytes())
+            assertArrayEquals(original, saved.readBytes())
         }
-        assertEquals("smart", recovery().consume(true, "smart", "off"))
+        assertEquals("smart", recovery().resume(true, "smart", "off"))
     }
 
     @Test
@@ -360,7 +423,7 @@ class ParkedRecoveryTest {
         now += 180_001L
         assertNull(recovery().validUntilMs(true, "smart", "off"))
         assertTrue(saved.exists())
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(true, "smart", "off"))
         assertFalse(saved.exists())
     }
 
@@ -378,7 +441,7 @@ class ParkedRecoveryTest {
         }
         assertNull(recovery(null).validUntilMs(true, "smart", "off"))
         assertTrue(saved.exists())
-        assertEquals("smart", recovery().consume(true, "smart", "off"))
+        assertEquals("smart", recovery().resume(true, "smart", "off"))
     }
 
     @Test
@@ -389,7 +452,7 @@ class ParkedRecoveryTest {
             now
         })
         assertNull(handoff.validUntilMs(true, "smart", "off"))
-        assertNull(recovery().consume(true, "smart", "off"))
+        assertNull(recovery().resume(true, "smart", "off"))
     }
 
     @Test
@@ -401,7 +464,7 @@ class ParkedRecoveryTest {
         for (bytes in listOf(byteArrayOf(0, 0, 0, 1), ByteArray(257))) {
             saved.writeBytes(bytes)
             assertNull(recovery().validUntilMs(true, "smart", "off"))
-            org.junit.Assert.assertArrayEquals(bytes, saved.readBytes())
+            assertArrayEquals(bytes, saved.readBytes())
         }
     }
 

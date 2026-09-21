@@ -27,7 +27,7 @@ internal fun dashboardScript(directory: String, apkPath: String): String = """
     apk='${apkPath.replace("'", "'\"'\"'")}'
     failures=0
     while true; do
-        resolved=${'$'}(pm path com.strike 2>/dev/null | grep '/base.apk${'$'}' | head -n 1 | sed 's/^package://')
+        resolved=${'$'}(timeout -s KILL 5 cmd package path com.strike 2>/dev/null | grep '/base.apk${'$'}' | head -n 1 | sed 's/^package://')
         if [ -n "${'$'}resolved" ] && [ -f "${'$'}resolved" ]; then apk="${'$'}resolved"; fi
         if [ -f "${'$'}apk" ]; then
             started=${'$'}(date +%s)
@@ -38,7 +38,7 @@ internal fun dashboardScript(directory: String, apkPath: String): String = """
             elapsed=${'$'}(( ${'$'}(date +%s) - started ))
             if [ "${'$'}elapsed" -ge 300 ] || [ "${'$'}code" -eq 42 ]; then failures=0; fi
         else
-            packages=${'$'}(pm list packages com.strike 2>/dev/null)
+            packages=${'$'}(timeout -s KILL 5 cmd package list packages com.strike 2>/dev/null)
             if [ "${'$'}?" -eq 0 ] && ! printf '%s\n' "${'$'}packages" | grep -Fx 'package:com.strike' >/dev/null; then exit 0; fi
         fi
         if [ "${'$'}failures" -lt 20 ]; then failures=${'$'}((failures + 1)); fi

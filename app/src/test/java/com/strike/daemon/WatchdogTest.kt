@@ -203,6 +203,53 @@ class WatchdogTest {
     }
 
     @Test
+    fun aPackageLookupTimeoutStillLaunchesTheKnownApk() {
+        val setup = """
+            pm() { : > unbounded-pm; return 20; }
+            timeout() { return 137; }
+        """.trimIndent()
+        assertEquals(0, watchdog(listOf("0 300 stop"), setup = setup))
+        assertEquals("1", file("starts").readText().trim())
+        assertFalse(file("unbounded-pm").exists())
+        assertFalse(file("sleeps").exists())
+    }
+
+    @Test
+    fun aPackageListTimeoutDoesNotCountAsAnUninstall() {
+        val setup = """
+            rm -f base.apk
+            pm() { : > unbounded-pm; return 20; }
+            timeout() { return 137; }
+        """.trimIndent()
+        assertEquals(0, watchdog(listOf("0 300 stop"), setup = setup, afterSleep = ": > base.apk"))
+        assertEquals("1", file("starts").readText().trim())
+        assertEquals(listOf("10"), file("sleeps").readLines())
+        assertFalse(file("unbounded-pm").exists())
+    }
+
+    @Test
+    fun manualStopDuringPackageLookupPreventsAnotherLaunch() {
+        val setup = """
+            timeout() { echo stopped by user > cam.disabled; return 137; }
+        """.trimIndent()
+        assertEquals(0, watchdog(emptyList(), setup = setup))
+        assertFalse(file("starts").exists())
+        assertEquals("stopped by user", file("cam.disabled").readText().trim())
+        assertFalse(file("cam_watchdog.pid").exists())
+    }
+
+    @Test
+    fun aReplacementWatchdogDuringPackageLookupPreventsAnotherLaunch() {
+        val setup = """
+            timeout() { echo replacement > cam_watchdog.pid; return 137; }
+        """.trimIndent()
+        assertEquals(0, watchdog(emptyList(), setup = setup))
+        assertFalse(file("starts").exists())
+        assertEquals("replacement", file("cam_watchdog.pid").readText().trim())
+        assertFalse(file("cam.disabled").exists())
+    }
+
+    @Test
     fun aMissingResolvedApkUsesTheExistingFallback() {
         val setup = """pm() { echo package:/missing/base.apk; }"""
         assertEquals(0, watchdog(listOf("0 300 stop"), setup = setup))
@@ -363,6 +410,16 @@ class WatchdogTest {
         file("exits").writeText(exits.joinToString("\n"))
         file("uptime").writeText("0")
         val commands = """
+            cmd() {
+                [ "$1" = package ] || exit 98
+                shift
+                pm "$@"
+            }
+            timeout() {
+                [ "$1" = -s ] && [ "$2" = KILL ] && [ "$3" -gt 0 ] || exit 98
+                shift 3
+                "$@"
+            }
             pm() { printf 'package:%s/base.apk\n' "${'$'}PWD"; }
             awk() { cat uptime; }
             pidof() { [ "${'$'}(cat camera-name 2>/dev/null)" = "${'$'}1" ] && echo 777; }
