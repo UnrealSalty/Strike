@@ -56,7 +56,7 @@ class RecorderRotationTest {
     }
 
     @Test
-    fun anOverdueKeyframeMakesTheQueuedEncoderBoundaryObsolete() {
+    fun openingTheFirstClipMakesAnEarlierBoundaryRequestObsolete() {
         val recorder = Recorder(folder.root, RecordingMode.DRIVE, null) {}
         val encoder = encoder()
         val rotation = encoder.rotation
@@ -71,21 +71,21 @@ class RecorderRotationTest {
                 sample(0L, key = true)
             },
             {
-                assertEquals(1, finished(recorder).size)
+                assertEquals(0, finished(recorder).size)
                 assertFalse(rotation.isPending(obsoleteId))
                 nextId = rotation.boundary(keyFrame = true, nowMs = 4_001L)
                 assertTrue(nextId > obsoleteId)
                 sample(1L, rotationId = obsoleteId)
             },
             {
-                assertEquals(1, finished(recorder).size)
+                assertEquals(0, finished(recorder).size)
                 assertTrue(rotation.isPending(nextId))
                 set(recorder, "running", false)
                 null
             }
         )
 
-        assertEquals(2, clips)
+        assertEquals(1, clips)
     }
 
     private fun encoder() = Encoder(64, 64, 15, 1_000_000, MediaFormat.MIMETYPE_VIDEO_AVC) {}.also {

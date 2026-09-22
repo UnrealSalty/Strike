@@ -8,6 +8,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "Audio"
 private const val BACKLOG = 2
@@ -24,6 +25,8 @@ class AudioConfig(
     val bitrateBps: Int,
     val csd: ByteArray
 )
+
+data class AudioStart(val config: AudioConfig, val first: Sample)
 
 // Audio and video timestamps use System.nanoTime across both processes.
 class AudioIngest {
@@ -60,6 +63,29 @@ class AudioIngest {
     internal val queuedFrames: Int get() = frames.size
 
     fun take(): Sample? = frames.poll()
+
+    internal val nextTimeUs: Long? get() = frames.peek()?.timeUs
+
+    internal fun takeForClip(
+        fromUs: Long,
+        waitMs: Long = 0L,
+        before: ((Sample) -> Unit)? = null
+    ): AudioStart? {
+        val format = config ?: return null
+        val deadlineNs = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(waitMs)
+        var available = frames.size
+        while (available-- > 0 || waitMs > 0 && System.nanoTime() < deadlineNs) {
+            val remainingNs = deadlineNs - System.nanoTime()
+            val frame = if (waitMs > 0 && remainingNs > 0) {
+                frames.poll(remainingNs, TimeUnit.NANOSECONDS)
+            } else frames.poll()
+            if (frame == null || config !== format) return null
+            if (frame.bytes.isEmpty()) continue
+            if (frame.timeUs >= fromUs) return AudioStart(format, frame)
+            before?.invoke(frame)
+        }
+        return null
+    }
 
     fun clear() = frames.clear()
 

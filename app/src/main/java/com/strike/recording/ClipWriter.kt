@@ -4,6 +4,7 @@ import android.media.MediaCodec
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import com.strike.daemon.AudioConfig
+import com.strike.daemon.AudioStart
 import com.strike.daemon.DaemonLog
 import java.io.File
 import java.io.IOException
@@ -29,6 +30,11 @@ class ClipWriter(private val dir: File) {
     private var audioTrack = -1
     private var writing: File? = null
     private var out = dir
+    private var videoSamples = 0L
+    private var audioSamples = 0L
+
+    internal var releaseFailed = false
+        private set
 
     val hasAudio: Boolean get() = audioTrack >= 0
 
@@ -38,7 +44,7 @@ class ClipWriter(private val dir: File) {
     var startedAtMs = 0L
         private set
 
-    fun open(mode: RecordingMode, format: MediaFormat, audio: AudioConfig? = null): Boolean {
+    fun open(mode: RecordingMode, format: MediaFormat, audio: AudioStart? = null): Boolean {
         val clip = clipName(mode, System.currentTimeMillis())
         var fresh: MediaMuxer? = null
         return try {
@@ -48,16 +54,20 @@ class ClipWriter(private val dir: File) {
             out = file.parentFile!!
             fresh = opened
             track = fresh.addTrack(format)
-            audioTrack = if (audio == null) -1 else fresh.addTrack(aacFormat(audio))
+            audioTrack = if (audio == null) -1 else fresh.addTrack(aacFormat(audio.config))
             fresh.start()
             muxer = fresh
             writing = file
             name = clip
             startedAtMs = System.currentTimeMillis()
+            if (audio != null) writeAudio(audio.first)
             true
         } catch (e: Exception) {
             DaemonLog.e(TAG, "cannot start a clip on this volume: ${e.message}")
             if (fresh != null) release(fresh, clip)
+            muxer = null
+            writing = null
+            name = null
             track = -1
             audioTrack = -1
             false
@@ -76,6 +86,7 @@ class ClipWriter(private val dir: File) {
         val info = MediaCodec.BufferInfo()
         info.set(0, sample.bytes.size, sample.timeUs, sample.flags)
         open.writeSampleData(which, ByteBuffer.wrap(sample.bytes), info)
+        if (which == track) videoSamples++ else audioSamples++
     }
 
     // Only a successful stop writes the index required to list a playable clip.
@@ -94,7 +105,8 @@ class ClipWriter(private val dir: File) {
             open.stop()
             true
         } catch (e: RuntimeException) {
-            DaemonLog.e(TAG, "clip $clip did not close cleanly, keeping it aside")
+            DaemonLog.e(TAG, "clip $clip did not close cleanly ($videoSamples video, $audioSamples audio samples, " +
+                "${out.usableSpace / MB} MB free): ${e.message}; keeping it aside")
             false
         } finally {
             release(open, clip)
@@ -123,6 +135,7 @@ class ClipWriter(private val dir: File) {
         try {
             muxer.release()
         } catch (e: RuntimeException) {
+            releaseFailed = true
             DaemonLog.e(TAG, "cannot release clip $clip: ${e.message}")
         }
     }

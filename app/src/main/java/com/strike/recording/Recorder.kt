@@ -8,6 +8,7 @@ import com.strike.camera.Frame
 import com.strike.camera.FrameBus
 import com.strike.camera.frameOf
 import com.strike.daemon.AudioIngest
+import com.strike.daemon.AudioStart
 import com.strike.daemon.DaemonLog
 import com.strike.surveillance.EVENT_PREROLL_MS
 import java.io.File
@@ -74,6 +75,9 @@ class Recorder(
     private var closerFinished = true
 
     @Volatile
+    private var muxerReleaseFailed = false
+
+    @Volatile
     var clip: String? = null
         private set
 
@@ -93,7 +97,7 @@ class Recorder(
     var frame: Frame? = null
         private set
 
-    val isRecording: Boolean get() = running && encoder?.isDead != true
+    val isRecording: Boolean get() = running && !muxerReleaseFailed && encoder?.isDead != true
 
     val lastOutputAtMs: Long get() = encoder?.lastOutputAtMs ?: 0L
 
@@ -156,7 +160,7 @@ class Recorder(
         ring?.clear()
         clip = null
         frame = null
-        return true
+        return !muxerReleaseFailed
     }
 
     private fun writeClips(encoder: Encoder, options: RecordingOptions) {
@@ -164,7 +168,6 @@ class Recorder(
         if (options.audio) awaitAudio()
         if (!running) return
         var current: ClipWriter? = null
-        if (!gated) current = openClip(format, options.audio) ?: return
         val clipLengthMs = options.clipLengthMs
         var audioFromUs = Long.MIN_VALUE
 
@@ -183,31 +186,46 @@ class Recorder(
                     continue
                 }
                 var open = current
-                if (open == null) {
-                    open = openClip(format, options.audio, preRoll = true) ?: break
+                if (open == null && gated && (ring?.count ?: 0) > 0) {
+                    open = openClip(format, null, preRoll = true) ?: break
                     current = open
                     encoder.rotation.complete()
                 }
-                val audioReady = options.audio && !open.hasAudio && audio?.config != null
-                // The shared microphone can retain AAC from before this recording began.
-                if (audioFromUs == Long.MIN_VALUE && sample != null) audioFromUs = sample.timeUs
-                if (!audioReady && audioFromUs != Long.MIN_VALUE) drainAudio(open, audioFromUs)
                 if (sample == null) {
-                    if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
+                    if (open != null) {
+                        drainAudio(open, audioFromUs)
+                        if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
+                    }
                     continue
                 }
-                if (running && shouldRotate(sample, open, clipLengthMs, audioReady, encoder.rotation)) {
-                    val done = open
-                    open = openClip(format, options.audio) ?: break
+                if (open == null) {
+                    val sound = if (options.audio) audio?.takeForClip(sample.timeUs, AUDIO_WAIT_MS) else null
+                    open = openClip(format, sound, preRoll = gated) ?: break
                     current = open
                     encoder.rotation.complete()
-                    finish(done)
                     audioFromUs = sample.timeUs
-                    if (audioReady && open.hasAudio) {
-                        drainAudio(open, audioFromUs)
-                        DaemonLog.d(TAG, "cabin audio joined recording")
+                } else {
+                    val rotate = running && shouldRotate(sample, open, clipLengthMs, encoder.rotation)
+                    val canJoinAudio = running && options.audio && !open.hasAudio &&
+                        sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0 && elapsed(open) >= 1_000L &&
+                        (audio?.nextTimeUs ?: Long.MIN_VALUE) >= sample.timeUs - AUDIO_WAIT_MS * 1_000L
+                    val sound = if (options.audio && (rotate || canJoinAudio)) {
+                        val outgoing = open
+                        audio?.takeForClip(sample.timeUs, AUDIO_WAIT_MS) { older ->
+                            if (outgoing.hasAudio && older.timeUs >= audioFromUs) outgoing.writeAudio(older)
+                        }
+                    } else null
+                    if (rotate || canJoinAudio && sound != null) {
+                        val done = open
+                        open = openClip(format, sound) ?: break
+                        current = open
+                        encoder.rotation.complete()
+                        finish(done)
+                        audioFromUs = sample.timeUs
+                        if (canJoinAudio && open.hasAudio) DaemonLog.d(TAG, "cabin audio joined recording")
                     }
                 }
+                drainAudio(open, audioFromUs)
                 open.write(sample)
                 if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
             }
@@ -230,9 +248,10 @@ class Recorder(
     }
 
     // Tracks cannot be added after muxer start; audio changes apply at a clip boundary.
-    private fun openClip(format: MediaFormat, audioEnabled: Boolean, preRoll: Boolean = false): ClipWriter? {
+    private fun openClip(format: MediaFormat, sound: AudioStart?, preRoll: Boolean = false): ClipWriter? {
         val writer = ClipWriter(dir)
-        if (!writer.open(mode, format, if (audioEnabled) audio?.config else null)) {
+        if (!writer.open(mode, format, sound)) {
+            if (writer.releaseFailed) muxerReleaseFailed = true
             running = false
             return null
         }
@@ -279,15 +298,13 @@ class Recorder(
         sample: Sample,
         writer: ClipWriter,
         clipLengthMs: Long,
-        audioReady: Boolean,
         rotation: ClipRotation
     ): Boolean =
         clipShouldRotate(
             rotation.isPending(sample.rotationId),
             elapsed(writer),
             clipLengthMs,
-            sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0,
-            audioReady
+            sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
         )
 
     private fun elapsed(writer: ClipWriter): Long = System.currentTimeMillis() - writer.startedAtMs
@@ -310,6 +327,10 @@ class Recorder(
                 val writer = toClose.poll(200, TimeUnit.MILLISECONDS)
                 if (writer != null) {
                     val finished = writer.close()
+                    if (writer.releaseFailed) {
+                        muxerReleaseFailed = true
+                        running = false
+                    }
                     if (finished != null) {
                         toIndex.offer(finished)
                         onClipFinished()

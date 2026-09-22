@@ -1,13 +1,18 @@
 package com.strike.daemon
 
+import com.strike.recording.Sample
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.DataOutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 
 private const val SAMPLE_RATE = 48_000
 private const val CHANNELS = 1
@@ -53,6 +58,149 @@ class AudioIngestTest {
         await { ingest.take() }
 
         assertNull(ingest.take())
+    }
+
+    @Test
+    fun anAudioHeaderAloneCannotStartAClipTrack() {
+        configured()
+
+        assertNull(ingest.takeForClip(1_000L))
+    }
+
+    @Test
+    fun audioBeforeTheClipBoundaryCannotStartItsTrack() {
+        configured()
+        frames().add(Sample(byteArrayOf(1), 999L, 0))
+
+        assertNull(ingest.takeForClip(1_000L))
+        assertEquals(0, ingest.queuedFrames)
+    }
+
+    @Test
+    fun aClipReservesItsFirstNonemptyAudioFrameWithItsFormat() {
+        val config = configured()
+        val first = Sample(byteArrayOf(1, 2, 3), 1_000L, 0)
+        val next = Sample(byteArrayOf(4, 5), 1_021L, 0)
+        frames().add(Sample(byteArrayOf(9), 999L, 0))
+        frames().add(Sample(byteArrayOf(), 1_000L, 0))
+        frames().add(first)
+        frames().add(next)
+
+        val start = ingest.takeForClip(1_000L)
+
+        assertNotNull(start)
+        assertSame(config, start!!.config)
+        assertSame(first, start.first)
+        assertSame(next, ingest.take())
+        assertNull(ingest.take())
+    }
+
+    @Test
+    fun anAudioDisconnectLeavesNoFrameToStartAClipTrack() {
+        Thread({ ingest.serveForever() }, "ingest").also { it.isDaemon = true }.start()
+        connect().use { client ->
+            val link = DataOutputStream(client.getOutputStream())
+            sendConfig(link)
+            sendFrame(link, timeUs = 1_000L, bytes = byteArrayOf(1))
+            assertNotNull(await { if (ingest.queuedFrames > 0) true else null })
+        }
+
+        assertNotNull(await { if (ingest.config == null && ingest.queuedFrames == 0) true else null })
+        assertNull(ingest.takeForClip(1_000L))
+    }
+
+    @Test
+    fun searchingForClipAudioYieldsWhenOldFramesKeepArriving() {
+        configured()
+        val queued = object : ArrayBlockingQueue<Sample>(200) {
+            var consumed = 0
+            override fun poll(): Sample? {
+                assertTrue("Searching for clip audio did not yield", consumed < 4)
+                val first = super.poll() ?: return null
+                consumed++
+                add(Sample(byteArrayOf(1), 999L, 0))
+                return first
+            }
+        }
+        queued.add(Sample(byteArrayOf(1), 999L, 0))
+        queued.add(Sample(byteArrayOf(2), 999L, 0))
+        set("frames", queued)
+
+        assertNull(ingest.takeForClip(1_000L))
+
+        assertEquals(2, queued.consumed)
+        assertEquals(2, ingest.queuedFrames)
+    }
+
+    @Test
+    fun anAudioReconnectCannotPairAnOldFrameWithTheNewFormat() {
+        configured()
+        val replacement = AudioConfig(44_100, CHANNELS, BITRATE_BPS, CSD)
+        val queued = object : ArrayBlockingQueue<Sample>(1) {
+            override fun poll(): Sample? = super.poll()?.also { set("config", replacement) }
+        }
+        queued.add(Sample(byteArrayOf(1), 1_000L, 0))
+        set("frames", queued)
+
+        assertNull(ingest.takeForClip(1_000L))
+        assertSame(replacement, ingest.config)
+    }
+
+    @Test
+    fun delayedAudioCanStartTheClipWithoutDiscardingThePreviousClipsTail() {
+        configured()
+        val old = Sample(byteArrayOf(1), 980L, 0)
+        val next = Sample(byteArrayOf(2), 1_021L, 0)
+        val written = ArrayList<Sample>()
+        val queued = object : ArrayBlockingQueue<Sample>(2) {
+            var waits = 0
+            override fun poll(timeout: Long, unit: TimeUnit): Sample? {
+                assertTrue(timeout > 0L)
+                waits++
+                return super.poll() ?: next
+            }
+        }
+        queued.add(old)
+        set("frames", queued)
+
+        val start = ingest.takeForClip(1_000L, 1_000L, written::add)
+
+        assertSame(next, start!!.first)
+        assertEquals(listOf(old), written)
+        assertEquals(2, queued.waits)
+    }
+
+    @Test
+    fun aSilentMicrophoneReturnsWithoutInventingAnAudioSample() {
+        configured()
+        val queued = object : ArrayBlockingQueue<Sample>(1) {
+            var waits = 0
+            override fun poll(timeout: Long, unit: TimeUnit): Sample? {
+                waits++
+                assertTrue(unit.toMillis(timeout) <= 1_000L)
+                return null
+            }
+        }
+        set("frames", queued)
+
+        assertNull(ingest.takeForClip(1_000L, 1_000L))
+        assertEquals(1, queued.waits)
+    }
+
+    private fun configured() = AudioConfig(SAMPLE_RATE, CHANNELS, BITRATE_BPS, CSD).also {
+        set("config", it)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun frames(): ArrayBlockingQueue<Sample> =
+        AudioIngest::class.java.getDeclaredField("frames").also {
+            it.isAccessible = true
+        }.get(ingest) as ArrayBlockingQueue<Sample>
+
+    private fun set(name: String, value: Any) {
+        AudioIngest::class.java.getDeclaredField(name).also {
+            it.isAccessible = true
+        }.set(ingest, value)
     }
 
     private fun connect(): Socket {
