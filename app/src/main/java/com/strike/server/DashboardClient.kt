@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.strike.BootDiagnostics
 import com.strike.prepareBootAccess
 import com.strike.core.Logs
 import com.strike.core.PinSession
@@ -28,6 +29,7 @@ internal class DashboardClient(private val context: Context, private val shell: 
     private var session: JSONObject? = null
     private val logSource = UUID.randomUUID().toString()
     private var logsThrough = 0L
+    private var bootLogVersion = -1L
 
     fun observe(callback: (String, Boolean) -> Unit) {
         worker.execute {
@@ -46,24 +48,48 @@ internal class DashboardClient(private val context: Context, private val shell: 
 
     fun restoreAfterBoot(active: () -> Boolean, completed: (Boolean) -> Unit) = worker.execute {
         if (!active()) return@execute
+        var stage = "shell"
+        val startedAtMs = SystemClock.elapsedRealtime()
+        BootDiagnostics.record("recovery attempt started")
         val ready = try {
             shell.retry()
             val deadline = SystemClock.elapsedRealtime() + 60_000L
             while (active() && !shell.isAuthorised() && shell.isPending && SystemClock.elapsedRealtime() < deadline) {
                 Thread.sleep(500L)
             }
-            active() && shell.isAuthorised() && connect(active = active) && bootstrap == null &&
-                awaitBootRecovery(active, { start ->
-                    exchange(JSONObject().put("op", "boot").put("start", start))?.optBoolean("ready") == true
-                })
+            if (!active() || !shell.isAuthorised()) {
+                BootDiagnostics.record("shell not ready pending=${shell.isPending} active=${active()}")
+                false
+            } else {
+                stage = "dashboard"
+                BootDiagnostics.record("shell authorised; connecting dashboard")
+                if (!connect(active = active) || bootstrap != null) false else {
+                    stage = "recorder"
+                    BootDiagnostics.record("dashboard connected; waiting for recorder recovery")
+                    awaitBootRecovery(active, { start ->
+                        exchange(JSONObject().put("op", "boot").put("start", start))?.optBoolean("ready") == true
+                    })
+                }
+            }
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
             false
         } catch (e: Exception) {
+            BootDiagnostics.record("recovery exception stage=$stage type=${e.javaClass.simpleName}")
             Logs.w("Boot", "Could not restore Strike after head unit restart", e)
             false
         }
+        BootDiagnostics.record("recovery ended stage=$stage ready=$ready active=${active()} " +
+            "durationMs=${SystemClock.elapsedRealtime() - startedAtMs}")
         main.post { completed(ready) }
+    }
+
+    fun flushBootDiagnostics() = worker.execute {
+        try {
+            exchange(JSONObject().put("op", "diagnostics"))
+        } catch (e: Exception) {
+            Logs.w("Boot", "Boot diagnostics remain saved on this device")
+        }
     }
 
     fun resume(callback: (Boolean) -> Unit) = worker.execute {
@@ -156,6 +182,10 @@ internal class DashboardClient(private val context: Context, private val shell: 
         if (!request.has("seed")) Logs.batch(logsThrough)?.let {
             request.put("logSource", logSource).put("logs", it)
         }
+        if (!request.has("seed")) BootDiagnostics.snapshot(bootLogVersion)?.let {
+            request.put("bootLog", JSONObject().put("source", BootDiagnostics.source)
+                .put("version", it.version).put("text", it.text))
+        }
         val bytes = request.put("identity", identity).put("apk", context.applicationInfo.sourceDir)
             .toString().toByteArray()
         require(bytes.size <= DASHBOARD_MAX_BYTES)
@@ -163,6 +193,7 @@ internal class DashboardClient(private val context: Context, private val shell: 
             ?: return null
         return JSONObject(reply.toString(Charsets.UTF_8)).also {
             logsThrough = maxOf(logsThrough, it.optLong("logsThrough"))
+            bootLogVersion = maxOf(bootLogVersion, it.optLong("bootLogVersion", -1L))
         }
     }
 }

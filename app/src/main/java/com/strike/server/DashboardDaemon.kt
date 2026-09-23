@@ -120,6 +120,7 @@ private class DashboardHost(private val context: Context, private val uid: Int, 
     @Volatile private var runtime: DashboardRuntime? = null
     private val identityFile = File(context.filesDir, "identity")
     private var identity = if (identityFile.isFile) identityFile.readText() else ""
+    private val bootLog = BootLogMirror(File(context.filesDir, "boot.log"))
 
     fun maintainRecorder() { runtime?.maintainRecorder() }
 
@@ -183,6 +184,16 @@ private class DashboardHost(private val context: Context, private val uid: Int, 
                     }
                 }
                 session().apply { bootReady?.let { put("ready", it) } }
+            }
+        }
+        if (wanted == identity) request.optJSONObject("bootLog")?.let {
+            try {
+                response.put("bootLogVersion", bootLog.save(it.getString("source"),
+                    it.getLong("version"), it.getString("text")))
+            } catch (e: java.io.IOException) {
+                Logs.w("Boot", "Could not keep boot diagnostics for export")
+            } catch (e: IllegalArgumentException) {
+                Logs.w("Boot", "Boot diagnostics exceeded the allowed format")
             }
         }
         request.optJSONObject("logs")?.let {

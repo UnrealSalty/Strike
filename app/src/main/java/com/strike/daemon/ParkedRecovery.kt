@@ -27,6 +27,7 @@ internal class ParkedRecovery(
     private var checkpointArm: String? = null
     private var checkpointSaved = true
     private var resumeAttempted = false
+    private var rejection = "no checkpoint"
 
     @Synchronized
     fun checkpoint(mode: String?, arm: String?): Boolean {
@@ -82,6 +83,7 @@ internal class ParkedRecovery(
         if (resumeAttempted) return null
         resumeAttempted = true
         if (validUntilMs(enabled, mode, arm) == null) {
+            if (file.exists()) DaemonLog.w("Boot", "Parked restoration skipped: $rejection")
             file.delete()
             return null
         }
@@ -100,26 +102,36 @@ internal class ParkedRecovery(
     @Synchronized
     fun validUntilMs(enabled: Boolean, mode: String, arm: String): Long? {
         return try {
-            if (stopped.exists() || !enabled || !supported(mode, arm) || file.length() > 256L) return null
-            val boot = bootId?.takeIf { it.isNotEmpty() } ?: return null
+            if (stopped.exists()) return reject("recorder was switched off")
+            if (!enabled || !supported(mode, arm)) return reject("surveillance settings no longer match")
+            if (file.length() > 256L) return reject("checkpoint is too large")
+            val boot = bootId?.takeIf { it.isNotEmpty() } ?: return reject("boot identity unavailable")
             DataInputStream(ByteArrayInputStream(file.readBytes())).use {
                 val version = it.readInt()
-                if (version != 1 && version != 2) return null
+                if (version != 1 && version != 2) return reject("unknown checkpoint format")
                 val sameBoot = it.readUTF() == boot
                 val recordedAtMs = it.readLong()
                 val recordedWallMs = if (version == 2) it.readLong() else null
                 val now = nowMs()
                 val ageMs = if (sameBoot) now - recordedAtMs
-                    else wallNowMs() - (recordedWallMs ?: return null)
+                    else wallNowMs() - (recordedWallMs ?: return reject("old checkpoint has no reboot timestamp"))
                 val recordedMode = it.readUTF()
                 val recordedArm = it.readUTF()
-                if (ageMs !in 0..RESUME_WITHIN_MS || recordedMode != mode || recordedArm != arm ||
-                    stopped.exists()) null
-                else now + (RESUME_WITHIN_MS - ageMs)
+                when {
+                    ageMs !in 0..RESUME_WITHIN_MS -> reject("checkpoint ageMs=$ageMs sameBoot=$sameBoot")
+                    recordedMode != mode || recordedArm != arm -> reject("surveillance settings changed")
+                    stopped.exists() -> reject("recorder was switched off")
+                    else -> now + (RESUME_WITHIN_MS - ageMs)
+                }
             }
         } catch (e: IOException) {
-            null
+            reject("checkpoint unreadable: ${e.javaClass.simpleName}")
         }
+    }
+
+    private fun reject(reason: String): Long? {
+        rejection = reason
+        return null
     }
 
     private fun supported(mode: String, arm: String): Boolean =

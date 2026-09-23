@@ -24,6 +24,7 @@ class StrikeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        BootDiagnostics.start(this)
         if (getSystemService(UserManager::class.java).isUserUnlocked) startUnlocked()
     }
 
@@ -33,7 +34,10 @@ class StrikeApp : Application() {
                 DashboardClient(context, Shell(context)).also { earlyDashboard = it }
             }
         }
-        client.restoreAfterBoot(active, completed)
+        client.restoreAfterBoot(active) { ready ->
+            completed(ready)
+            client.flushBootDiagnostics()
+        }
     }
 
     @Synchronized

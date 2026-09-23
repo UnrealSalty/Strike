@@ -74,6 +74,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     private val storage = Storage(context, shell)
     private val events = EventStorage(context, shell)
     private val dashboardLog = File(context.filesDir, "daemon.log").absolutePath
+    private val bootLog = File(context.filesDir, "boot.log").absolutePath
     private val recorder = RecorderDaemon(shell, Daemon(context, shell), DaemonClient()) {
         storage.publish(shell)
         events.publish(shell)
@@ -155,7 +156,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
 
     fun logs(): Response {
         val tail = shell.read("tail -n $LOG_TAIL_LINES $CAM_LOG_PATH 2>/dev/null; " +
-            "if [ -f '$dashboardLog' ]; then tail -n $LOG_TAIL_LINES '$dashboardLog'; fi")
+            "if [ -f '$dashboardLog' ]; then tail -n $LOG_TAIL_LINES '$dashboardLog'; fi; " +
+            "if [ -f '$bootLog' ]; then tail -n 20 '$bootLog'; fi")
         val lines = JSONArray()
         for (line in merged(tail)) {
             val row = JSONObject()
@@ -186,7 +188,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
 
     private fun buildLog(): String {
         val full = shell.read("cat $CAM_LOG_PATH 2>/dev/null; " +
-            "if [ -f '$dashboardLog' ]; then cat '$dashboardLog'; fi")
+            "if [ -f '$dashboardLog' ]; then cat '$dashboardLog'; fi; " +
+            "if [ -f '$bootLog' ]; then cat '$bootLog'; fi")
         val clock = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
         return buildString {
             for (line in merged(full)) {
