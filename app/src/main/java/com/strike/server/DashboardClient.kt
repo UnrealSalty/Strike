@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import com.strike.BootDiagnostics
+import com.strike.RecorderRevival
 import com.strike.prepareBootAccess
 import com.strike.core.Logs
 import com.strike.core.PinSession
@@ -39,7 +40,7 @@ internal class DashboardClient(private val context: Context, private val shell: 
         }
     }
 
-    fun authorised() = worker.execute { connect() }
+    fun authorised() = worker.execute { connect(attach = onSession != null) }
 
     fun reconnect(completed: (Boolean) -> Unit) = worker.execute {
         val ready = connect(force = true)
@@ -63,7 +64,7 @@ internal class DashboardClient(private val context: Context, private val shell: 
             } else {
                 stage = "dashboard"
                 BootDiagnostics.record("shell authorised; connecting dashboard")
-                if (!connect(active = active) || bootstrap != null) false else {
+                if (!connect(active = active, attach = false) || bootstrap != null) false else {
                     stage = "recorder"
                     BootDiagnostics.record("dashboard connected; waiting for recorder recovery")
                     awaitBootRecovery(active, { start ->
@@ -102,15 +103,15 @@ internal class DashboardClient(private val context: Context, private val shell: 
     }
 
     fun acc(on: Boolean) = worker.execute {
-        bootstrap?.online?.acc(on)
+        bootstrap?.acc(on)
         if (!on) PinSession.lock()
         exchange(JSONObject().put("op", "acc").put("on", on))
     }
 
-    private fun connect(force: Boolean = false, active: () -> Boolean = { true }): Boolean {
+    private fun connect(force: Boolean = false, active: () -> Boolean = { true }, attach: Boolean = true): Boolean {
         if (!active()) return false
         try {
-            val current = exchange(JSONObject().put("op", "attach"))
+            val current = exchange(JSONObject().put("op", if (attach) "attach" else "resume"))
             if (!active()) return false
             if (current != null) {
                 finish(current, force)
@@ -139,7 +140,7 @@ internal class DashboardClient(private val context: Context, private val shell: 
             check(launchDashboard(context, shell)) { "Could not start the dashboard daemon" }
             repeat(30) {
                 if (!active()) return false
-                val opened = exchange(JSONObject().put("op", "attach"))
+                val opened = exchange(JSONObject().put("op", if (attach) "attach" else "resume"))
                 if (!active()) return false
                 if (opened != null) {
                     finish(opened, force)
@@ -189,9 +190,13 @@ internal class DashboardClient(private val context: Context, private val shell: 
         val bytes = request.put("identity", identity).put("apk", context.applicationInfo.sourceDir)
             .toString().toByteArray()
         require(bytes.size <= DASHBOARD_MAX_BYTES)
+        val revision = RecorderRevival.revision(context)
         val reply = shell.exchangeLocal(context.applicationInfo.sourceDir, bytes, DASHBOARD_MAX_BYTES)
             ?: return null
         return JSONObject(reply.toString(Charsets.UTF_8)).also {
+            if (it.has("recorderDesired")) {
+                RecorderRevival.reconcile(context, it.getBoolean("recorderDesired"), revision)
+            }
             logsThrough = maxOf(logsThrough, it.optLong("logsThrough"))
             bootLogVersion = maxOf(bootLogVersion, it.optLong("bootLogVersion", -1L))
         }

@@ -22,6 +22,10 @@ class BootCompleted : BroadcastReceiver() {
             BootDiagnostics.record("startup skipped: access not ready")
             return
         }
+        if (RecorderRevival.isEnabled(context)) {
+            RecorderRevival.recover(context)
+            return
+        }
         val scheduler = context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
         if (scheduler.getPendingJob(BOOT_JOB_ID) != null) {
             BootDiagnostics.record("startup already scheduled")

@@ -58,6 +58,17 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".RecorderRevival"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+
+        <service
+            android:name=".RecorderRecoveryService"
+            android:directBootAware="true"
+            android:exported="false" />
+
         <service
             android:name=".BootRecovery"
             android:directBootAware="true"

@@ -85,6 +85,15 @@ object DashboardDaemon {
                 if (current.uid != uid) exitProcess(0)
                 if (current.sourceDir != apk) exitProcess(42)
                 host.maintainRecorder()
+                if (host.recoveryStalled()) {
+                    Thread({
+                        Thread.sleep(1_000L)
+                        Process.killProcess(Process.myPid())
+                        Runtime.getRuntime().halt(1)
+                    }, "dashboard-exit").start()
+                    DaemonLog.e("Recorder", "parked power call stopped responding; restarting dashboard recovery")
+                    return
+                }
                 val nowMs = SystemClock.elapsedRealtime()
                 if (nowMs >= nextLogCheckMs) {
                     nextLogCheckMs = nowMs + 3_600_000L
@@ -123,6 +132,8 @@ private class DashboardHost(private val context: Context, private val uid: Int, 
     private val bootLog = BootLogMirror(File(context.filesDir, "boot.log"))
 
     fun maintainRecorder() { runtime?.maintainRecorder() }
+
+    fun recoveryStalled(): Boolean = runtime?.recoveryStalled() == true
 
     fun restore() {
         if (identity.isNotEmpty()) start()
@@ -179,7 +190,7 @@ private class DashboardHost(private val context: Context, private val uid: Int, 
                     "resume" -> runtime?.updates?.resume()
                     "acc" -> {
                         val on = request.getBoolean("on")
-                        runtime?.online?.acc(on)
+                        runtime?.acc(on)
                         if (!on) PinSession.lock()
                     }
                 }
@@ -211,12 +222,15 @@ private class DashboardHost(private val context: Context, private val uid: Int, 
 
     private fun start() {
         runtime = DashboardRuntime(context, Shell(context), vehicle).also { it.start() }
-        DaemonLog.d("Online", "Dashboard running as shell, uid ${Process.myUid()}, pid ${Process.myPid()}")
+        val boot = try { File("/proc/sys/kernel/random/boot_id").readText().trim() }
+            catch (e: IOException) { "unavailable" }
+        DaemonLog.d("Online", "Dashboard running as shell, uid ${Process.myUid()}, pid ${Process.myPid()}, " +
+            "boot=$boot elapsedMs=${SystemClock.elapsedRealtime()}")
     }
 
     private fun session(): JSONObject {
         val active = checkNotNull(runtime)
         return JSONObject().put("cookie", active.browsers.nativeCookie())
-            .put("pinSet", active.pin.isSet())
+            .put("pinSet", active.pin.isSet()).put("recorderDesired", active.recorderDesired())
     }
 }

@@ -4,6 +4,10 @@ import android.content.Context
 import com.strike.core.Logs
 import com.strike.core.Pin
 import com.strike.daemon.RecorderRecoveryPower
+import com.strike.daemon.RecoveryPowerWorker
+import com.strike.daemon.CAM_SCRIPT_PATH
+import com.strike.daemon.CAM_SENTINEL_PATH
+import android.os.SystemClock
 import com.strike.daemon.Shell
 import com.strike.online.BrowserAccess
 import com.strike.online.CloudflareMethod
@@ -21,7 +25,8 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
     val pin = Pin(File(context.filesDir, "pin.json"))
     val browsers = BrowserGate(BrowserAccess(File(context.filesDir, "browser-access.json")))
     private val power = OnlinePower(context)
-    private val recorderPower = RecorderRecoveryPower.create(context)
+    private val recoveryPower = RecorderRecoveryPower.create(context)
+    private val recorderPower = RecoveryPowerWorker.android(recoveryPower)
     private var recoveryPowerReady = true
     private val telemetry = vehicle ?: VehicleTelemetry(context)
     private val settings = OnlineSettings(File(context.filesDir, "online.json"))
@@ -48,7 +53,7 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
         online.close()
         check(power.releasePanel()) { "The parked display is still held" }
         check(updates.awaitIdle(30_000L)) { "An update is still in progress" }
-        if (!recorderPower.close()) Logs.w("Recorder", "Could not release the recovery wake lock")
+        if (!recorderPower.awaitClosed(1_000L)) Logs.w("Recorder", "Could not release the recovery wake lock")
     }
 
     fun restoreAfterBoot(start: Boolean): Boolean = synchronized(updates) {
@@ -56,16 +61,27 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
     }
 
     fun maintainRecorder() {
-        holdRecorderPower()
         daemons.maintainRecorder()
-    }
-
-    fun holdRecorderPower(): Boolean {
-        val ready = recorderPower.refresh()
+        recorderPower.request()
+        val ready = recorderPower.snapshot().ready
         if (!ready && recoveryPowerReady) Logs.w("Recorder", "Could not keep recorder recovery awake")
         recoveryPowerReady = ready
-        return ready && recorderPower.isHeld
     }
+
+    fun acc(on: Boolean) {
+        online.acc(on)
+        recoveryPower.acc(on)
+        recorderPower.request()
+    }
+
+    fun holdRecorderPower(): Boolean = recorderPower.awaitHeld(750L)
+
+    fun recoveryStalled(): Boolean = recorderPower.snapshot().inFlightSinceMs?.let {
+        SystemClock.uptimeMillis() - it >= 30_000L
+    } == true
+
+    fun recorderDesired(): Boolean = File(CAM_SCRIPT_PATH).isFile &&
+        !File(CAM_SENTINEL_PATH).exists() && !updates.isInstalling()
 
     fun releasePanel(): Boolean = power.releasePanel()
 }

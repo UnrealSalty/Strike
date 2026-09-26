@@ -25,6 +25,7 @@ class StrikeApp : Application() {
     override fun onCreate() {
         super.onCreate()
         BootDiagnostics.start(this)
+        RecorderRevival.resume(this)
         if (getSystemService(UserManager::class.java).isUserUnlocked) startUnlocked()
     }
 

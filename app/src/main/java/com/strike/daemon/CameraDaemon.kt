@@ -156,6 +156,10 @@ object CameraDaemon {
         DaemonLog.d(TAG, "starting as uid ${Process.myUid()}, pid ${Process.myPid()}, boot uptime ${SystemClock.elapsedRealtime() / 1000}s")
         // A duplicate exits without clearing the active daemon's lock.
         if (!lock.take()) exitProcess(EXIT_ALREADY_RUNNING)
+        supervisorAtMs = SystemClock.uptimeMillis()
+        captureExpected = true
+        // Native library and system-context initialization can block before the supervisor starts.
+        Thread({ watchCapture() }, "capture-watch").also { it.isDaemon = true; it.start() }
         cameraProfile = CameraProfile.of(Config.getString(CAMERA_PROFILE, "auto")) ?: CameraProfile.AUTO
         DaemonLog.d(TAG, "camera profile: ${cameraProfile.label}")
         // The camera HAL posts its callbacks to the main looper, as in Overdrive's daemon.
@@ -179,9 +183,7 @@ object CameraDaemon {
         }, "last-clip"))
         val commands = CommandServer(::answer)
         server = commands
-        supervisorAtMs = SystemClock.uptimeMillis()
         supervisor = Thread({ supervise() }, "supervisor").also { it.isDaemon = true; it.start() }
-        Thread({ watchCapture() }, "capture-watch").also { it.isDaemon = true; it.start() }
         Thread({ commands.serveForever() }, "commands").also { it.isDaemon = true }.start()
         Thread({ relay.serveForever() }, "packets").also { it.isDaemon = true }.start()
         Thread({ audio.serveForever() }, "audio").also { it.isDaemon = true }.start()
@@ -725,7 +727,9 @@ object CameraDaemon {
         val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)
         val mode = Config.getString(SurveillanceSettings.MODE, SurveillanceSettings.fallback(SurveillanceSettings.MODE))
         val arm = Config.getString(SurveillanceSettings.ARM, SurveillanceSettings.fallback(SurveillanceSettings.ARM))
-        val saved = parkedRecovery.resume(enabled, mode, arm) ?: return
+        val saved = parkedRecovery.resume(enabled, mode, arm)
+            ?: mode.takeIf { ParkedRecovery(File(CAM_POWER_RECOVERY_PATH)).validUntilMs(enabled, mode, arm) != null }
+            ?: return
         sentryMode = if (saved == "smart") SentryMode.SMART else SentryMode.CONTINUOUS
         wanted = false
         DaemonLog.d("Sentry", "resuming parked surveillance after recorder recovery")

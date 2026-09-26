@@ -11,6 +11,7 @@ import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 
 internal const val CAM_RECOVERY_PATH = "$STRIKE_DIR/cam.recovery"
+internal const val CAM_POWER_RECOVERY_PATH = "$STRIKE_DIR/cam.parked-owner"
 private const val RESUME_WITHIN_MS = 180_000L
 private const val CHECKPOINT_EVERY_MS = 60_000L
 

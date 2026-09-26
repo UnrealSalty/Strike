@@ -91,6 +91,7 @@ object ParkedRails {
     @Synchronized
     fun tick(): Boolean {
         if (!isHeld) return false
+        if (cameraOwner && !isAwake) takeWakeLock()
         return maintain(cameraOwner)
     }
 
