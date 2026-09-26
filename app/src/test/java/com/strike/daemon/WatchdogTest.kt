@@ -461,9 +461,11 @@ class WatchdogTest {
         val builder = ProcessBuilder(shell.absolutePath, script.name)
             .directory(temporary.root).redirectErrorStream(true).redirectOutput(output)
         builder.environment()["PATH"] = shell.parentFile!!.absolutePath + File.pathSeparator + builder.environment()["PATH"]
+        // Git Bash process launches are slower; retry timings use the fixture clock.
+        val completionSeconds = if (shell.extension == "exe") 120L else 20L
         val process = builder.start()
         try {
-            assertTrue("Shell did not finish: ${output.readText()}", process.waitFor(20, TimeUnit.SECONDS))
+            assertTrue("Shell did not finish: ${output.readText()}", process.waitFor(completionSeconds, TimeUnit.SECONDS))
             if (output.length() > 0) println(output.readText())
             return process.exitValue()
         } finally {
