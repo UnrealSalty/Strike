@@ -71,6 +71,10 @@
         }
         paintSwitch('surveillance.enabled', payload.values['surveillance.enabled']);
         paintSwitch('surveillance.screen', payload.values['surveillance.screen']);
+        paintSwitch('surveillance.diLink5KeepAlive', payload.values['surveillance.diLink5KeepAlive']);
+        var keepAliveSupported = payload.diLink5KeepAliveSupported === true;
+        document.getElementById('diLink5KeepAliveRow').hidden = !keepAliveSupported;
+        document.getElementById('diLink5KeepAliveNote').hidden = !keepAliveSupported;
         paintProximity(payload.values['surveillance.proximity']);
         paintMode(payload.values['surveillance.mode']);
         var message = document.getElementById('message');

@@ -2,6 +2,7 @@ package com.strike.server.api
 
 import android.content.Context
 import com.strike.core.Config
+import com.strike.core.DiLink5
 import com.strike.daemon.DaemonClient
 import com.strike.daemon.Shell
 import com.strike.recording.ClipThumbs
@@ -95,17 +96,18 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         val payload = JSONObject()
         payload.put("values", values())
         payload.put("volumes", volumesPayload())
+        payload.put("diLink5KeepAliveSupported", DiLink5.isSupported)
         return Response(200, JSON, payload.toString().toByteArray())
     }
 
     fun save(body: String): Response {
         val key = formValue(body, "key") ?: return Response(400, TEXT, "No setting named".toByteArray())
         val value = formValue(body, "value") ?: return Response(400, TEXT, "No value given".toByteArray())
-        if (!SurveillanceSettings.accepts(key, value)) {
+        if (!SurveillanceSettings.accepts(key, value, DiLink5.isSupported)) {
             return Response(400, TEXT, "That setting does not take that value".toByteArray())
         }
         val stored = when (key) {
-            SurveillanceSettings.ENABLED, SurveillanceSettings.SCREEN ->
+            SurveillanceSettings.ENABLED, SurveillanceSettings.SCREEN, SurveillanceSettings.DILINK5_KEEP_ALIVE ->
                 Config.put(shell, key, value == "true")
             SurveillanceSettings.BUDGET_MB -> Config.put(shell, key, value.toInt())
             else -> Config.put(shell, key, value)
@@ -142,6 +144,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         }
         values.put(SurveillanceSettings.ENABLED, Config.getBool(SurveillanceSettings.ENABLED, false))
         values.put(SurveillanceSettings.SCREEN, Config.getBool(SurveillanceSettings.SCREEN, false))
+        values.put(SurveillanceSettings.DILINK5_KEEP_ALIVE, Config.getBool(SurveillanceSettings.DILINK5_KEEP_ALIVE, false))
         values.put(
             SurveillanceSettings.MESSAGE,
             Config.getString(SurveillanceSettings.MESSAGE, SurveillanceSettings.MESSAGE_FALLBACK)

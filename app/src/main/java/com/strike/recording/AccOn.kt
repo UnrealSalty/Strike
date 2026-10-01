@@ -4,11 +4,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.strike.StrikeApp
+import com.strike.DiLink5NetworkReceiver
 
 // Forward ACC on immediately so a parked deterrent does not remain over the boot screen.
 class AccOn : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        DiLink5NetworkReceiver.accOn(context)
         (context.applicationContext as StrikeApp).dashboard.acc(true)
         val pending = goAsync()
         Thread({

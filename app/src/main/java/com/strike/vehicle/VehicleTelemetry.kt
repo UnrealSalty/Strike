@@ -92,6 +92,18 @@ class VehicleTelemetry(
     private fun currentPowerMode(): Boolean? =
         diLink5AccOnOf(powerQuery.read())
 
+    internal fun batteryVoltage(): Double? {
+        val ota = device(OTA) ?: return null
+        val direct = read(ota, "getBatteryPowerVoltage")?.toDouble()
+        if (direct != null && direct.isFinite() && direct in 6.0..17.0) return direct
+        return try {
+            (ota.javaClass.getMethod("getBatteryVoltage", Int::class.javaPrimitiveType)
+                .invoke(ota, 0) as? Number)?.toDouble()?.takeIf { it.isFinite() && it in 6.0..17.0 }
+        } catch (e: ReflectiveOperationException) {
+            null
+        }
+    }
+
     private fun gear(gearbox: Any?): String? =
         gears.read(read(gearbox, "getGearboxAutoModeType")?.toInt())
 

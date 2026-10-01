@@ -110,7 +110,13 @@
                             <span class="control__value control__value--wide" id="proximity">&mdash;</span>
                         </span>
                     </div>
+                    <div class="row" id="diLink5KeepAliveRow" hidden>
+                        <span class="row__label" id="diLink5KeepAliveLabel">DiLink 5 parked keepalive</span>
+                        <button class="switch" type="button" data-key="surveillance.diLink5KeepAlive" aria-labelledby="diLink5KeepAliveLabel" aria-describedby="diLink5KeepAliveNote" aria-pressed="false"><span class="switch__knob"></span></button>
+                    </div>
                 </div>
+
+                <p class="note" id="diLink5KeepAliveNote" hidden>Experimental. Asks the vehicle network to stay awake while parked. Uses more battery and needs testing on your car. Requires a fresh 12 V reading and pauses if the battery runs low.</p>
 
                 <h2 class="head" id="screenHead">Screen message</h2>
                 <div class="list" id="screenList">

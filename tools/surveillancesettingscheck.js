@@ -40,9 +40,11 @@ function harness() {
     node('modeButton').setAttribute('data-value', 'smart');
     var enabled = node('surveillance.enabled');
     var screen = node('surveillance.screen');
+    var keepAlive = node('surveillance.diLink5KeepAlive');
+    keepAlive.setAttribute('data-key', 'surveillance.diLink5KeepAlive');
     enabled.setAttribute('data-key', 'surveillance.enabled');
     screen.setAttribute('data-key', 'surveillance.screen');
-    var controls = [node('modeButton'), enabled, screen, node('surveillance.proximity'), node('message'), node('preview'), node('surveillance.budgetMb'), node('settingsClose')];
+    var controls = [node('modeButton'), enabled, screen, keepAlive, node('surveillance.proximity'), node('message'), node('preview'), node('surveillance.budgetMb'), node('settingsClose')];
     modal.querySelectorAll = function () { return controls; };
     function Xhr() { this.timeout = 0; requests.push(this); }
     Xhr.prototype.open = function (method, url) { this.method = method; this.url = url; };
@@ -70,7 +72,7 @@ function harness() {
             getElementById: node,
             querySelectorAll: function (selector) {
                 if (selector === '.seg[data-key]') return [mode];
-                if (selector === '.switch[data-key]') return [enabled, screen];
+                if (selector === '.switch[data-key]') return [enabled, screen, keepAlive];
                 throw new Error('Unexpected selector ' + selector);
             },
             querySelector: function (selector) {
@@ -122,6 +124,40 @@ function ready(enabled) {
 }
 var checks = 0;
 function check(name, run) { run(); checks++; console.log('PASS ' + name); }
+
+check('parked keepalive is hidden until the head unit reports support', function () {
+    var app = harness();
+    var payload = ready(true);
+    app.requests[0].success(payload);
+    assert.equal(app.nodes.diLink5KeepAliveRow.hidden, true);
+    assert.equal(app.nodes.diLink5KeepAliveNote.hidden, true);
+    app.load();
+    payload.diLink5KeepAliveSupported = false;
+    payload.values['surveillance.diLink5KeepAlive'] = true;
+    app.requests[1].success(payload);
+    assert.equal(app.nodes.diLink5KeepAliveRow.hidden, true);
+    assert.equal(app.nodes.diLink5KeepAliveNote.hidden, true);
+});
+
+check('supported parked keepalive stays off until saved and confirmed', function () {
+    var app = harness();
+    var payload = ready(true);
+    payload.diLink5KeepAliveSupported = true;
+    app.requests[0].success(payload);
+    var toggle = app.nodes['surveillance.diLink5KeepAlive'];
+    assert.equal(app.nodes.diLink5KeepAliveRow.hidden, false);
+    assert.equal(app.nodes.diLink5KeepAliveNote.hidden, false);
+    assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+    toggle.onclick();
+    assert.equal(app.requests[1].body, 'key=surveillance.diLink5KeepAlive&value=true');
+    assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+    assert.equal(toggle.disabled, true);
+    app.requests[1].success();
+    payload.values['surveillance.diLink5KeepAlive'] = true;
+    app.requests[2].success(payload);
+    assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+    assert.equal(toggle.disabled, false);
+});
 
 check('startup keeps its initial fetch but cold volumes do not paint incomplete settings', function () {
     var app = harness();

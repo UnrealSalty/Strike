@@ -23,6 +23,22 @@ class SurveillanceSettingsTest {
     }
 
     @Test
+    fun parkedKeepaliveNeedsSupportedHardwareToEnable() {
+        val key = SurveillanceSettings.DILINK5_KEEP_ALIVE
+        assertFalse(SurveillanceSettings.accepts(key, "true"))
+        assertFalse(SurveillanceSettings.accepts(key, "true", diLink5Supported = false))
+        assertTrue(SurveillanceSettings.accepts(key, "true", diLink5Supported = true))
+        assertFalse(SurveillanceSettings.accepts(key, "1", diLink5Supported = true))
+    }
+
+    @Test
+    fun parkedKeepaliveCanBeDisabledEvenWhenHardwareIsUnsupported() {
+        val key = SurveillanceSettings.DILINK5_KEEP_ALIVE
+        assertTrue(SurveillanceSettings.accepts(key, "false", diLink5Supported = false))
+        assertTrue(SurveillanceSettings.accepts(key, "false", diLink5Supported = true))
+    }
+
+    @Test
     fun proximityTakesOnlyTheFiveSteps() {
         assertTrue(SurveillanceSettings.accepts(SurveillanceSettings.PROXIMITY, "1"))
         assertTrue(SurveillanceSettings.accepts(SurveillanceSettings.PROXIMITY, "5"))

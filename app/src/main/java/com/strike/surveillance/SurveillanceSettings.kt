@@ -20,6 +20,7 @@ object SurveillanceSettings {
     const val ENABLED = "surveillance.enabled"
     const val MODE = "surveillance.mode"
     const val ARM = "surveillance.arm"
+    const val DILINK5_KEEP_ALIVE = "surveillance.diLink5KeepAlive"
     const val PROXIMITY = "surveillance.proximity"
     const val SCREEN = "surveillance.screen"
     const val MESSAGE = "surveillance.message"
@@ -45,7 +46,8 @@ object SurveillanceSettings {
 
     fun fallback(key: String): String = choices.getValue(key).fallback
 
-    fun accepts(key: String, value: String): Boolean {
+    fun accepts(key: String, value: String, diLink5Supported: Boolean = false): Boolean {
+        if (key == DILINK5_KEEP_ALIVE) return value == "false" || (value == "true" && diLink5Supported)
         val choice = choices[key]
         if (choice != null) return choice.options.contains(value)
         if (key == ENABLED || key == SCREEN) return value == "true" || value == "false"
