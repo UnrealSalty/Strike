@@ -437,7 +437,7 @@ class WatchdogTest {
               exit ${'$'}1
             }
             sleep() {
-              if [ "${'$'}1" -eq 3600 ]; then exec sleep 30; fi
+              if [ -n "${'$'}{LOG_TICKS+x}" ]; then exec sleep 30; fi
               echo "${'$'}1" >> sleeps
               $afterSleep
             }

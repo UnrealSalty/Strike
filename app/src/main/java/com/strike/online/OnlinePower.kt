@@ -90,7 +90,7 @@ internal class OnlinePower(private val context: Context) {
 
     @Synchronized
     fun releasePanel(): Boolean {
-        if (!panel.release()) return false
+        if (!panel.release(carInUse = false)) return false
         panelLease.release()
         wakePending = true
         return true

@@ -23,13 +23,13 @@ private const val SENTRY_ENTER = 782237711
 private const val SENTRY_STATE = 782237728
 private const val OEM_KEY_1 = 1901
 private const val OEM_KEY_2 = 1902
-private const val MCU_HOLD = -1442840502
+private const val MCU_WAKE = -1442840502
 private const val ISP_NEED = 0x4090103E
 private const val ISP_WORK = 0x4090103C
 
 private const val SETTLE_MS = 1_000L
 
-// Hold the MCU/ISP rails and AP awake for parked capture, matching Overdrive's AccSentry.
+// Wake the MCU, request camera power and keep the AP awake for parked capture.
 object ParkedRails {
 
     @Volatile
@@ -184,13 +184,13 @@ object ParkedRails {
         writeSpecial(OEM_KEY_2, 2)
         writeSpecial(ISP_NEED, 0)
         writeSpecial(ISP_WORK, 0)
-        writePower(MCU_HOLD, 0)
+        writePower(MCU_WAKE, 0)
     }
 
     private fun vote(): Int {
         maintenance.didVote()
         var landed = 0
-        if (writePower(MCU_HOLD, 1)) landed++
+        if (writePower(MCU_WAKE, 1)) landed++
         if (writeSpecial(SENTRY_ENTER, 1)) landed++
         if (writeSpecial(SENTRY_STATE, 1)) landed++
         if (writeSpecial(OEM_KEY_1, 1)) landed++
@@ -328,7 +328,7 @@ object ParkedRails {
     private fun findPower(): Any? {
         val ctx = hardwareContext() ?: return null
         val found = instance(POWER, ctx)
-        if (found == null && !powerUnavailable) DaemonLog.w(TAG, "no power device, MCU will not be held")
+        if (found == null && !powerUnavailable) DaemonLog.w(TAG, "no power device, MCU wake is unavailable")
         if (found != null && powerUnavailable) DaemonLog.d(TAG, "power device is available")
         powerUnavailable = found == null
         return found

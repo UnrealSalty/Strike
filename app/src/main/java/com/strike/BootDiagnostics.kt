@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Process
 import android.os.SystemClock
 import android.os.UserManager
+import android.provider.Settings
 import android.util.Log
 import java.io.File
 import java.io.IOException
@@ -25,7 +26,7 @@ internal object BootDiagnostics {
             catch (e: IOException) { "unavailable" }
         val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName
         val debug = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-        record("app started version=$version debug=$debug " +
+        record("app started version=$version debug=$debug revivalEnabled=${RecorderRevival.isEnabled(context)} " +
             "sdk=${Build.VERSION.SDK_INT} android=${Build.VERSION.RELEASE} " +
             "model=${Build.MODEL} hardware=${Build.HARDWARE} build=${Build.DISPLAY}")
         environment(context, "startup")
@@ -33,11 +34,17 @@ internal object BootDiagnostics {
 
     fun environment(context: Context, stage: String) {
         val unlocked = context.getSystemService(UserManager::class.java).isUserUnlocked
-        record("$stage unlocked=$unlocked deviceAccess=${access(context.createDeviceProtectedStorageContext().filesDir)}" +
+        val services = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val bootStartListed = services.orEmpty().split(':').any { it == "com.strike/.BootStart" || it == "com.strike/com.strike.BootStart" }
+        record("$stage unlocked=$unlocked bootStartListed=$bootStartListed " +
+            "deviceAccess=${access(context.createDeviceProtectedStorageContext().filesDir)}" +
             if (unlocked) " userAccess=${access(context.filesDir)}" else "")
         val names = listOf("ro.boot.bootreason", "sys.boot.reason", "persist.sys.boot.reason",
             "sys.boot_completed", "ro.crypto.type", "init.svc.adbd", "service.adb.tcp.port")
         record("$stage " + names.joinToString(" ") { "$it=${property(it)}" })
+        val rebootNames = listOf("sys.boot.reason.last", "persist.sys.rebootreason",
+            "persist.sys.cloud_reboot_reson", "persist.sys.cloud_reboot_time")
+        record("$stage " + rebootNames.joinToString(" ") { "$it=${property(it)}" })
     }
 
     @Synchronized

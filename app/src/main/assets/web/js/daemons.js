@@ -66,7 +66,8 @@
             button.type = 'button';
             button.onclick = function () {
                 this.disabled = true;
-                Strike.core.post(post.path, '', load,
+                Strike.core.post(post.path, '',
+                    function () { load(); Strike.toast('Accept the debugging prompt on the screen'); },
                     function () { load(); Strike.toast('Could not connect shell access', true); });
             };
             return button;
@@ -229,8 +230,9 @@
     document.getElementById('logExport').onclick = function (event) {
         if (!carSave) return;
         event.preventDefault();
-        Strike.core.post('/api/logs/save', '', function () {
-            Strike.toast('Log saved to Strike/logs');
+        Strike.core.post('/api/logs/save', '', function (text) {
+            var place = { internal: 'internal storage', sd: 'the SD card', usb: 'USB storage' }[JSON.parse(text).location];
+            Strike.toast('Log saved to Strike/logs on ' + place);
         }, function () {
             Strike.toast('Could not save the log', true);
         });

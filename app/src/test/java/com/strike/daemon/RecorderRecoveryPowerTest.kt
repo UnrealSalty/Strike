@@ -132,16 +132,16 @@ class RecorderRecoveryPowerTest {
                 wall += 30_000L
                 assertTrue(power.refresh())
             }
-            assertEquals(listOf(140_000L), budgets)
+            assertEquals(listOf(1_975_000L), budgets)
             assertEquals(0, released)
             if (manualStop) stopped.writeText("stopped") else {
-                now += 50_000L
-                wall += 50_000L
+                wall += 1_980_000L - now
+                now = 1_980_000L
             }
             assertTrue(power.refresh())
             assertTrue(power.refresh())
             assertEquals(1, released)
-            assertEquals(listOf(140_000L), budgets)
+            assertEquals(listOf(1_975_000L), budgets)
         }
     }
 

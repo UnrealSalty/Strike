@@ -2,6 +2,7 @@ package com.strike.daemon
 
 private const val LOG_MAX_BYTES = 5_242_880L
 private const val LOG_CHECK_SECONDS = 3_600
+private const val DASHBOARD_CHECK_SECONDS = 60
 private const val HEALTHY_UPTIME_SEC = 300
 private const val MAX_RETRY_DELAY_SEC = 60
 
@@ -28,8 +29,31 @@ internal fun watchdogScript(
         "FALLBACK_APK=\"$apkPath\"",
         "RETRY_COUNT=0",
         "APK_WAITING=0",
+        *dashboardRecoveryLines(installation).toTypedArray(),
         "echo \$\$ > \"\$PID_FILE\"",
-        "trap 'if [ \"\$(cat \"\$PID_FILE\" 2>/dev/null)\" = \"\$\$\" ]; then rm -f \"\$PID_FILE\"; fi' EXIT",
+        "MAINTENANCE_PID=",
+        "trap 'if [ -n \"\$MAINTENANCE_PID\" ]; then kill \$MAINTENANCE_PID 2>/dev/null; wait \$MAINTENANCE_PID 2>/dev/null; fi; " +
+            "if [ \"\$(cat \"\$PID_FILE\" 2>/dev/null)\" = \"\$\$\" ]; then rm -f \"\$PID_FILE\"; fi' EXIT",
+        "(",
+        "  trap - EXIT",
+        "  LOG_TICKS=0",
+        "  SLEEP_PID=",
+        "  trap 'kill \$SLEEP_PID 2>/dev/null; exit 0' TERM",
+        "  while kill -0 \$\$ 2>/dev/null; do",
+        "    sleep $DASHBOARD_CHECK_SECONDS &",
+        "    SLEEP_PID=\$!",
+        "    wait \$SLEEP_PID",
+        "    if [ -f \"\$SENTINEL\" ] || [ \"\$(cat \"\$PID_FILE\" 2>/dev/null)\" != \"\$\$\" ]; then break; fi",
+        "    kill -0 \$\$ 2>/dev/null || break",
+        "    recover_dashboard",
+        "    LOG_TICKS=\$((LOG_TICKS + 1))",
+        "    if [ \$LOG_TICKS -ge ${LOG_CHECK_SECONDS / DASHBOARD_CHECK_SECONDS} ]; then",
+        *truncateLines("      "),
+        "      LOG_TICKS=0",
+        "    fi",
+        "  done",
+        ") &",
+        "MAINTENANCE_PID=\$!",
         "while true; do",
         *truncateLines("  "),
         "  if [ -f \"\$SENTINEL\" ] || [ \"\$(cat \"\$PID_FILE\" 2>/dev/null)\" != \"\$\$\" ]; then",
@@ -59,20 +83,8 @@ internal fun watchdogScript(
         "  START=\$(awk '{print int(\$1)}' /proc/uptime 2>/dev/null || date +%s)",
         launch,
         "  DAEMON_PID=\$!",
-        "  (",
-        "    trap 'kill \$SLEEP_PID 2>/dev/null; exit 0' TERM",
-        "    while kill -0 \$DAEMON_PID 2>/dev/null; do",
-        "      sleep $LOG_CHECK_SECONDS &",
-        "      SLEEP_PID=\$!",
-        "      wait \$SLEEP_PID",
-        *truncateLines("      "),
-        "    done",
-        "  ) &",
-        "  ROTATE_PID=\$!",
         "  wait \$DAEMON_PID",
         "  EXIT_CODE=\$?",
-        "  kill \$ROTATE_PID 2>/dev/null",
-        "  wait \$ROTATE_PID 2>/dev/null",
         "  END=\$(awk '{print int(\$1)}' /proc/uptime 2>/dev/null || date +%s)",
         "  UPTIME_SEC=\$((END - START))",
         "  if [ \$UPTIME_SEC -lt 0 ]; then UPTIME_SEC=0; fi",
@@ -91,6 +103,31 @@ internal fun watchdogScript(
             "waiting \${DELAY}s\" >> \"\$LOG_FILE\"",
         "  sleep \$DELAY",
         "done"
+    )
+}
+
+internal fun dashboardRecoveryLines(installation: String): List<String> {
+    if (!installation.matches(Regex("[0-9]+:[0-9]+"))) return listOf("recover_dashboard() { return 1; }")
+    val script = "$STRIKE_DIR/dashboard-${installation.replace(':', '-')}/start.sh"
+    val wanted = "(${recorderDesiredGuard(installation)}; " +
+        "[ \"\$(cat '$CAM_WATCHDOG_PID_PATH' 2>/dev/null)\" = \"\$\$\" ]) || return 1"
+    return listOf(
+        "DASHBOARD_RECOVERY_LOGGED=0",
+        "DASHBOARD_START_PID=",
+        "recover_dashboard() {",
+        "  $wanted",
+        "  if pidof strike_dashboard >/dev/null 2>&1; then DASHBOARD_RECOVERY_LOGGED=0; return 0; fi",
+        "  [ -f '$script' ] || return 1",
+        "  if [ -n \"\$DASHBOARD_START_PID\" ] && kill -0 \"\$DASHBOARD_START_PID\" 2>/dev/null && " +
+            "tr '\\000' '\\n' < \"/proc/\$DASHBOARD_START_PID/cmdline\" 2>/dev/null | grep -Fx '$script' >/dev/null; then return 0; fi",
+        "  $wanted",
+        "  nohup sh '$script' </dev/null >/dev/null 2>&1 &",
+        "  DASHBOARD_START_PID=\$!",
+        "  if [ \$DASHBOARD_RECOVERY_LOGGED -eq 0 ]; then",
+        "    echo \"\$(date +%s)000 warn watchdog dashboard missing; requested restart\" >> '$CAM_LOG_PATH'",
+        "    DASHBOARD_RECOVERY_LOGGED=1",
+        "  fi",
+        "}"
     )
 }
 

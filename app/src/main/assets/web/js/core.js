@@ -43,7 +43,7 @@ Strike.core = {
                 onFail();
                 return;
             }
-            onOk();
+            onOk(xhr.responseText);
         };
         xhr.send(body);
     },

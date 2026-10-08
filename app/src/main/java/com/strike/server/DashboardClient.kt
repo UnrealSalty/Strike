@@ -51,7 +51,7 @@ internal class DashboardClient(private val context: Context, private val shell: 
         if (!active()) return@execute
         var stage = "shell"
         val startedAtMs = SystemClock.elapsedRealtime()
-        BootDiagnostics.record("recovery attempt started")
+        BootDiagnostics.record("recovery stage=shell")
         val ready = try {
             shell.retry()
             val deadline = SystemClock.elapsedRealtime() + 60_000L
@@ -63,10 +63,10 @@ internal class DashboardClient(private val context: Context, private val shell: 
                 false
             } else {
                 stage = "dashboard"
-                BootDiagnostics.record("shell authorised; connecting dashboard")
+                BootDiagnostics.record("recovery stage=dashboard")
                 if (!connect(active = active, attach = false) || bootstrap != null) false else {
                     stage = "recorder"
-                    BootDiagnostics.record("dashboard connected; waiting for recorder recovery")
+                    BootDiagnostics.record("recovery stage=recorder")
                     awaitBootRecovery(active, { start ->
                         exchange(JSONObject().put("op", "boot").put("start", start))?.optBoolean("ready") == true
                     })

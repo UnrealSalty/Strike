@@ -48,6 +48,7 @@ class RedScreen(
     private var wokeAtMs = 0L
     private var closed = false
     private var previewing = false
+    private var darkPending = false
 
     val isShowing: Boolean get() = control != null
 
@@ -116,25 +117,39 @@ class RedScreen(
         val held = control
         control = null
         if (held != null) releaseLayer(held)
-        if (darken) sleepPanel() else panel.release()
+        if (darken) sleepPanel() else panel.release(AccGate.isInUse)
     }
 
-    /** After the warning, or after rails wake the AP. ACC on must not call this. */
+    /** After the warning, or after rails wake the AP. Waits for [settle] while ACC is unconfirmed. */
     @Synchronized
     fun sleepPanel() {
-        if (closed || control != null || AccGate.isUnsafe) return
+        if (closed || control != null) return
+        if (AccGate.isUnsafe) {
+            val unknown = !AccGate.isInUse
+            if (unknown && !darkPending) DaemonLog.d(TAG, "the panel stays lit until the car is confirmed off")
+            darkPending = unknown
+            return
+        }
+        darkPending = false
         panel.darken()
+    }
+
+    /** After a boot the AP wakes before ACC is known; darken once it is confirmed off. */
+    @Synchronized
+    fun settle() {
+        if (AccGate.isInUse) darkPending = false
+        if (darkPending && !AccGate.isUnsafe) sleepPanel()
     }
 
     @Synchronized
     fun close(): Boolean {
         closed = true
         hide()
-        return panel.release()
+        return panel.release(AccGate.isInUse)
     }
 
     @Synchronized
-    fun releasePanel(): Boolean = panel.release()
+    fun releasePanel(): Boolean = panel.release(AccGate.isInUse)
 
     @Synchronized
     fun parkedWake(stillWanted: () -> Boolean): Boolean {
@@ -142,11 +157,13 @@ class RedScreen(
         if (control != null) return true
         val woke = ParkedRails.wakeAp()
         if (!stillWanted() || AccGate.isUnsafe) {
+            darkPending = false
             panel.wake()
             return false
         }
         sleepPanel()
         if (!stillWanted() || AccGate.isUnsafe) {
+            darkPending = false
             panel.wake()
             return false
         }

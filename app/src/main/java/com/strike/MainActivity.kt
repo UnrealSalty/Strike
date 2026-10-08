@@ -24,18 +24,16 @@ class MainActivity : Activity() {
         WebUi.mount(findViewById<WebView>(R.id.webRoot), findViewById<TextureView>(R.id.videoRoot))
     }
 
+    // The permission and USB debugging prompts are activities, so resume marks their dismissal.
+    // Window focus does not; on the head unit it can stay with BYD's own windows.
     override fun onResume() {
         super.onResume()
+        (application as StrikeApp).setup.foreground(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         (application as StrikeApp).dashboard.resume { pinSet ->
             if (pinSet) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        (application as StrikeApp).setup.foreground(hasFocus)
     }
 
     override fun onPause() {
@@ -56,9 +54,12 @@ class MainActivity : Activity() {
         val missing = NEEDED.filter {
             checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isNotEmpty()) {
-            (application as StrikeApp).setup.permissionsRequested()
-            requestPermissions(missing.toTypedArray(), 1)
+        val setup = (application as StrikeApp).setup
+        if (missing.isEmpty()) {
+            setup.permissionsFinished()
+            return
         }
+        setup.permissionsRequested()
+        requestPermissions(missing.toTypedArray(), 1)
     }
 }

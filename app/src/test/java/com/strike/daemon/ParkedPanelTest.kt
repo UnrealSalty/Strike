@@ -5,75 +5,38 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.IdentityHashMap
 
 class ParkedPanelTest {
-    @Test fun releasesTheNullTokenAcceptedByTheVendor() {
-        val vendor = Vendor().apply { rejectsBinder = true }
-        val panel = panel(vendor)
-        panel.darken()
-        assertEquals(1, vendor.locks[null])
-        assertTrue(panel.release())
-        assertTrue(vendor.locks.isEmpty())
-    }
-
-    @Test fun failedReleaseRetainsOwnershipUntilItCanBeRetried() {
+    @Test fun handingBackWhileParkedLeavesADarkenedPanelDark() {
         val vendor = Vendor()
         val panel = panel(vendor)
         panel.darken()
-        vendor.rejectsRelease = true
-        assertFalse(panel.release())
-        panel.darken()
-        assertEquals(1, vendor.locks.values.sum())
-        vendor.rejectsRelease = false
-        assertTrue(panel.release())
-        assertTrue(vendor.locks.isEmpty())
+        assertTrue(panel.release(carInUse = false))
+        assertFalse(vendor.lit)
     }
 
-    @Test fun repeatedDarkeningDoesNotStackVendorLocks() {
-        val vendor = Vendor()
-        val panel = panel(vendor)
-        repeat(10) { panel.darken() }
-        assertEquals(1, vendor.locks.values.sum())
-        assertTrue(panel.release())
-        assertTrue(vendor.locks.isEmpty())
-    }
-
-    @Test fun anAmbiguousOffFailureCanStillReleaseTheAcquiredLock() {
-        val vendor = Vendor().apply { failsAfterAcquire = true }
-        val panel = panel(vendor)
-        panel.darken()
-        panel.darken()
-        assertEquals(1, vendor.locks.values.sum())
-        assertFalse(vendor.locks.containsKey(null))
-        assertTrue(panel.release())
-        assertTrue(vendor.locks.isEmpty())
-    }
-
-    @Test fun anAmbiguousNullTokenFailureRetainsTheNullReleaseToken() {
-        val vendor = Vendor().apply {
-            rejectsBinder = true
-            failsAfterAcquire = true
-        }
-        val panel = panel(vendor)
-        panel.darken()
-        assertEquals(1, vendor.locks[null])
-        assertTrue(panel.release())
-        assertTrue(vendor.locks.isEmpty())
-    }
-
-    @Test fun aFailedWakeDoesNotForgetTheOffLock() {
+    @Test fun handingBackToACarInUseLightsTheDarkenedPanel() {
         val vendor = Vendor()
         val panel = panel(vendor)
         panel.darken()
-        vendor.rejectsRelease = true
+        assertTrue(panel.release(carInUse = true))
+        assertTrue(vendor.lit)
+    }
+
+    @Test fun handingBackAfterAWakeDropsTheKeepOnHoldAndLeavesTheLight() {
+        val vendor = Vendor()
+        val panel = panel(vendor)
         panel.wake()
-        assertFalse(panel.release())
-        assertEquals(1, vendor.locks.values.sum())
-        vendor.rejectsRelease = false
-        panel.wake()
-        assertTrue(vendor.locks.isEmpty())
-        assertTrue(panel.release())
+        assertEquals(1, vendor.holds.size)
+        assertTrue(panel.release(carInUse = false))
+        assertTrue(vendor.holds.isEmpty())
+        assertTrue(vendor.lit)
+    }
+
+    @Test fun aPanelStrikeNeverDarkenedIsNotLit() {
+        val vendor = Vendor().apply { lit = false }
+        assertTrue(panel(vendor).release(carInUse = true))
+        assertFalse(vendor.lit)
     }
 
     private fun panel(vendor: Vendor): ParkedPanel {
@@ -81,25 +44,29 @@ class ParkedPanelTest {
         return ParkedPanel(powerManager = { manager })
     }
 
-    class Manager(@JvmField val mService: Vendor)
+    class Manager(@JvmField val mService: Vendor) {
+        fun TurnBacklightOn() {
+            mService.lit = true
+        }
+
+        fun TurnBacklightOff() {
+            mService.holds.clear()
+            mService.lit = false
+        }
+    }
 
     class Vendor {
-        val locks = IdentityHashMap<IBinder?, Int>()
-        var rejectsBinder = false
-        var failsAfterAcquire = false
-        var rejectsRelease = false
-
-        fun TurnBacklightOffWithLock(token: IBinder?) {
-            if (rejectsBinder && token != null) throw IllegalArgumentException("token rejected")
-            locks[token] = (locks[token] ?: 0) + 1
-            if (failsAfterAcquire) throw IllegalStateException("reply failed after acquire")
-        }
+        var lit = true
+        val holds = mutableSetOf<IBinder>()
 
         @Suppress("UNUSED_PARAMETER")
         fun TurnBacklightOnWithLock(token: IBinder?, tag: String) {
-            if (rejectsRelease) throw IllegalStateException("release refused")
-            val count = locks[token] ?: return
-            if (count == 1) locks.remove(token) else locks[token] = count - 1
+            if (token != null) holds += token
+            lit = true
+        }
+
+        fun TurnBacklightOffWithLock(token: IBinder?) {
+            holds.remove(token)
         }
     }
 }

@@ -27,6 +27,7 @@ private const val INDEX_WAIT_MS = 6_000L
 
 // Wait briefly for the app's AAC format before starting the first muxer.
 private const val AUDIO_WAIT_MS = 1_000L
+private const val STORAGE_RETRY_MS = 10_000L
 
 // The clip can open a supervisor tick after the trigger, so hold more than the pre-roll itself.
 private const val PREROLL_SPAN_MS = EVENT_PREROLL_MS + 3_000L
@@ -47,6 +48,8 @@ class Recorder(
     private val dir: File,
     private val mode: RecordingMode,
     private val audio: AudioIngest?,
+    private val createWriter: (File) -> ClipWriter = { ClipWriter(it) },
+    private val monotonicMs: () -> Long = { System.nanoTime() / 1_000_000L },
     private val onClipFinished: () -> Unit
 ) {
 
@@ -78,6 +81,10 @@ class Recorder(
     private var muxerReleaseFailed = false
 
     @Volatile
+    private var waitingForStorage = false
+    private var storageRetryAtMs = 0L
+
+    @Volatile
     var clip: String? = null
         private set
 
@@ -102,7 +109,7 @@ class Recorder(
     val lastOutputAtMs: Long get() = encoder?.lastOutputAtMs ?: 0L
 
     /** Armed surveillance encodes without a clip open, which is not yet footage on disk. */
-    val isWriting: Boolean get() = isRecording && (!gated || clip != null)
+    val isWriting: Boolean get() = isRecording && clip != null
 
     fun start(options: RecordingOptions, bus: FrameBus): Boolean {
         if (running) return true
@@ -118,6 +125,8 @@ class Recorder(
         )
         val surface = encoder.start() ?: return false
         samples.clear()
+        waitingForStorage = false
+        storageRetryAtMs = 0L
         running = true
         bus.add(Consumer(CONSUMER, surface, CameraView.ALL, wanted, encoder::inputFailed))
         this.bus = bus
@@ -185,9 +194,28 @@ class Recorder(
                     if (sample != null) ring?.add(sample)
                     continue
                 }
+                if (current == null && waitingForStorage) {
+                    if (!running) break
+                    if (monotonicMs() < storageRetryAtMs) {
+                        if (sample != null) ring?.add(sample)
+                        continue
+                    }
+                    if (!gated && (sample == null || !keyFrame(sample))) {
+                        if (storageRetryAtMs != 0L) {
+                            encoder.requestKeyFrame()
+                            storageRetryAtMs = 0L
+                        }
+                        continue
+                    }
+                }
                 var open = current
                 if (open == null && gated && (ring?.count ?: 0) > 0) {
-                    open = openClip(format, null, preRoll = true) ?: break
+                    open = openClip(format, null, preRoll = true)
+                    if (open == null) {
+                        if (!waitingForStorage) break
+                        if (sample != null) ring?.add(sample)
+                        continue
+                    }
                     current = open
                     encoder.rotation.complete()
                 }
@@ -200,7 +228,12 @@ class Recorder(
                 }
                 if (open == null) {
                     val sound = if (options.audio) audio?.takeForClip(sample.timeUs, AUDIO_WAIT_MS) else null
-                    open = openClip(format, sound, preRoll = gated) ?: break
+                    open = openClip(format, sound, preRoll = gated)
+                    if (open == null) {
+                        if (!waitingForStorage) break
+                        ring?.add(sample)
+                        continue
+                    }
                     current = open
                     encoder.rotation.complete()
                     audioFromUs = sample.timeUs
@@ -217,7 +250,16 @@ class Recorder(
                     } else null
                     if (rotate || canJoinAudio && sound != null) {
                         val done = open
-                        open = openClip(format, sound) ?: break
+                        open = openClip(format, sound)
+                        if (open == null) {
+                            if (!waitingForStorage) break
+                            current = null
+                            clip = null
+                            encoder.rotation.complete()
+                            finish(done)
+                            ring?.add(sample)
+                            continue
+                        }
                         current = open
                         encoder.rotation.complete()
                         finish(done)
@@ -249,12 +291,25 @@ class Recorder(
 
     // Tracks cannot be added after muxer start; audio changes apply at a clip boundary.
     private fun openClip(format: MediaFormat, sound: AudioStart?, preRoll: Boolean = false): ClipWriter? {
-        val writer = ClipWriter(dir)
+        val writer = createWriter(dir)
         if (!writer.open(mode, format, sound)) {
-            if (writer.releaseFailed) muxerReleaseFailed = true
-            running = false
+            val storageFailure = writer.outputFailure
+            if (storageFailure != null && !writer.releaseFailed) {
+                storageRetryAtMs = monotonicMs() + STORAGE_RETRY_MS
+                if (!waitingForStorage) {
+                    DaemonLog.w(TAG, "Waiting for recording storage at $dir: ${storageFailure.message}")
+                }
+                waitingForStorage = true
+            } else {
+                if (writer.releaseFailed) muxerReleaseFailed = true
+                running = false
+                waitingForStorage = false
+            }
             return null
         }
+        if (waitingForStorage) DaemonLog.d(TAG, "Recording storage resumed at ${writer.directory}")
+        waitingForStorage = false
+        storageRetryAtMs = 0L
         clipStartedAtMs = writer.startedAtMs
         mediaStartedAtMs = writer.startedAtMs - if (preRoll) flushPreRoll(writer) else 0L
         clip = writer.name

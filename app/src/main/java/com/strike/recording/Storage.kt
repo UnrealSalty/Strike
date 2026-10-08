@@ -40,18 +40,22 @@ class Storage(context: Context, shell: Shell) {
         if (dropped > 0) Logs.d(TAG, "dropped $dropped oldest clips to stay under $budgetMb MB")
     }
 
-    // Saved logs sit beside clips and events, on the volume recording writes to.
-    fun saveLog(shell: Shell, name: String, bytes: ByteArray): File? {
-        val root = volumes.rootFor(location()) ?: return null
-        val dir = File(publicRoot(root.path), LOGS_DIR)
-        if (!prepareDir(dir, shell)) return null
-        val file = File(dir, name)
-        return try {
-            file.writeBytes(bytes)
-            file
-        } catch (e: IOException) {
-            null
+    /** Saves beside the clips, or on any other mounted volume when that one is full. Returns the location used. */
+    fun saveLog(shell: Shell, name: String, bytes: ByteArray): String? {
+        val preferred = location()
+        for (where in listOf(preferred) + volumes.mounted().keys.filter { it != preferred }) {
+            val root = volumes.rootFor(where) ?: continue
+            val dir = File(publicRoot(root.path), LOGS_DIR)
+            if (!prepareDir(dir, shell)) continue
+            val file = File(dir, name)
+            try {
+                file.writeBytes(bytes)
+                return where
+            } catch (e: IOException) {
+                file.delete()
+            }
         }
+        return null
     }
 }
 

@@ -24,6 +24,101 @@ class ParkedRecoveryTest {
         ParkedRecovery(saved, stopped, boot, nowMs = clock, wallNowMs = { wall })
 
     @Test
+    fun heartbeatAndCameraRestartPreserveTheOriginalParkStart() {
+        val recorder = recovery()
+        val startedAt = now
+        assertTrue(recorder.checkpoint("smart", "off"))
+        repeat(3) {
+            now += 60_000L
+            assertTrue(recorder.checkpoint("smart", "off"))
+            assertEquals(startedAt, recovery().intent(true, "smart", "off")?.startedAtMs)
+        }
+        now += 1_000L
+        assertEquals("smart", recovery().resume(true, "smart", "off"))
+        assertEquals(startedAt, recovery().intent(true, "smart", "off")?.startedAtMs)
+        assertTrue(saved.length() <= 256L)
+    }
+
+    @Test
+    fun ownerFallbackPreservesTheParkStartWhenTheCameraJournalHasExpired() {
+        assertTrue(recovery().checkpoint("smart", "off"))
+        val startedAt = now
+        val owner = ParkedRecovery(File(folder.root, "cam.parked-owner"), stopped, "boot-a",
+            nowMs = { now }, wallNowMs = { wall })
+        assertTrue(owner.checkpoint("smart", "off"))
+        repeat(4) {
+            now += 60_000L
+            assertTrue(owner.checkpoint("smart", "off"))
+        }
+        assertNull(recovery().intent(true, "smart", "off"))
+        val resumed = recovery()
+        assertEquals("smart", resumed.resume(true, "smart", "off", owner))
+        assertEquals(startedAt, recovery().intent(true, "smart", "off")?.startedAtMs)
+        now += 60_000L
+        assertTrue(resumed.checkpoint("smart", "off"))
+        assertEquals(startedAt, recovery().intent(true, "smart", "off")?.startedAtMs)
+    }
+
+    @Test
+    fun ownerFallbackCannotRestoreStoppedChangedOrExpiredIntent() {
+        val owner = ParkedRecovery(File(folder.root, "cam.parked-owner"), stopped, "boot-a",
+            nowMs = { now }, wallNowMs = { wall })
+        assertTrue(owner.checkpoint("smart", "off"))
+        assertNull(recovery().resume(false, "smart", "off", owner))
+        assertNull(recovery().resume(true, "continuous", "off", owner))
+        assertNull(recovery().resume(true, "smart", "lock", owner))
+        stopped.writeText("stopped")
+        assertNull(recovery().resume(true, "smart", "off", owner))
+        assertTrue(stopped.delete())
+        now += 180_001L
+        assertNull(recovery().resume(true, "smart", "off", owner))
+        assertFalse(saved.exists())
+    }
+
+    @Test
+    fun leavingParkGivesTheNextParkItsOwnStart() {
+        val recorder = recovery()
+        assertTrue(recorder.checkpoint("smart", "off"))
+        assertTrue(recorder.checkpoint(null, null))
+        now += 1_000L
+        assertTrue(recorder.checkpoint("smart", "off"))
+        assertEquals(now, recovery().intent(true, "smart", "off")?.startedAtMs)
+    }
+
+    @Test
+    fun aRebootPreservesTheParkAgeWhenRenewingTheCheckpoint() {
+        val recorder = recovery()
+        assertTrue(recorder.checkpoint("smart", "off"))
+        now += 60_000L
+        wall += 60_000L
+        assertTrue(recorder.checkpoint("smart", "off"))
+        now = 5_000L
+        wall += 30_000L
+        val resumed = recovery("boot-b")
+        assertEquals(now - 90_000L, resumed.intent(true, "smart", "off")?.startedAtMs)
+        assertEquals("smart", resumed.resume(true, "smart", "off"))
+        assertEquals(now - 90_000L, recovery("boot-b").intent(true, "smart", "off")?.startedAtMs)
+    }
+
+    @Test
+    fun legacyCheckpointsRemainRestorableWithoutInventingANewParkStart() {
+        for (version in 1..2) {
+            DataOutputStream(saved.outputStream()).use {
+                it.writeInt(version)
+                it.writeUTF("boot-a")
+                it.writeLong(now - 60_000L)
+                if (version == 2) it.writeLong(wall - 60_000L)
+                it.writeUTF("smart")
+                it.writeUTF("off")
+            }
+            assertEquals(now + 120_000L, recovery().validUntilMs(true, "smart", "off"))
+            assertNull(recovery().intent(true, "smart", "off")?.startedAtMs)
+            assertEquals("smart", recovery().resume(true, "smart", "off"))
+            assertNull(recovery().intent(true, "smart", "off")?.startedAtMs)
+        }
+    }
+
+    @Test
     fun eachParkedRecordingModeResumesOncePerDaemon() {
         for (mode in listOf("smart", "continuous")) {
             assertTrue(recovery().save(mode, "lock"))
@@ -115,7 +210,7 @@ class ParkedRecoveryTest {
             assertTrue(recovery().save(mode, arm))
             now = 5_000L
             wall += 30_000L
-            assertEquals(now + 150_000L, recovery("boot-b").validUntilMs(true, mode, arm))
+            assertEquals(1_980_000L, recovery("boot-b").validUntilMs(true, mode, arm))
             val resumed = recovery("boot-b")
             assertEquals(mode, resumed.resume(true, mode, arm))
             assertEquals(now + 180_000L, recovery("boot-b").validUntilMs(true, mode, arm))
@@ -126,10 +221,25 @@ class ParkedRecoveryTest {
     }
 
     @Test
-    fun anotherBootRejectsExpiredAndFutureWallTimestamps() {
-        for (age in listOf(-1L, 180_001L)) {
+    fun delayedBootRecoveryRestoresIntentThatWasFreshAtTheReboot() {
+        for (uptime in listOf(300_000L, 900_000L, 1_800_000L)) {
+            now = 1_000_000L
+            assertTrue(recovery().checkpoint("smart", "off"))
+            now = uptime
+            wall += 60_000L + uptime
+            assertEquals(1_980_000L, recovery("boot-b").validUntilMs(true, "smart", "off"))
+            assertEquals("smart", recovery("boot-b").resume(true, "smart", "off"))
+            assertEquals(-60_000L, recovery("boot-b").intent(true, "smart", "off")?.startedAtMs)
+        }
+    }
+
+    @Test
+    fun anotherBootRejectsIntentAlreadyStaleBeforeTheReboot() {
+        for (uptime in listOf(5_000L, 900_000L)) {
+            now = 1_000_000L
             assertTrue(recovery().save("smart", "off"))
-            wall += age
+            now = uptime
+            wall += 180_001L + uptime
             assertNull(recovery("boot-b").validUntilMs(true, "smart", "off"))
             assertNull(recovery("boot-b").resume(true, "smart", "off"))
             assertFalse(saved.exists())
@@ -137,13 +247,65 @@ class ParkedRecoveryTest {
     }
 
     @Test
-    fun anotherBootAcceptsTheDeadlineRegardlessOfItsUptime() {
-        for (uptime in listOf(1L, 2_000_000L)) {
+    fun anotherBootRejectsWallTimeInconsistentWithTheBoot() {
+        for (wallAdvance in listOf(-1L, 299_999L, 86_400_000L)) {
+            now = 1_000_000L
+            assertTrue(recovery().save("smart", "off"))
+            now = 300_000L
+            wall += wallAdvance
+            assertNull(recovery("boot-b").validUntilMs(true, "smart", "off"))
+            assertNull(recovery("boot-b").resume(true, "smart", "off"))
+            assertFalse(saved.exists())
+        }
+    }
+
+    @Test
+    fun bootRecoveryAcceptsItsDeadlineButCannotExtendPastIt() {
+        for (uptime in listOf(1_980_000L, 1_980_001L)) {
+            now = 1_000_000L
             assertTrue(recovery().save("continuous", "lock"))
             now = uptime
-            wall += 180_000L
-            assertEquals(now, recovery("boot-b").validUntilMs(true, "continuous", "lock"))
-            assertEquals("continuous", recovery("boot-b").resume(true, "continuous", "lock"))
+            wall += 180_000L + uptime
+            val atDeadline = uptime == 1_980_000L
+            assertEquals(if (atDeadline) uptime else null,
+                recovery("boot-b").validUntilMs(true, "continuous", "lock"))
+            assertEquals(if (atDeadline) "continuous" else null,
+                recovery("boot-b").resume(true, "continuous", "lock"))
+            assertEquals(atDeadline, saved.exists())
+        }
+    }
+
+    @Test
+    fun aCheckpointRenewedAfterDelayedBootRecoveryUsesTheNormalExpiry() {
+        assertTrue(recovery().checkpoint("smart", "off"))
+        now = 300_000L
+        wall += 360_000L
+        assertEquals("smart", recovery("boot-b").resume(true, "smart", "off"))
+        now += 60_000L
+        wall += 60_000L
+        assertEquals(now + 120_000L, recovery("boot-b").validUntilMs(true, "smart", "off"))
+        now += 120_001L
+        wall += 120_001L
+        assertNull(recovery("boot-b").validUntilMs(true, "smart", "off"))
+        assertNull(recovery("boot-b").resume(true, "smart", "off"))
+        assertFalse(saved.exists())
+    }
+
+    @Test
+    fun delayedBootRecoveryStillRejectsStopAndChangedSettings() {
+        for (change in listOf("stop", "disabled", "mode", "arm")) {
+            now = 1_000_000L
+            assertTrue(recovery().save("smart", "off"))
+            now = 900_000L
+            wall += 960_000L
+            assertEquals(1_980_000L, recovery("boot-b").validUntilMs(true, "smart", "off"))
+            if (change == "stop") stopped.writeText("stopped")
+            val enabled = change != "disabled"
+            val mode = if (change == "mode") "continuous" else "smart"
+            val arm = if (change == "arm") "lock" else "off"
+            assertNull(recovery("boot-b").resume(enabled, mode, arm))
+            assertFalse(saved.exists())
+            if (change == "stop") assertTrue(stopped.delete())
         }
     }
 
@@ -165,10 +327,10 @@ class ParkedRecoveryTest {
         val original = saved.readBytes()
         now = 5_000L
         wall += 30_000L
-        val expectedDeadline = now + 150_000L
-        repeat(3) {
-            now += 50_000L
-            wall += 50_000L
+        val expectedDeadline = 1_980_000L
+        for (uptime in listOf(300_000L, 900_000L, 1_800_000L, expectedDeadline)) {
+            wall += uptime - now
+            now = uptime
             assertEquals(expectedDeadline, recovery("boot-b").validUntilMs(true, "smart", "off"))
             assertArrayEquals(original, saved.readBytes())
         }
@@ -198,7 +360,10 @@ class ParkedRecoveryTest {
     @Test
     fun recoveredIntentDoesNotInventVehicleReadingsOrOverrideFreshUse() {
         for (mode in listOf("smart", "continuous")) for (arm in listOf("off", "lock")) {
+            now = 1_000_000L
             assertTrue(recovery().save(mode, arm))
+            now = 900_000L
+            wall += 960_000L
             val recovered = recovery("boot-b").resume(true, mode, arm)
             assertEquals(mode, recovered)
             assertNull(sentryMode(true, mode, null, arm, wasWatching = recovered != null))

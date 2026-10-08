@@ -407,7 +407,8 @@ main {
     flex-direction: column;
 }
 
-.page > .card + .columns {
+.page > .card + .columns,
+.page > .card:not([hidden]) + .card {
     margin-top: var(--gap);
 }
 
@@ -2483,6 +2484,20 @@ main {
     border: 1px solid var(--line);
     border-radius: var(--radius);
     padding: var(--pad);
+}
+
+.card--action {
+    border-color: var(--bad);
+}
+
+.card--action .row__label {
+    font-weight: 600;
+}
+
+.card__text {
+    flex: 1;
+    min-width: 0;
+    margin-right: var(--pad);
 }
 
 .card__head {

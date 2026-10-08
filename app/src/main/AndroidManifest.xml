@@ -25,6 +25,7 @@
     <uses-permission android:name="android.permission.BYDAUTO_GEARBOX_GET" />
     <uses-permission android:name="android.permission.BYDAUTO_ENERGY_COMMON" />
     <uses-permission android:name="android.permission.BYDAUTO_ENERGY_GET" />
+    <uses-permission android:name="android.permission.BYDAUTO_OTA_GET" />
     <uses-permission android:name="android.permission.BYD_CAMERA" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -64,6 +65,12 @@
             android:exported="true"
             android:permission="android.permission.DUMP" />
 
+        <receiver
+            android:name=".DiLink5NetworkReceiver"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+
         <service
             android:name=".RecorderRecoveryService"
             android:directBootAware="true"
@@ -74,6 +81,22 @@
             android:directBootAware="true"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="true" />
+
+        <service
+            android:name=".RecorderRevivalJob"
+            android:directBootAware="true"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true" />
+
+        <service
+            android:name=".BootStart"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/boot_start" />
+        </service>
 
         <receiver android:name=".recording.AccOff" android:exported="true">
             <intent-filter>

@@ -26,22 +26,29 @@ internal fun keptIn(root: File, namePattern: Regex): List<Kept> {
     return kept
 }
 
-class Retention(private val store: Reapable, private val budgetBytes: Long) {
+/** [shortBytes] is how far the volume is below the space the next clip needs, whatever filled it. */
+class Retention(private val store: Reapable, private val budgetBytes: Long, private val shortBytes: Long = 0) {
 
     fun enforce(inFlight: String?): Int {
         val clips = store.kept()
         var usedBytes = totalBytes(clips)
-        if (usedBytes <= budgetBytes) return 0
-
+        var freedBytes = 0L
         var dropped = 0
         for (i in clips.indices.reversed()) {
-            if (usedBytes <= budgetBytes) break
+            if (usedBytes <= budgetBytes && freedBytes >= shortBytes) break
             val clip = clips[i]
             if (clip.id == inFlight) continue
             if (!store.delete(clip.id)) continue
             usedBytes -= clip.bytes
+            freedBytes += clip.bytes
             dropped++
         }
         return dropped
     }
+}
+
+/** A volume that reports no size at all is unreadable, not full; it frees nothing. */
+fun shortBytes(dir: File, floorBytes: Long): Long {
+    if (dir.totalSpace <= 0L) return 0L
+    return maxOf(0L, floorBytes - dir.usableSpace)
 }

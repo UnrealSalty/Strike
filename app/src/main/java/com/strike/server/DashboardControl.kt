@@ -32,13 +32,13 @@ object DashboardControl {
         }
     }
 
-    internal fun holdRecorderPower(apk: String): Boolean {
+    internal fun holdRecorderPower(apk: String): Boolean? {
         val request = JSONObject().put("op", "recorder.power").put("apk", apk).toString().toByteArray()
         return try {
-            val reply = exchange(request, 1_000) ?: return false
+            val reply = exchange(request, 1_000) ?: return null
             JSONObject(reply.toString(Charsets.UTF_8)).optBoolean("held")
         } catch (e: IOException) {
-            false
+            null
         }
     }
 

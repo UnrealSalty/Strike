@@ -12,10 +12,12 @@ class RecorderRevival : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_STATE -> if (intent.hasExtra("enabled")) {
-                setEnabled(context, intent.getBooleanExtra("enabled", false))
+                setEnabled(context, intent.getBooleanExtra("enabled", false), "shell broadcast")
             }
             ACTION_WAKE -> if (alarm(context).fired()) {
                 recover(context)
+            } else {
+                BootDiagnostics.record("recorder revival alarm ignored: disabled")
             }
         }
     }
@@ -27,8 +29,10 @@ class RecorderRevival : BroadcastReceiver() {
         private var current: RevivalAlarm? = null
 
         @Synchronized
-        fun setEnabled(context: Context, enabled: Boolean) {
+        fun setEnabled(context: Context, enabled: Boolean, source: String = "recorder") {
+            val changed = isEnabled(context) != enabled
             alarm(context).setEnabled(enabled)
+            if (changed) BootDiagnostics.record("recorder revival enabled=$enabled source=$source")
             if (!enabled) context.stopService(Intent(context, RecorderRecoveryService::class.java))
         }
 
@@ -36,18 +40,35 @@ class RecorderRevival : BroadcastReceiver() {
 
         @Synchronized
         internal fun reconcile(context: Context, enabled: Boolean, expectedRevision: Long) {
+            val changed = isEnabled(context) != enabled
             if (!alarm(context).reconcile(enabled, expectedRevision)) return
+            if (changed) BootDiagnostics.record("recorder revival enabled=$enabled source=dashboard")
             if (!enabled) context.stopService(Intent(context, RecorderRecoveryService::class.java))
         }
 
         fun isEnabled(context: Context): Boolean = preferences(context).getBoolean("enabled", false)
 
-        fun resume(context: Context) = alarm(context).restore()
+        @Synchronized
+        fun resume(context: Context) {
+            try {
+                alarm(context).restore()
+            } catch (e: RuntimeException) {
+                BootDiagnostics.record("recorder revival alarm restore failed: ${e.javaClass.simpleName}")
+                Logs.w("Recorder", "Could not restore recorder recovery alarm", e)
+            }
+            if (!isEnabled(context)) RecorderRevivalJob.cancel(context)
+        }
 
         internal fun recover(context: Context) {
             resume(context)
-            if (!isEnabled(context) || !canRecoverAfterBoot(context)) return
-            BootDiagnostics.record("recorder revival requested")
+            if (!isEnabled(context)) {
+                BootDiagnostics.record("recorder revival skipped: disabled")
+                return
+            }
+            if (!canRecoverAfterBoot(context)) {
+                BootDiagnostics.record("recorder revival skipped: access not ready")
+                return
+            }
             try {
                 context.startForegroundService(Intent(context, RecorderRecoveryService::class.java))
             } catch (e: RuntimeException) {
@@ -69,9 +90,18 @@ class RecorderRevival : BroadcastReceiver() {
                 { enabled -> check(saved.edit().putBoolean("enabled", enabled).commit()) {
                     "Could not save recorder recovery state"
                 } },
-                { manager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    SystemClock.elapsedRealtime() + INTERVAL_MS, operation) },
-                { manager.cancel(operation) }
+                {
+                    try {
+                        manager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            SystemClock.elapsedRealtime() + INTERVAL_MS, operation)
+                    } finally {
+                        RecorderRevivalJob.schedule(context)
+                    }
+                },
+                {
+                    try { manager.cancel(operation) }
+                    finally { RecorderRevivalJob.cancel(context) }
+                }
             ).also { current = it }
         }
 

@@ -18,7 +18,18 @@ class SetupRestartTest {
     private var retries = 0
     private val pending: File get() = File(folder.root, "setup.pending")
 
-    private fun setup(firstRun: Boolean) = SetupRestart(pending, firstRun, { retries++ }) { restarts++ }
+    private var connected = false
+
+    private fun setup(firstRun: Boolean) = SetupRestart(pending, firstRun, { retries++; connected }) { restarts++ }
+
+    @Test fun anApprovalNobodyReportedStillRestartsWhenTheAppReturns() {
+        val setup = setup(true)
+        setup.permissionsRequested()
+        setup.permissionsFinished()
+        connected = true
+        setup.foreground(true)
+        assertEquals(1, restarts)
+    }
 
     @Test fun approvalWaitsForThePermissionDialogToFinishAndTheAppToReturn() {
         val setup = setup(true)
@@ -95,7 +106,49 @@ class SetupRestartTest {
         assertEquals(1, restarts)
     }
 
-    @Test fun returningFromThePromptRetriesOnceWithoutAnExtraPollingLoop() {
+    @Test fun anApprovalWithoutAnyResumeIsFoundByPolling() {
+        val setup = setup(true)
+        setup.permissionsRequested()
+        setup.foreground(true)
+        setup.permissionsFinished()
+        assertEquals(3_000L, setup.poll())
+        assertEquals(0, restarts)
+        connected = true
+        setup.poll()
+        assertEquals(1, restarts)
+        assertEquals(null, setup.poll())
+    }
+
+    @Test fun aPermissionDialogThatNeverReportedBackStopsBlockingOnceStrikeStaysInFront() {
+        val setup = setup(true)
+        setup.permissionsRequested()
+        setup.foreground(true)
+        setup.shellAuthorised()
+        setup.poll()
+        assertEquals(0, restarts)
+        setup.poll()
+        assertEquals(1, restarts)
+    }
+
+    @Test fun aPermissionDialogStillOpenKeepsBlockingThePoll() {
+        val setup = setup(true)
+        connected = true
+        setup.permissionsRequested()
+        setup.foreground(true)
+        setup.foreground(false)
+        repeat(3) { setup.poll() }
+        assertEquals(0, restarts)
+    }
+
+    @Test fun pollingBacksOffAndNeverRunsForAnEstablishedInstallation() {
+        assertEquals(null, setup(false).poll())
+        assertEquals(0, retries)
+        val fresh = setup(true)
+        repeat(19) { assertEquals(3_000L, fresh.poll()) }
+        assertEquals(30_000L, fresh.poll())
+    }
+
+    @Test fun returningFromThePromptRetriesOncePerReturn() {
         val setup = setup(true)
         setup.foreground(true)
         setup.foreground(true)

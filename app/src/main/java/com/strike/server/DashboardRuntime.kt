@@ -45,6 +45,7 @@ internal class DashboardRuntime(context: Context, shell: Shell, vehicle: Vehicle
         if (background) {
             online.restore()
             updates.resume()
+            Thread(daemons::captureAndroidBoot, "android-boot-log").start()
         }
     }
 

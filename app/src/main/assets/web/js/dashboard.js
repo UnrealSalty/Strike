@@ -83,6 +83,23 @@
         xhr.send('action=download');
     };
 
+    var autostartCard = document.getElementById('autostartCard');
+    var autostartOpen = document.getElementById('autostartOpen');
+    autostartOpen.onclick = function () {
+        autostartOpen.disabled = true;
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/autostart', true);
+        xhr.timeout = 8000;
+        xhr.onloadend = function () {
+            autostartOpen.disabled = false;
+            if (xhr.status === 204) autostartCard.hidden = true;
+            else if (xhr.status === 401) Strike.session.signIn();
+            else if (xhr.status === 403) location.replace('/lock');
+            else Strike.toast('Could not open the car\'s autostart list', true);
+        };
+        xhr.send();
+    };
+
     image.onload = function () {
         picture.removeAttribute('data-loading');
         image.hidden = false;
@@ -221,6 +238,7 @@
         render: function (status, cached) {
             var update = status.updates;
             updateNotice(update, cached);
+            if (!cached) autostartCard.hidden = status.autostartCheck !== true;
             document.getElementById('updateLink').hidden = !update || !update.available;
             say('updateSummary', update && update.latest ? 'v' + update.latest.replace(/^v/, '') : null);
             if (status.vehicle) {

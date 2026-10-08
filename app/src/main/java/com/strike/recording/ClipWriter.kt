@@ -23,7 +23,14 @@ private const val FAST = ".fast"
 private const val SWEEP_AGE_MS = 5 * 60_000L
 
 // Keep .tmp until the muxer closes successfully; stores only list finalized clips.
-class ClipWriter(private val dir: File) {
+class ClipWriter(
+    private val dir: File,
+    private val output: (File, String, Boolean) -> Pair<File, MediaMuxer> = { root, name, internal ->
+        openClipOutput(root, name, internal) {
+            MediaMuxer(it.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        }
+    }
+) {
 
     private var muxer: MediaMuxer? = null
     private var track = -1
@@ -36,6 +43,11 @@ class ClipWriter(private val dir: File) {
     internal var releaseFailed = false
         private set
 
+    internal var outputFailure: IOException? = null
+        private set
+
+    internal val directory: File get() = out
+
     val hasAudio: Boolean get() = audioTrack >= 0
 
     var name: String? = null
@@ -46,11 +58,12 @@ class ClipWriter(private val dir: File) {
 
     fun open(mode: RecordingMode, format: MediaFormat, audio: AudioStart? = null): Boolean {
         val clip = clipName(mode, System.currentTimeMillis())
+        outputFailure = null
         var fresh: MediaMuxer? = null
         return try {
-            val (file, opened) = openClipOutput(
+            val (file, opened) = output(
                 dir, clip + WRITING, mode == RecordingMode.DRIVE || mode == RecordingMode.MANUAL
-            ) { MediaMuxer(it.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4) }
+            )
             out = file.parentFile!!
             fresh = opened
             track = fresh.addTrack(format)
@@ -63,7 +76,8 @@ class ClipWriter(private val dir: File) {
             if (audio != null) writeAudio(audio.first)
             true
         } catch (e: Exception) {
-            DaemonLog.e(TAG, "cannot start a clip on this volume: ${e.message}")
+            if (fresh == null && e is IOException) outputFailure = e
+            else DaemonLog.e(TAG, "cannot start a clip on this volume: ${e.message}")
             if (fresh != null) release(fresh, clip)
             muxer = null
             writing = null
@@ -89,9 +103,8 @@ class ClipWriter(private val dir: File) {
         if (which == track) videoSamples++ else audioSamples++
     }
 
-    // Only a successful stop writes the index required to list a playable clip.
-    // Moving the index to the front is left to the caller; it copies the whole file and must
-    // not run on the thread muxing live frames.
+    // Only a successful stop writes the index a playable clip needs. The caller moves it to the
+    // front, off the muxing thread, because that copies the whole file.
     fun close(): File? {
         val open = muxer ?: return null
         val file = writing

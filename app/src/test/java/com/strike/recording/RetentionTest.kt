@@ -52,6 +52,39 @@ class RetentionTest {
     }
 
     @Test
+    fun aFullVolumeDropsOldestEvenUnderBudget() {
+        write("parked_20260901_100000.mp4", 100)
+        write("parked_20260902_100000.mp4", 100)
+        write("parked_20260903_100000.mp4", 100)
+
+        val store = ClipStore(folder.root)
+
+        assertEquals(2, Retention(store, 1000, shortBytes = 150).enforce(null))
+        assertEquals(listOf("parked_20260903_100000.mp4"), store.list().map { it.id })
+    }
+
+    @Test
+    fun aFullVolumeNeverDropsTheClipBeingWritten() {
+        write("parked_20260901_100000.mp4", 100)
+        write("parked_20260902_100000.mp4", 100)
+
+        val store = ClipStore(folder.root)
+
+        assertEquals(1, Retention(store, 1000, shortBytes = 500).enforce("parked_20260902_100000.mp4"))
+        assertEquals(listOf("parked_20260902_100000.mp4"), store.list().map { it.id })
+    }
+
+    @Test
+    fun aVolumeWithRoomIsNotShort() {
+        assertEquals(0L, shortBytes(folder.root, 1L))
+    }
+
+    @Test
+    fun anUnreadableVolumeIsNotShort() {
+        assertEquals(0L, shortBytes(File(folder.root, "never-mounted"), Long.MAX_VALUE))
+    }
+
+    @Test
     fun leavesForeignFilesAlone() {
         write("drive_20260901_100000.mp4", 100)
         write("drive_20260902_100000.mp4", 100)

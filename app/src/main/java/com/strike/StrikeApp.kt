@@ -59,12 +59,20 @@ class StrikeApp : Application() {
             { shell.retry() }
         ) {
             Thread({
-                Logs.d("Shell", "Restarting Strike after USB debugging approval")
+                BootDiagnostics.record("setup restart after USB debugging approval")
                 val started = shell.check("nohup sh -c 'am force-stop com.strike; " +
                     "am start -n com.strike/.MainActivity' </dev/null >/dev/null 2>&1 &")
-                if (!started) Logs.w("Shell", "Setup is complete. Close and reopen Strike")
+                if (!started) {
+                    BootDiagnostics.record("setup restart could not run")
+                    Logs.w("Shell", "Setup is complete. Close and reopen Strike")
+                }
             }, "setup-restart").start()
         }
+        main.post(object : Runnable {
+            override fun run() {
+                setupRestart.poll()?.let { main.postDelayed(this, it) }
+            }
+        })
         dashboardClient = DashboardClient(this, shell)
         started = true
         Triggers(this, shell).start()

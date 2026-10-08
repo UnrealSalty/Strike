@@ -10,6 +10,7 @@ local.properties
 *.jks
 captures/
 .kotlin/
+Examples/
 AGENTS.md
 
 .cursor/

@@ -14,6 +14,7 @@ import com.strike.daemon.Phase
 import com.strike.daemon.Processes
 import com.strike.daemon.RecorderDaemon
 import com.strike.daemon.Shell
+import com.strike.server.AndroidBootLog
 import com.strike.daemon.parseDaemonLog
 import com.strike.recording.RecordingSettings
 import com.strike.recording.Storage
@@ -75,6 +76,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     private val events = EventStorage(context, shell)
     private val dashboardLog = File(context.filesDir, "daemon.log").absolutePath
     private val bootLog = File(context.filesDir, "boot.log").absolutePath
+    private val androidBootLog = AndroidBootLog(File(context.filesDir, "android-boot.log"))
     private val recorder = RecorderDaemon(shell, Daemon(context, shell), DaemonClient()) {
         storage.publish(shell)
         events.publish(shell)
@@ -95,6 +97,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     }
 
     fun maintainRecorder() = recorder.maintain()
+
+    fun captureAndroidBoot() = androidBootLog.capture(shell)
 
     fun restoreAfterBoot(start: Boolean): Boolean = recorder.restoreAfterBoot(start)
 
@@ -181,9 +185,9 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     // In the car there is no browser download, so save beside the clips and events instead.
     fun saveLog(): Response {
         val name = logName()
-        storage.saveLog(shell, name, buildLog().toByteArray())
+        val location = storage.saveLog(shell, name, buildLog().toByteArray())
             ?: return Response(507, TEXT, "No place to save the log. Check where recording writes".toByteArray())
-        return Response(200, JSON, JSONObject().put("name", name).toString().toByteArray())
+        return Response(200, JSON, JSONObject().put("name", name).put("location", location).toString().toByteArray())
     }
 
     private fun buildLog(): String {
@@ -199,6 +203,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
                 append("  ").append(line.message)
                 append('\n')
             }
+            androidBootLog.text()?.let { append("\nAndroid log at the last head unit start\n").append(it) }
         }
     }
 
@@ -278,7 +283,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
             pending -> "Waiting for debugging approval"
             else -> "Not authorised"
         })
-        card.put("action", if (authorised) "none" else "connect")
+        card.put("action", if (authorised || pending) "none" else "connect")
         val facts = JSONArray()
         fact(facts, "Endpoint", "127.0.0.1:5555")
         fact(facts, "Runs as", if (authorised) "shell, uid 2000" else DASH)

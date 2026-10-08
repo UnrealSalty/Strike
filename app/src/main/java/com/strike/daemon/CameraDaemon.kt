@@ -36,7 +36,9 @@ import com.strike.recording.RecordingMode
 import com.strike.recording.RecordingOptions
 import com.strike.recording.RecordingSettings
 import com.strike.recording.Retention
+import com.strike.recording.bitrateBps
 import com.strike.recording.ensureDir
+import com.strike.recording.shortBytes
 import com.strike.recording.remount
 import com.strike.recording.storageUuid
 import com.strike.recording.shouldRecord
@@ -148,6 +150,7 @@ object CameraDaemon {
     private var remountedAtMs = 0L
     private var reapedAtMs = 0L
     private val reaping = AtomicBoolean(false)
+    private var cardFull = false
     private var clips = 0
 
     @JvmStatic
@@ -285,6 +288,7 @@ object CameraDaemon {
             supervisorAtMs = SystemClock.uptimeMillis()
             captureExpected = wanted || sentryMode != SentryMode.OFF || recorder != null
             updateVehicle()
+            screen.settle()
             captureExpected = (wanted && clipsDir() != null) ||
                 (sentryMode != SentryMode.OFF && eventsDir() != null) || recorder != null
             if (onlinePanelHeld && !ParkedRails.onlineHeld() &&
@@ -336,7 +340,7 @@ object CameraDaemon {
                     if (!stopRecording()) return
                 }
                 held == null && wantedTarget != null &&
-                    (wantedTarget.mode == RecordingMode.EVENT || now - failedAtMs > RETRY_AFTER_MS) ->
+                    now - failedAtMs > RETRY_AFTER_MS ->
                     startRecording(wantedTarget)
             }
             superviseEvent()
@@ -713,8 +717,10 @@ object CameraDaemon {
     private fun handoffParkedPower() {
         if (!ParkedRails.isHeld || sentryMode == SentryMode.OFF || File(CAM_SENTINEL_PATH).exists()) return
         val apk = screen.apkPath ?: return
-        if (!DashboardControl.holdRecorderPower(apk)) {
-            DaemonLog.w(TAG, "The dashboard could not take the recorder recovery power hold")
+        when (DashboardControl.holdRecorderPower(apk)) {
+            true -> Unit
+            false -> DaemonLog.w(TAG, "The dashboard answered but did not take the recorder recovery power hold")
+            null -> DaemonLog.w(TAG, "No dashboard response to the recorder recovery power request")
         }
     }
 
@@ -727,8 +733,7 @@ object CameraDaemon {
         val enabled = Config.getBool(SurveillanceSettings.ENABLED, false)
         val mode = Config.getString(SurveillanceSettings.MODE, SurveillanceSettings.fallback(SurveillanceSettings.MODE))
         val arm = Config.getString(SurveillanceSettings.ARM, SurveillanceSettings.fallback(SurveillanceSettings.ARM))
-        val saved = parkedRecovery.resume(enabled, mode, arm)
-            ?: mode.takeIf { ParkedRecovery(File(CAM_POWER_RECOVERY_PATH)).validUntilMs(enabled, mode, arm) != null }
+        val saved = parkedRecovery.resume(enabled, mode, arm, ParkedRecovery(File(CAM_POWER_RECOVERY_PATH)))
             ?: return
         sentryMode = if (saved == "smart") SentryMode.SMART else SentryMode.CONTINUOUS
         wanted = false
@@ -745,20 +750,30 @@ object CameraDaemon {
         if (!reaping.compareAndSet(false, true)) return
         try {
             val inFlight = recorder?.clip
+            val floorBytes = RecordingSettings.BUDGET_HEADROOM_MB * MB +
+                bitrateBps(setting(RecordingSettings.QUALITY), setting(RecordingSettings.CODEC)) / 8L * clipLengthMs() / 1000L
             clipsDir()?.let {
-                free(ClipStore(it), "clips", budgetMb(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB), inFlight)
+                free(ClipStore(it), it, "clips", budgetMb(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB),
+                    floorBytes, inFlight)
             }
             eventsDir()?.let {
-                free(EventStore(it), "events", budgetMb(SurveillanceSettings.BUDGET_MB, SurveillanceSettings.BUDGET_FALLBACK_MB), inFlight)
+                free(EventStore(it), it, "events", budgetMb(SurveillanceSettings.BUDGET_MB, SurveillanceSettings.BUDGET_FALLBACK_MB),
+                    floorBytes, inFlight)
             }
+            val full = listOfNotNull(clipsDir(), eventsDir()).any { shortBytes(it, floorBytes) > 0L }
+            if (full && !cardFull) DaemonLog.e(TAG, "Storage is full and Strike has no older clips left to drop")
+            cardFull = full
         } finally {
             reaping.set(false)
         }
     }
 
-    private fun free(store: Reapable, what: String, budgetMb: Int, inFlight: String?) {
-        val dropped = Retention(store, budgetMb * MB).enforce(inFlight)
-        if (dropped > 0) DaemonLog.d(TAG, "dropped $dropped oldest $what to stay under $budgetMb MB")
+    private fun free(store: Reapable, dir: File, what: String, budgetMb: Int, floorBytes: Long, inFlight: String?) {
+        val short = shortBytes(dir, floorBytes)
+        val dropped = Retention(store, budgetMb * MB, short).enforce(inFlight)
+        if (dropped == 0) return
+        val why = if (short > 0L) "free ${floorBytes / MB} MB on a full volume" else "stay under $budgetMb MB"
+        DaemonLog.d(TAG, "dropped $dropped oldest $what to $why")
     }
 
     // Cache camera discovery across status requests; repeated HAL probes can wedge capture.

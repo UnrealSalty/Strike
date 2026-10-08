@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.PowerManager
 import android.os.SystemClock
 import com.strike.core.Config
+import com.strike.core.DiLink5
 import com.strike.surveillance.SurveillanceSettings
 import com.strike.vehicle.VehicleTelemetry
 import java.io.File
@@ -14,7 +15,8 @@ internal class RecorderRecoveryPower(
     private val release: () -> Unit,
     private val nowMs: () -> Long = { SystemClock.elapsedRealtime() },
     private val maintain: () -> Unit = {},
-    private val onAcc: (Boolean) -> Unit = {}
+    private val onAcc: (Boolean) -> Unit = {},
+    private val onRefresh: (Boolean) -> Unit = {}
 ) {
     private var heldUntilMs: Long? = null
     @Volatile private var acquired = false
@@ -49,6 +51,7 @@ internal class RecorderRecoveryPower(
                 val current = if (closed) null else validUntilMs()
                 if (closed || current == null || current <= nowMs()) releaseHeld() else maintain()
             }
+            if (!closed) onRefresh(acquired)
             true
         } catch (e: RuntimeException) {
             false
@@ -81,6 +84,7 @@ internal class RecorderRecoveryPower(
             val recovery = ParkedRecovery()
             val owner = ParkedRecovery(File(CAM_POWER_RECOVERY_PATH))
             val vehicle = VehicleTelemetry(context)
+            val network = if (DiLink5.isSupported) DiLink5NetworkHold() else null
             val session = ParkedPowerSession(
                 settings = {
                     ParkedPowerSettings(
@@ -90,8 +94,8 @@ internal class RecorderRecoveryPower(
                 },
                 wanted = { File(CAM_SCRIPT_PATH).isFile && !File(CAM_SENTINEL_PATH).exists() },
                 seed = { settings ->
-                    recovery.validUntilMs(settings.enabled, settings.mode, settings.arm) != null ||
-                        owner.validUntilMs(settings.enabled, settings.mode, settings.arm) != null
+                    recovery.intent(settings.enabled, settings.mode, settings.arm)
+                        ?: owner.intent(settings.enabled, settings.mode, settings.arm)
                 },
                 journal = owner,
                 readVehicle = vehicle::parkingSnapshot,
@@ -111,7 +115,14 @@ internal class RecorderRecoveryPower(
                     }
                 },
                 maintain = ParkedRails::tickRecovery,
-                onAcc = session::edge
+                onAcc = session::edge,
+                onRefresh = { held ->
+                    network?.update(
+                        Config.getBool(SurveillanceSettings.DILINK5_KEEP_ALIVE, false) &&
+                            Config.getBool(SurveillanceSettings.ENABLED, false) &&
+                            File(CAM_SCRIPT_PATH).isFile && !File(CAM_SENTINEL_PATH).exists(),
+                        held, session.accOn())
+                }
             )
         }
     }

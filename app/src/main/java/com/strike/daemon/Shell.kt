@@ -13,8 +13,13 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "Shell"
 private const val HOST = "127.0.0.1"
@@ -22,6 +27,7 @@ private const val PORT = 5555
 private const val PORT_PROBE_MS = 300
 private const val CONNECT_TIMEOUT_MS = 3_000
 private const val SOCKET_TIMEOUT_MS = 45_000
+private const val HANDSHAKE_WAIT_MS = 3_000L
 private const val AUTH_ATTEMPTS = 5
 private const val RETRY_MS = 5_000L
 private const val MAX_RETRY_MS = 30_000L
@@ -217,15 +223,32 @@ private fun adbOpener(context: Context): () -> Dadb? {
         if (!listening) {
             null
         } else {
-            val fresh = Dadb.create(HOST, PORT, keys, CONNECT_TIMEOUT_MS, SOCKET_TIMEOUT_MS)
-            var accepted = false
-            try {
-                accepted = fresh.shell("echo ok").exitCode == 0
-                if (accepted) fresh else null
-            } finally {
-                if (!accepted) fresh.close()
-            }
+            handshake(keys)
         }
+    }
+}
+
+// A handshake started before the debugging prompt was approved can stall for the whole
+// socket timeout; abandon it so the next attempt, which adbd accepts at once, can run.
+private fun handshake(keys: AdbKeyPair): Dadb? {
+    val claimed = AtomicBoolean(false)
+    val attempt = FutureTask<Dadb?> {
+        val fresh = Dadb.create(HOST, PORT, keys, CONNECT_TIMEOUT_MS, SOCKET_TIMEOUT_MS)
+        var kept = false
+        try {
+            kept = fresh.shell("echo ok").exitCode == 0 && claimed.compareAndSet(false, true)
+            if (kept) fresh else null
+        } finally {
+            if (!kept) fresh.close()
+        }
+    }
+    Thread(attempt, "shell-handshake").also { it.isDaemon = true }.start()
+    return try {
+        attempt.get(HANDSHAKE_WAIT_MS, TimeUnit.MILLISECONDS)
+    } catch (e: TimeoutException) {
+        if (claimed.compareAndSet(false, true)) null else attempt.get()
+    } catch (e: ExecutionException) {
+        throw e.cause ?: e
     }
 }
 

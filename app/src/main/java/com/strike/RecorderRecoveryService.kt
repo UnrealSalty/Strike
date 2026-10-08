@@ -72,7 +72,7 @@ class RecorderRecoveryService : Service() {
 
     private fun finish(outcome: String) {
         cancelAttempt()
-        BootDiagnostics.record("recorder revival $outcome")
+        if (outcome != "ready") BootDiagnostics.record("recorder revival $outcome")
         release()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

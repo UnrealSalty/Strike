@@ -4,28 +4,27 @@ import android.content.Context
 import android.os.Binder
 import android.os.IBinder
 import android.os.SystemClock
-import java.lang.reflect.InvocationTargetException
 
+// BYD's OnWithLock takes a keep-on hold and lights the backlight; OffWithLock only drops
+// that hold. Only the plain TurnBacklightOff darkens the panel.
 class ParkedPanel(
     private val tag: String = "RedScreen",
     private val powerManager: () -> Any? = ::panelPowerManager
 ) {
     private var power: Any? = null
-    private var offLockHeld = false
-    private var offTokenWasNull = false
-    private val offToken = Binder()
+    private var keepOnHeld = false
+    private var isDark = false
+    private val token = Binder()
 
     @Synchronized
     fun wake() {
+        isDark = false
         val manager = powerManager()
         if (manager != null) {
             turnBacklightOn(manager)
-            turnBacklightOnWithLock(manager)
+            if (!keepOnHeld) keepOnHeld = withLock(manager, "TurnBacklightOnWithLock")
             val status = screenStatus(manager)
-            if (status == 0) {
-                turnBacklightOnWithLock(manager)
-                DaemonLog.w(tag, "panel still dark after WithLock, status=$status")
-            }
+            if (status == 0) DaemonLog.w(tag, "panel still dark after waking it, status=$status")
         } else {
             powerService()?.let { turnBacklightOn(it) }
         }
@@ -34,15 +33,25 @@ class ParkedPanel(
     @Synchronized
     fun darken() {
         val manager = powerManager() ?: return
-        turnBacklightOff(manager)
-        if (!offLockHeld) turnBacklightOffWithLock(manager)
+        if (!turnBacklightOff(manager)) return
+        keepOnHeld = false
+        isDark = true
     }
 
+    /** Hands the panel back. Only lights a panel Strike darkened when the car is in use. */
     @Synchronized
-    fun release(): Boolean {
-        if (!offLockHeld) return true
+    fun release(carInUse: Boolean): Boolean {
+        if (!keepOnHeld && !(isDark && carInUse)) return true
         val manager = powerManager() ?: return false
-        return turnBacklightOnWithLock(manager)
+        if (isDark && carInUse) {
+            if (!turnBacklightOn(manager)) return false
+            isDark = false
+        }
+        if (keepOnHeld) {
+            if (!withLock(manager, "TurnBacklightOffWithLock")) return false
+            keepOnHeld = false
+        }
+        return true
     }
 
     private fun powerService(): Any? {
@@ -70,8 +79,12 @@ class ParkedPanel(
         -1
     }
 
-    private fun turnBacklightOn(power: Any): Boolean {
-        for (name in arrayOf("TurnBacklightOn", "turnBacklightOn")) {
+    private fun turnBacklightOn(power: Any): Boolean = backlight(power, "TurnBacklightOn", "turnBacklightOn")
+
+    private fun turnBacklightOff(power: Any): Boolean = backlight(power, "TurnBacklightOff", "turnBacklightOff")
+
+    private fun backlight(power: Any, vararg names: String): Boolean {
+        for (name in names) {
             val method = power.javaClass.methods.firstOrNull { it.name == name } ?: continue
             try {
                 when (method.parameterTypes.size) {
@@ -87,78 +100,19 @@ class ParkedPanel(
         return false
     }
 
-    private fun turnBacklightOnWithLock(manager: Any): Boolean {
+    private fun withLock(manager: Any, name: String): Boolean {
         val service = managerService(manager) ?: return false
-        val method = try {
-            service.javaClass.getMethod(
-                "TurnBacklightOnWithLock",
-                IBinder::class.java,
-                String::class.java
-            )
-        } catch (e: NoSuchMethodException) {
-            return false
-        }
-        // Only the token that acquired an Off lock can acknowledge its release.
-        val tokens = if (offLockHeld) arrayOf<IBinder?>(if (offTokenWasNull) null else offToken)
-            else arrayOf<IBinder?>(offToken, null)
-        for (token in tokens) {
-            try {
-                method.invoke(service, token, "StrikeDeterrent")
-                offLockHeld = false
-                return true
-            } catch (e: ReflectiveOperationException) {
-                continue
+        val method = service.javaClass.methods.firstOrNull { it.name == name } ?: return false
+        return try {
+            when (method.parameterTypes.size) {
+                1 -> method.invoke(service, token)
+                2 -> method.invoke(service, token, "StrikeDeterrent")
+                else -> return false
             }
+            true
+        } catch (e: ReflectiveOperationException) {
+            false
         }
-        return false
-    }
-
-    private fun turnBacklightOff(power: Any): Boolean {
-        for (name in arrayOf("TurnBacklightOff", "turnBacklightOff")) {
-            val method = power.javaClass.methods.firstOrNull { it.name == name } ?: continue
-            try {
-                when (method.parameterTypes.size) {
-                    0 -> method.invoke(power)
-                    1 -> method.invoke(power, SystemClock.uptimeMillis())
-                    else -> continue
-                }
-            } catch (e: ReflectiveOperationException) {
-                continue
-            }
-            return true
-        }
-        return false
-    }
-
-    private fun turnBacklightOffWithLock(manager: Any): Boolean {
-        val service = managerService(manager) ?: return false
-        val method = service.javaClass.methods.firstOrNull { it.name == "TurnBacklightOffWithLock" }
-            ?: return false
-        val types = method.parameterTypes
-        for (token in arrayOf<IBinder?>(offToken, null)) {
-            try {
-                when (types.size) {
-                    1 -> method.invoke(service, token)
-                    2 -> method.invoke(service, token, "StrikeDeterrent")
-                    else -> return false
-                }
-                offTokenWasNull = token == null
-                offLockHeld = true
-                return true
-            } catch (e: InvocationTargetException) {
-                if (e.cause is IllegalArgumentException || e.cause is NullPointerException) continue
-                // The vendor may have taken the lock before its reply failed.
-                offTokenWasNull = token == null
-                offLockHeld = true
-                DaemonLog.w(tag, "panel Off lock was not confirmed; retaining its release token")
-                return false
-            } catch (e: IllegalArgumentException) {
-                continue
-            } catch (e: ReflectiveOperationException) {
-                return false
-            }
-        }
-        return false
     }
 
     private fun managerService(manager: Any): Any? = try {

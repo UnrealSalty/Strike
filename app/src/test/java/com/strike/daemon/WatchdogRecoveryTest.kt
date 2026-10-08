@@ -7,6 +7,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.nio.file.StandardWatchEventKinds.ENTRY_CREATE
 import java.util.concurrent.TimeUnit
 
 class WatchdogRecoveryTest {
@@ -225,6 +226,99 @@ class WatchdogRecoveryTest {
         assertFalse(file("launches").exists())
     }
 
+    @Test
+    fun androidRecoveryDoesNotRestartAHealthyCamera() {
+        file("start_cam.sh").writeText(original)
+        file("camera-alive").writeText("1234")
+
+        assertEquals(0, requestRevival())
+
+        assertEquals(listOf("broadcast", "--user", "0", "--include-stopped-packages", "--receiver-foreground",
+            "-n", "com.strike/.RecorderRevival", "-a", "com.strike.RECORDER_REVIVAL_WAKE"),
+            file("broadcast-arguments").readLines())
+        assertEquals("1234", file("camera-alive").readText())
+        assertUntouched()
+    }
+
+    @Test
+    fun androidRecoveryWakesTheInstalledAppsUser() {
+        file("start_cam.sh").writeText(original)
+
+        assertEquals(0, requestRevival(user = 10))
+
+        assertEquals(listOf("broadcast", "--user", "10", "--include-stopped-packages", "--receiver-foreground",
+            "-n", "com.strike/.RecorderRevival", "-a", "com.strike.RECORDER_REVIVAL_WAKE"),
+            file("broadcast-arguments").readLines())
+        assertUntouched()
+    }
+
+    @Test
+    fun manualStopPreventsAndroidRecovery() {
+        file("start_cam.sh").writeText(original)
+        file("cam.disabled").writeText("stopped from the app")
+
+        assertEquals(1, requestRevival())
+
+        assertFalse(file("broadcast-arguments").exists())
+        assertEquals("stopped from the app", file("cam.disabled").readText())
+        assertUntouched()
+    }
+
+    @Test
+    fun aMissingScriptPreventsAndroidRecovery() {
+        assertEquals(1, requestRevival())
+        assertFalse(file("broadcast-arguments").exists())
+        assertFalse(file("start_cam.sh").exists())
+    }
+
+    @Test
+    fun anEarlierInstallationCannotRequestAndroidRecovery() {
+        val old = original.replace(installation, "10123:900")
+        file("start_cam.sh").writeText(old)
+
+        assertEquals(1, requestRevival())
+
+        assertFalse(file("broadcast-arguments").exists())
+        assertEquals(old, file("start_cam.sh").readText())
+    }
+
+    @Test
+    fun stopBeforeQueuedAndroidRecoveryIsCheckedAgain() {
+        file("start_cam.sh").writeText(original)
+        val before = recorderDesiredGuard(installation) + "\necho stopped > cam.disabled\n"
+
+        assertEquals(1, requestRevival(before))
+
+        assertFalse(file("broadcast-arguments").exists())
+        assertEquals("stopped\n", file("cam.disabled").readText())
+        assertUntouched()
+    }
+
+    @Test
+    fun aRejectedAndroidRecoveryRequestIsReportedAsFailure() {
+        file("start_cam.sh").writeText(original)
+
+        assertEquals(2, requestRevival(exitCode = 20))
+
+        assertTrue(file("broadcast-arguments").exists())
+        assertUntouched()
+    }
+
+    private fun requestRevival(before: String = "", exitCode: Int = 0, user: Int = 0): Int {
+        val fixture = """
+            timeout() {
+                [ "${'$'}1" = -s ] && [ "${'$'}2" = KILL ] && [ "${'$'}3" = 5 ] || exit 98
+                shift 3
+                "${'$'}@"
+            }
+            am() {
+                printf '%s\n' "${'$'}@" > broadcast-arguments
+                return $exitCode
+            }
+        """.trimIndent()
+        return execute(fixture + "\n" + before + recorderRevivalLine(installation, user))
+    }
+
     private fun running(arguments: List<String>? = null, pid: String? = null): Int {
         val owner = when {
             arguments != null -> "echo \"\$\$\" > cam_watchdog.pid; mkdir -p \"proc/\$\$\"; " +
@@ -247,10 +341,12 @@ class WatchdogRecoveryTest {
         apk.parentFile!!.mkdirs()
         apk.writeText("")
         file("owned-pids").writeText("")
+        if (file("capture.ready").exists()) assertTrue(file("capture.ready").delete())
         file("capture.sh").writeText("""
             echo ${'$'}${'$'} >> owned-pids
             printf '%s\n' "${'$'}CLASSPATH" > classpath
             printf '%s\n' "${'$'}@" > arguments
+            echo ready > capture.ready
             exec sleep 30
         """.trimIndent())
         val fixture = """
@@ -284,7 +380,7 @@ class WatchdogRecoveryTest {
         val lines = watchdog ?: watchdogScript("com.strike", apk.absolutePath.replace('\\', '/'), "/new/lib/arm64",
             "com.strike.daemon.CameraDaemon", installation)
         val tracked = lines.flatMap { line ->
-            if (line.trim() == "ROTATE_PID=\$!") listOf(line, "echo \"\$ROTATE_PID\" >> owned-pids")
+            if (line.trim() == "MAINTENANCE_PID=\$!") listOf(line, "echo \"\$MAINTENANCE_PID\" >> owned-pids")
             else listOf(line)
         }
         val owner = ownerArguments?.let { args ->
@@ -294,11 +390,26 @@ class WatchdogRecoveryTest {
         } ?: ""
         val commands = "pidof() { [ -f camera-alive ]; }\n" + owner + before +
             recoverWatchdogLine(installation, fixture + tracked)
-        try {
-            return execute(commands)
-        } finally {
-            execute("while read PID; do case \"\$PID\" in ''|*[!0-9]*) continue;; esac; " +
-                "kill -9 \"\$PID\" 2>/dev/null; done < owned-pids; exit 0")
+        temporary.root.toPath().fileSystem.newWatchService().use { changes ->
+            temporary.root.toPath().register(changes, ENTRY_CREATE)
+            try {
+                val code = execute(commands)
+                if (code == 0 && watchdog == null) {
+                    val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+                    while (!file("capture.ready").isFile) {
+                        val remaining = deadline - System.nanoTime()
+                        assertTrue("Camera fixture did not publish its arguments", remaining > 0)
+                        val changed = changes.poll(remaining, TimeUnit.NANOSECONDS)
+                            ?: throw AssertionError("Camera fixture did not publish its arguments")
+                        changed.pollEvents()
+                        assertTrue("Camera fixture directory disappeared", changed.reset())
+                    }
+                }
+                return code
+            } finally {
+                execute("while read PID; do case \"\$PID\" in ''|*[!0-9]*) continue;; esac; " +
+                    "kill -9 \"\$PID\" 2>/dev/null; done < owned-pids; exit 0")
+            }
         }
     }
 

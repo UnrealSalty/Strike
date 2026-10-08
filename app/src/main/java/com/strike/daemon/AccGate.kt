@@ -15,6 +15,10 @@ object AccGate {
 
     val isUnsafe: Boolean
         @Synchronized get() = accUnsafe(on, saidAtMs, System.currentTimeMillis())
+
+    /** A fresh reading says the car is on or in gear, not merely unknown. */
+    val isInUse: Boolean
+        @Synchronized get() = on != false && System.currentTimeMillis() - saidAtMs < STALE_MS
 }
 
 internal fun accUnsafe(accOn: Boolean?, saidAtMs: Long, now: Long): Boolean =

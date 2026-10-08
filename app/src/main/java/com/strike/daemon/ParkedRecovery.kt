@@ -13,7 +13,11 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 internal const val CAM_RECOVERY_PATH = "$STRIKE_DIR/cam.recovery"
 internal const val CAM_POWER_RECOVERY_PATH = "$STRIKE_DIR/cam.parked-owner"
 private const val RESUME_WITHIN_MS = 180_000L
+// Android 10 may restore the 15-minute job up to 30 minutes after boot, plus startup time.
+private const val BOOT_RESUME_WITHIN_MS = 33 * 60_000L
 private const val CHECKPOINT_EVERY_MS = 60_000L
+
+internal data class ParkedIntent(val startedAtMs: Long?, val validUntilMs: Long)
 
 // Carries recent recording intent across restarts, never vehicle state.
 internal class ParkedRecovery(
@@ -27,6 +31,7 @@ internal class ParkedRecovery(
     private var checkpointMode: String? = null
     private var checkpointArm: String? = null
     private var checkpointSaved = true
+    private var sessionStartedAtMs: Long? = null
     private var resumeAttempted = false
     private var rejection = "no checkpoint"
 
@@ -39,6 +44,7 @@ internal class ParkedRecovery(
             if (!parked && checkpointSaved) return true
             if (now - previousAtMs in 0 until CHECKPOINT_EVERY_MS) return checkpointSaved
         }
+        if (mode != checkpointMode || arm != checkpointArm || !parked) sessionStartedAtMs = null
         checkpointAtMs = now
         checkpointMode = mode
         checkpointArm = arm
@@ -60,12 +66,15 @@ internal class ParkedRecovery(
         val temporary = File(file.path + ".tmp")
         return try {
             DataOutputStream(temporary.outputStream()).use {
-                it.writeInt(2)
+                val now = nowMs()
+                it.writeInt(3)
                 it.writeUTF(boot)
-                it.writeLong(nowMs())
+                it.writeLong(now)
                 it.writeLong(wallNowMs())
                 it.writeUTF(mode)
                 it.writeUTF(arm)
+                it.writeLong(sessionStartedAtMs ?: now)
+                sessionStartedAtMs = sessionStartedAtMs ?: now
             }
             Files.move(temporary.toPath(), file.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
             if (stopped.exists()) {
@@ -80,15 +89,17 @@ internal class ParkedRecovery(
     }
 
     @Synchronized
-    fun resume(enabled: Boolean, mode: String, arm: String): String? {
+    fun resume(enabled: Boolean, mode: String, arm: String, fallback: ParkedRecovery? = null): String? {
         if (resumeAttempted) return null
         resumeAttempted = true
-        if (validUntilMs(enabled, mode, arm) == null) {
+        val saved = intent(enabled, mode, arm) ?: fallback?.intent(enabled, mode, arm)
+        if (saved == null) {
             if (file.exists()) DaemonLog.w("Boot", "Parked restoration skipped: $rejection")
             file.delete()
             return null
         }
         val resumedAtMs = nowMs()
+        sessionStartedAtMs = saved.startedAtMs ?: Long.MIN_VALUE
         if (!save(mode, arm)) {
             if (stopped.exists()) file.delete()
             return null
@@ -101,7 +112,11 @@ internal class ParkedRecovery(
     }
 
     @Synchronized
-    fun validUntilMs(enabled: Boolean, mode: String, arm: String): Long? {
+    fun validUntilMs(enabled: Boolean, mode: String, arm: String): Long? =
+        intent(enabled, mode, arm)?.validUntilMs
+
+    @Synchronized
+    fun intent(enabled: Boolean, mode: String, arm: String): ParkedIntent? {
         return try {
             if (stopped.exists()) return reject("recorder was switched off")
             if (!enabled || !supported(mode, arm)) return reject("surveillance settings no longer match")
@@ -109,20 +124,33 @@ internal class ParkedRecovery(
             val boot = bootId?.takeIf { it.isNotEmpty() } ?: return reject("boot identity unavailable")
             DataInputStream(ByteArrayInputStream(file.readBytes())).use {
                 val version = it.readInt()
-                if (version != 1 && version != 2) return reject("unknown checkpoint format")
+                if (version !in 1..3) return reject("unknown checkpoint format")
                 val sameBoot = it.readUTF() == boot
                 val recordedAtMs = it.readLong()
-                val recordedWallMs = if (version == 2) it.readLong() else null
+                val recordedWallMs = if (version >= 2) it.readLong() else null
                 val now = nowMs()
                 val ageMs = if (sameBoot) now - recordedAtMs
                     else wallNowMs() - (recordedWallMs ?: return reject("old checkpoint has no reboot timestamp"))
+                val validUntilMs = if (sameBoot) {
+                    if (ageMs !in 0..RESUME_WITHIN_MS) return reject("checkpoint ageMs=$ageMs sameBoot=true")
+                    now + (RESUME_WITHIN_MS - ageMs)
+                } else {
+                    val ageAtBootMs = ageMs - now
+                    if (now !in 0..BOOT_RESUME_WITHIN_MS || ageAtBootMs !in 0..RESUME_WITHIN_MS) {
+                        return reject("checkpoint ageAtBootMs=$ageAtBootMs bootUptimeMs=$now")
+                    }
+                    BOOT_RESUME_WITHIN_MS
+                }
                 val recordedMode = it.readUTF()
                 val recordedArm = it.readUTF()
+                val started = if (version >= 3) it.readLong().takeUnless { value -> value == Long.MIN_VALUE } else null
                 when {
-                    ageMs !in 0..RESUME_WITHIN_MS -> reject("checkpoint ageMs=$ageMs sameBoot=$sameBoot")
+                    started != null && started > recordedAtMs -> reject("session starts after its checkpoint")
                     recordedMode != mode || recordedArm != arm -> reject("surveillance settings changed")
                     stopped.exists() -> reject("recorder was switched off")
-                    else -> now + (RESUME_WITHIN_MS - ageMs)
+                    else -> ParkedIntent(started?.let { start ->
+                        if (sameBoot) start else now - ageMs - (recordedAtMs - start)
+                    }, validUntilMs)
                 }
             }
         } catch (e: IOException) {
@@ -130,7 +158,7 @@ internal class ParkedRecovery(
         }
     }
 
-    private fun reject(reason: String): Long? {
+    private fun reject(reason: String): Nothing? {
         rejection = reason
         return null
     }

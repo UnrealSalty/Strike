@@ -30,8 +30,8 @@ class ParkedPowerSessionTest {
 
     private fun session(readVehicle: () -> VehicleSnapshot? = { null }): ParkedPowerSession =
         ParkedPowerSession({ settings }, { desired && !stopped.exists() }, { current ->
-            camera.validUntilMs(current.enabled, current.mode, current.arm) != null ||
-                owner.validUntilMs(current.enabled, current.mode, current.arm) != null
+            camera.intent(current.enabled, current.mode, current.arm)
+                ?: owner.intent(current.enabled, current.mode, current.arm)
         }, owner, readVehicle, now::get)
 
     private fun snapshot(on: Boolean?, gear: String? = "P", locked: Boolean? = true) =
@@ -84,6 +84,120 @@ class ParkedPowerSessionTest {
         now.addAndGet(15_000L)
         vehicle = null
         assertNull(session.refresh())
+    }
+
+    @Test
+    fun aNewCameraParkCanStartAfterIgnitionOnWithoutBackupVehicleReadings() {
+        val recorder = camera
+        var vehicle: VehicleSnapshot? = snapshot(true)
+        val session = session { vehicle }
+        assertNull(session.refresh())
+        now.addAndGet(30_000L)
+        vehicle = null
+        assertTrue(recorder.checkpoint("smart", "off"))
+        assertNotNull(session.refresh())
+        assertNotNull(owner.validUntilMs(true, "smart", "off"))
+    }
+
+    @Test
+    fun aHeartbeatFromThePreviousParkCannotUndoIgnitionOn() {
+        val recorder = camera
+        assertTrue(recorder.checkpoint("smart", "off"))
+        var vehicle: VehicleSnapshot? = null
+        val session = session { vehicle }
+        assertNotNull(session.refresh())
+        now.addAndGet(15_000L)
+        vehicle = snapshot(true)
+        assertNull(session.refresh())
+        now.addAndGet(60_000L)
+        vehicle = null
+        assertTrue(recorder.checkpoint("smart", "off"))
+        assertNull(session.refresh())
+        assertNull(owner.validUntilMs(true, "smart", "off"))
+    }
+
+    @Test
+    fun aNewCameraParkCanStartAfterUnlockingWithoutBackupVehicleReadings() {
+        settings = settings.copy(arm = "lock")
+        val recorder = camera
+        assertTrue(recorder.checkpoint("smart", "lock"))
+        var vehicle: VehicleSnapshot? = null
+        val session = session { vehicle }
+        assertNotNull(session.refresh())
+        now.addAndGet(15_000L)
+        vehicle = snapshot(null, locked = false)
+        assertNull(session.refresh())
+        assertTrue(recorder.checkpoint(null, null))
+        now.addAndGet(30_000L)
+        vehicle = null
+        assertTrue(recorder.checkpoint("smart", "lock"))
+        assertNotNull(session.refresh())
+    }
+
+    @Test
+    fun restartingTheCameraCannotMakeTheRejectedParkLookNew() {
+        val recorder = camera
+        assertTrue(recorder.checkpoint("smart", "off"))
+        var vehicle: VehicleSnapshot? = null
+        val session = session { vehicle }
+        assertNotNull(session.refresh())
+        now.addAndGet(15_000L)
+        vehicle = snapshot(true)
+        assertNull(session.refresh())
+        now.addAndGet(30_000L)
+        vehicle = null
+        assertEquals("smart", camera.resume(true, "smart", "off"))
+        assertNull(session.refresh())
+    }
+
+    @Test
+    fun resumingFromAnOwnerHeartbeatCannotMakeARejectedParkLookNew() {
+        assertTrue(camera.checkpoint("smart", "off"))
+        val session = session()
+        assertNotNull(session.refresh())
+        now.addAndGet(180_001L)
+        assertNotNull(session.refresh())
+        assertNull(camera.intent(true, "smart", "off"))
+        session.edge(true)
+        now.addAndGet(30_000L)
+        assertEquals("smart", camera.resume(true, "smart", "off", owner))
+        assertNull(session.refresh())
+    }
+
+    @Test
+    fun aFreshIgnitionOnObservationStillOverridesANewCameraPark() {
+        val session = session { snapshot(true) }
+        assertNull(session.refresh())
+        now.addAndGet(5_000L)
+        assertTrue(camera.checkpoint("smart", "off"))
+        assertNull(session.refresh())
+        now.addAndGet(30_000L)
+        assertNull(session.refresh())
+    }
+
+    @Test
+    fun aCameraSettingsChangeBetweenOwnerPollsCanKeepParkedPower() {
+        val recorder = camera
+        assertTrue(recorder.checkpoint("smart", "off"))
+        val session = session()
+        assertNotNull(session.refresh())
+        now.addAndGet(15_000L)
+        settings = settings.copy(mode = "continuous")
+        assertTrue(recorder.checkpoint("continuous", "off"))
+        now.addAndGet(15_000L)
+        assertNotNull(session.refresh())
+        assertNotNull(owner.validUntilMs(true, "continuous", "off"))
+    }
+
+    @Test
+    fun aSettingsChangeCannotRestoreAnOldMatchingCameraCheckpoint() {
+        assertTrue(camera.checkpoint("continuous", "off"))
+        val session = session()
+        assertNull(session.refresh())
+        now.addAndGet(15_000L)
+        settings = settings.copy(mode = "continuous")
+        assertNull(session.refresh())
+        assertNull(owner.validUntilMs(true, "continuous", "off"))
     }
 
     @Test
@@ -173,7 +287,7 @@ class ParkedPowerSessionTest {
         val session = ParkedPowerSession({ settings }, { desired && !stopped.exists() }, { current ->
             reading.countDown()
             check(finishReading.await(5, TimeUnit.SECONDS))
-            camera.validUntilMs(current.enabled, current.mode, current.arm) != null
+            camera.intent(current.enabled, current.mode, current.arm)
         }, owner, { null }, now::get)
         try {
             val refresh = executor.submit<Long?> { session.refresh() }
