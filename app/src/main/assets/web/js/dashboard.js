@@ -85,19 +85,27 @@
 
     var autostartCard = document.getElementById('autostartCard');
     var autostartOpen = document.getElementById('autostartOpen');
+    var autostartFailed = false;
     autostartOpen.onclick = function () {
         autostartOpen.disabled = true;
+        var dismissing = autostartFailed;
         var xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/autostart', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         xhr.timeout = 8000;
         xhr.onloadend = function () {
             autostartOpen.disabled = false;
             if (xhr.status === 204) autostartCard.hidden = true;
             else if (xhr.status === 401) Strike.session.signIn();
             else if (xhr.status === 403) location.replace('/lock');
-            else Strike.toast('Could not open the car\'s autostart list', true);
+            else if (dismissing) Strike.toast('Could not close the card', true);
+            else {
+                autostartFailed = true;
+                autostartOpen.textContent = 'Close';
+                Strike.toast('Could not open the car\'s autostart list. Open it from the car\'s settings', true);
+            }
         };
-        xhr.send();
+        xhr.send(dismissing ? 'action=dismiss' : '');
     };
 
     image.onload = function () {

@@ -9,6 +9,7 @@ import com.strike.surveillance.EventStorage
 import com.strike.server.JSON
 import com.strike.server.Response
 import com.strike.server.TEXT
+import com.strike.server.formValue
 import com.strike.vehicle.VehicleTelemetry
 import com.strike.update.Updates
 import org.json.JSONObject
@@ -78,7 +79,11 @@ class DashboardApi(context: Context, private val shell: Shell, private val daemo
         return Response(200, JSON, payload.toString().toByteArray())
     }
 
-    fun openAutostart(): Response {
+    fun autostart(body: String): Response {
+        if (formValue(body, "action") == "dismiss") {
+            autostart.confirm()
+            return Response(204, TEXT)
+        }
         val opened = AUTOSTART_SCREENS.any { command ->
             shell.read("$command 2>&1")?.let { !it.contains("Error") } == true
         }

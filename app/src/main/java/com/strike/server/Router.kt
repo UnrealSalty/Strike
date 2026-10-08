@@ -110,7 +110,7 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
         }
         path == UNLOCK_API -> if (method == "POST") security.unlock(body) else methodNotAllowed()
         path == "/api/status" -> if (method == "GET") dashboard.status(inCar) else methodNotAllowed()
-        path == "/api/autostart" -> if (method == "POST") dashboard.openAutostart() else methodNotAllowed()
+        path == "/api/autostart" -> if (method == "POST") dashboard.autostart(body) else methodNotAllowed()
         path == "/api/recording/settings" -> when (method) {
             "GET" -> recordings.settings()
             "POST" -> recordings.save(body)
