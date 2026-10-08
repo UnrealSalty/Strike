@@ -19,6 +19,8 @@ class DaemonClient {
 
     fun status(): JSONObject? = send("status")
 
+    fun report(): JSONObject? = send("report")
+
     fun shutdown(): Boolean = accepted(send("shutdown"))
 
     internal fun parkedWake(): Boolean = accepted(exchange(JSONObject().put("cmd", "power.parked"), 1_000))

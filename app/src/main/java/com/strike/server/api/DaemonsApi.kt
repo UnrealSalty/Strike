@@ -190,7 +190,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         return Response(200, JSON, JSONObject().put("name", name).put("location", location).toString().toByteArray())
     }
 
-    private fun buildLog(): String {
+    internal fun buildLog(): String {
         val full = shell.read("cat $CAM_LOG_PATH 2>/dev/null; " +
             "if [ -f '$dashboardLog' ]; then cat '$dashboardLog'; fi; " +
             "if [ -f '$bootLog' ]; then cat '$bootLog'; fi")

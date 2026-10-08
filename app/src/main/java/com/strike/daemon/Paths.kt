@@ -4,7 +4,7 @@ import java.io.File
 
 private const val LEGACY_DIR = "/data/local/tmp/strike"
 private const val SHELL_DATA_DIR = "/data/user_de/0/com.android.shell"
-private const val DILINK5_MARKER = "/system/lib64/libais_test_util.so"
+internal const val DILINK5_MARKER = "/system/lib64/libais_test_util.so"
 
 // DiLink 5 firmware such as the Shark 6 denies the shell /data/local/tmp. The shell's own
 // data dir carries the same label there, and the marker reads the same in the app and the shell.

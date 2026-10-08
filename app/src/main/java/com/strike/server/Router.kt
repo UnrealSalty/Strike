@@ -12,6 +12,7 @@ import com.strike.daemon.Shell
 import com.strike.server.api.DaemonsApi
 import com.strike.server.api.CameraApi
 import com.strike.server.api.DashboardApi
+import com.strike.server.api.ModelReport
 import com.strike.server.api.RECORDER_API
 import com.strike.server.api.RecordingsApi
 import com.strike.server.api.SecurityApi
@@ -19,6 +20,7 @@ import com.strike.server.api.OnlineApi
 import com.strike.server.api.SurveillanceApi
 import com.strike.server.api.UpdatesApi
 import com.strike.online.Online
+import com.strike.recording.Storage
 import com.strike.update.Updates
 import com.strike.vehicle.VehicleTelemetry
 import java.io.File
@@ -52,6 +54,13 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
         { profile -> Config.put(shell, CAMERA_PROFILE, profile) }
     )
     private val live = LiveStream(DaemonClient())
+    private val storage = Storage(context, shell)
+    private val report = ModelReport(
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "",
+        { command -> if (shell.isAuthorised()) shell.read(command) else null },
+        DaemonClient()::report, daemons::buildLog,
+        { name, bytes -> storage.saveLog(shell, name, bytes) }
+    )
 
     fun locked(token: String?): Boolean = pin.isSet() && !PinSession.allows(token)
 
@@ -135,6 +144,13 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
         path == "/api/logs" -> if (method == "GET") daemons.logs() else methodNotAllowed()
         path == "/api/logs/export" -> if (method == "GET") daemons.exportLog() else methodNotAllowed()
         path == "/api/logs/save" -> if (method == "POST") daemons.saveLog() else methodNotAllowed()
+        path == "/api/report" -> when (method) {
+            "GET" -> report.status()
+            "POST" -> report.start()
+            else -> methodNotAllowed()
+        }
+        path == "/api/report/file" -> if (method == "GET") report.file() else methodNotAllowed()
+        path == "/api/report/save" -> if (method == "POST") report.save() else methodNotAllowed()
         path.startsWith(BYD_API) -> {
             if (method == "POST") daemons.setByd(path.substring(BYD_API.length), body)
             else methodNotAllowed()

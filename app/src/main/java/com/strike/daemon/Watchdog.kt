@@ -5,7 +5,7 @@ private const val LOG_CHECK_SECONDS = 3_600
 private const val DASHBOARD_CHECK_SECONDS = 60
 private const val HEALTHY_UPTIME_SEC = 300
 private const val MAX_RETRY_DELAY_SEC = 60
-private const val BMM_JAR_PATH = "/system/framework/bmmcamera.jar"
+internal const val BMM_JAR_PATH = "/system/framework/bmmcamera.jar"
 
 // The app sleeps with the car, so the shell owns recovery.
 internal fun watchdogScript(

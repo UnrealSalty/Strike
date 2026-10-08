@@ -146,6 +146,7 @@ object CameraDaemon {
     private var cameraOpenedAtMs = 0L
     private var cameraRetryAtMs = 0L
     private var camerasReason = ""
+    private var probeReason: String? = null
     private var failedAtMs = 0L
     private var remountedAtMs = 0L
     private var reapedAtMs = 0L
@@ -197,6 +198,7 @@ object CameraDaemon {
 
     private fun answer(command: JSONObject): JSONObject = when (command.optString("cmd")) {
         "status" -> status()
+        "report" -> cameraReport(cameraProfile, found(), probeReason, cameraStartup?.choice)
         "vehicle" -> {
             acc.fromApp(VehicleSnapshot(
                 null, null, null, null, null,
@@ -782,6 +784,7 @@ object CameraDaemon {
         var known = inventory
         if (known == null) {
             val probed = cameras(cameraProfile)
+            if (cameraProfile == CameraProfile.AUTO) probeReason = probed.reason
             if (probed.cameras.isEmpty()) {
                 DaemonLog.w(TAG, "no named camera: ${probed.reason}")
                 DaemonLog.d(TAG, "camera stack: " + cameraStack())

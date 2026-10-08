@@ -42,7 +42,7 @@
     <main class="page">
         <div class="hero">
             <h1 class="hero__title">Settings</h1>
-            <p class="hero__sub">Updates, cameras, and the screen PIN.</p>
+            <p class="hero__sub">Updates, cameras, the screen PIN and the model report.</p>
         </div>
         <div class="columns">
             <section class="card columns__wide" id="updates">
@@ -67,7 +67,7 @@
                 <div class="updates__panel">
                     <p class="updates__status" id="updateMessage" role="status" aria-live="polite">&mdash;</p>
                     <p class="updates__checked">Last checked <span id="updateChecked">&mdash;</span></p>
-                    <div class="updates__progress" id="updateProgress" hidden>
+                    <div class="progress" id="updateProgress" hidden>
                         <span class="meter" role="progressbar" id="updateMeter" aria-label="APK download" aria-valuemin="0" aria-valuemax="100"><span class="meter__fill" id="updateFill"></span></span>
                         <span class="note" id="updateBytes"></span>
                     </div>
@@ -100,6 +100,21 @@
                         </button>
                         <div class="pick__menu" hidden></div>
                     </span>
+                </section>
+                <section class="card" id="modelReport">
+                    <div class="card__actions">
+                        <div class="card__lead">
+                            <h2 class="card__name">Model report</h2>
+                            <p class="note">Collects this car's model, firmware and cameras for adding support.</p>
+                        </div>
+                        <span class="card__tools">
+                            <button class="btn" id="reportCreate" type="button">Create</button>
+                        </span>
+                        <div class="progress" id="reportProgress" hidden>
+                            <span class="meter" role="progressbar" id="reportMeter" aria-label="Model report" aria-valuemin="0" aria-valuemax="100"><span class="meter__fill" id="reportFill"></span></span>
+                            <span class="note" id="reportStep"></span>
+                        </div>
+                    </div>
                 </section>
             </div>
         </div>
@@ -138,5 +153,6 @@
     <script src="js/release-notes.js"></script>
     <script src="js/updates.js"></script>
     <script src="js/camera-settings.js"></script>
+    <script src="js/model-report.js"></script>
 </body>
 </html>
