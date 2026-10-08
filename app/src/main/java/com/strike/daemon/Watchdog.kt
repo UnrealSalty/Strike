@@ -5,6 +5,7 @@ private const val LOG_CHECK_SECONDS = 3_600
 private const val DASHBOARD_CHECK_SECONDS = 60
 private const val HEALTHY_UPTIME_SEC = 300
 private const val MAX_RETRY_DELAY_SEC = 60
+private const val BMM_JAR_PATH = "/system/framework/bmmcamera.jar"
 
 // The app sleeps with the car, so the shell owns recovery.
 internal fun watchdogScript(
@@ -15,7 +16,7 @@ internal fun watchdogScript(
     installation: String = ""
 ): List<String> {
     // app_process needs the extracted native library and the apk's assets.
-    val launch = "  CLASSPATH=/system/framework/bmmcamera.jar:\$APK_PATH app_process " +
+    val launch = "  CLASSPATH=\"\$BMM_JAR\$APK_PATH\" app_process " +
         "-Djava.library.path=$nativeLibDir:/system/lib64:/vendor/lib64:/product/lib64:/odm/lib64 " +
         "/system/bin --nice-name=$CAM_PROCESS $daemonClass $nativeLibDir \"\$APK_PATH\" " +
         ">> \"\$LOG_FILE\" 2>&1 &"
@@ -27,6 +28,8 @@ internal fun watchdogScript(
         "SENTINEL=\"$CAM_SENTINEL_PATH\"",
         "PID_FILE=\"$CAM_WATCHDOG_PID_PATH\"",
         "FALLBACK_APK=\"$apkPath\"",
+        // app_process aborts on a classpath entry that does not exist, and some units ship no BMM jar.
+        "BMM_JAR=; [ ! -f $BMM_JAR_PATH ] || BMM_JAR=$BMM_JAR_PATH:",
         "RETRY_COUNT=0",
         "APK_WAITING=0",
         *dashboardRecoveryLines(installation).toTypedArray(),

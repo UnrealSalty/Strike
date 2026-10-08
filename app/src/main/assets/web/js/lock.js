@@ -70,6 +70,9 @@
                 location.replace('/');
                 return;
             }
+            if (typeof payload.resetPath === 'string') {
+                document.getElementById('pinResetCommand').textContent = 'adb shell touch ' + payload.resetPath;
+            }
             waitFor(typeof payload.lockoutMs === 'number' ? payload.lockoutMs : 0);
         }, function () {});
     });

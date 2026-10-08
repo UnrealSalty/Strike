@@ -6,6 +6,7 @@ import com.strike.core.Pin
 import com.strike.core.PinCheck
 import com.strike.core.PinSession
 import com.strike.core.PinSet
+import com.strike.daemon.PIN_RESET_PATH
 import com.strike.server.JSON
 import com.strike.server.Response
 import com.strike.server.TEXT
@@ -19,6 +20,7 @@ class SecurityApi(private val pin: Pin) {
         val payload = JSONObject()
         payload.put("set", pin.isSet())
         payload.put("lockoutMs", pin.lockoutMs())
+        payload.put("resetPath", PIN_RESET_PATH)
         return Response(200, JSON, payload.toString().toByteArray())
     }
 

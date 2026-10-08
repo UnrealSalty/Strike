@@ -312,15 +312,27 @@ class WatchdogTest {
 
     @Test
     fun theLaunchPassesTheCameraJarAndExtractedLibraries() {
+        file("system/framework").mkdirs()
+        file("system/framework/bmmcamera.jar").writeText("")
         assertEquals(0, watchdog(listOf("0 300 stop")))
 
-        assertTrue(file("classpath").readText().startsWith("/system/framework/bmmcamera.jar:"))
-        assertTrue(file("classpath").readText().trim().endsWith("/base.apk"))
+        val classpath = file("classpath").readText().trim()
+        assertTrue(classpath.startsWith(temporary.root.absolutePath.replace('\\', '/') + "/system/framework/bmmcamera.jar:"))
+        assertTrue(classpath.endsWith("/base.apk"))
         val args = file("arguments").readLines()
         assertTrue(args.contains("-Djava.library.path=/app/lib/arm64:/system/lib64:/vendor/lib64:/product/lib64:/odm/lib64"))
         assertTrue(args.contains("--nice-name=strike_cam"))
         assertTrue(args.contains("com.strike.daemon.CameraDaemon"))
         assertTrue(args.contains("/app/lib/arm64"))
+    }
+
+    @Test
+    fun aUnitWithoutTheCameraJarLaunchesFromTheApkAlone() {
+        assertEquals(0, watchdog(listOf("0 300 stop")))
+
+        val classpath = file("classpath").readText().trim()
+        assertFalse(classpath.contains("bmmcamera"))
+        assertTrue(classpath.endsWith("/base.apk"))
     }
 
     @Test
@@ -456,6 +468,7 @@ class WatchdogTest {
         assertTrue("A POSIX shell is required to exercise the watchdog", shell.isFile)
         val mapped = commands.replace(STRIKE_DIR, temporary.root.absolutePath.replace('\\', '/'))
             .replace("/proc/", temporary.root.absolutePath.replace('\\', '/') + "/proc/")
+            .replace("/system/framework/", temporary.root.absolutePath.replace('\\', '/') + "/system/framework/")
         val script = file("test.sh").also { it.writeText(mapped) }
         val output = file("output")
         val builder = ProcessBuilder(shell.absolutePath, script.name)

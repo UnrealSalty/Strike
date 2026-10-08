@@ -11,7 +11,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
 
-private const val RECEIPT = "$STRIKE_DIR/update-result"
+private val RECEIPT = "$STRIKE_DIR/update-result"
 
 internal class UpdateInstall(
     private val context: Context,

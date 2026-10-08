@@ -156,7 +156,7 @@ object CameraDaemon {
     @JvmStatic
     fun main(args: Array<String>) {
         DaemonLog.watchCrashes()
-        DaemonLog.d(TAG, "starting as uid ${Process.myUid()}, pid ${Process.myPid()}, boot uptime ${SystemClock.elapsedRealtime() / 1000}s")
+        DaemonLog.d(TAG, "starting as uid ${Process.myUid()}, pid ${Process.myPid()}, boot uptime ${SystemClock.elapsedRealtime() / 1000}s, files in $STRIKE_DIR")
         // A duplicate exits without clearing the active daemon's lock.
         if (!lock.take()) exitProcess(EXIT_ALREADY_RUNNING)
         supervisorAtMs = SystemClock.uptimeMillis()

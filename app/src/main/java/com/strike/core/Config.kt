@@ -3,6 +3,7 @@ package com.strike.core
 import android.util.Base64
 import com.strike.daemon.CONFIG_PATH
 import com.strike.daemon.STRIKE_DIR
+import com.strike.daemon.strikeDirSetup
 import com.strike.daemon.Shell
 import org.json.JSONException
 import org.json.JSONObject
@@ -62,6 +63,6 @@ object Config {
 
 // Base64 protects shell arguments; atomic rename prevents partial reads.
 internal fun writeLine(base64: String): String =
-    "mkdir -p $STRIKE_DIR && chmod 755 $STRIKE_DIR && " +
+    "mkdir -p $STRIKE_DIR && ${strikeDirSetup()} && chmod 755 $STRIKE_DIR && " +
         "echo $base64 | base64 -d > $CONFIG_PATH.tmp && chmod 644 $CONFIG_PATH.tmp && " +
         "mv -f $CONFIG_PATH.tmp $CONFIG_PATH"

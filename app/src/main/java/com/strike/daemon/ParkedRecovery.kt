@@ -10,8 +10,8 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 
-internal const val CAM_RECOVERY_PATH = "$STRIKE_DIR/cam.recovery"
-internal const val CAM_POWER_RECOVERY_PATH = "$STRIKE_DIR/cam.parked-owner"
+internal val CAM_RECOVERY_PATH = "$STRIKE_DIR/cam.recovery"
+internal val CAM_POWER_RECOVERY_PATH = "$STRIKE_DIR/cam.parked-owner"
 private const val RESUME_WITHIN_MS = 180_000L
 // Android 10 may restore the 15-minute job up to 30 minutes after boot, plus startup time.
 private const val BOOT_RESUME_WITHIN_MS = 33 * 60_000L

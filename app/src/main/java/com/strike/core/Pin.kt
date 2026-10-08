@@ -1,5 +1,6 @@
 package com.strike.core
 
+import com.strike.daemon.PIN_RESET_PATH
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
@@ -27,7 +28,7 @@ enum class PinCheck { OK, WRONG, LOCKED, UNSET }
 
 class Pin(
     private val store: File,
-    private val resetFlag: File = File("/data/local/tmp/.strike_pin_reset")
+    private val resetFlag: File = File(PIN_RESET_PATH)
 ) {
 
     // Serialize attempt counting so concurrent requests cannot bypass lockout.

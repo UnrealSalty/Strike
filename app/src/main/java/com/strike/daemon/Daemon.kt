@@ -211,7 +211,7 @@ internal fun recoverWatchdogLine(installation: String, script: List<String>): St
         "echo \"\$(date +%s)000 warn watchdog recorder stopped; watchdog restarted\" >> '$CAM_LOG_PATH'"
 
 internal fun stopWatchdogLine(): String =
-    "mkdir -p $STRIKE_DIR || exit 1; chmod 755 $STRIKE_DIR; " +
+    "mkdir -p $STRIKE_DIR || exit 1; ${strikeDirSetup()}; chmod 755 $STRIKE_DIR; " +
         "echo stopped from the app > $CAM_SENTINEL_PATH || exit 1; chmod 644 $CAM_SENTINEL_PATH; " +
         killLine(CAM_SCRIPT_PATH) + "; rm -f $CAM_SCRIPT_PATH $CAM_WATCHDOG_PID_PATH $CAM_RECOVERY_PATH $CAM_RECOVERY_PATH.tmp " +
         "$CAM_POWER_RECOVERY_PATH $CAM_POWER_RECOVERY_PATH.tmp"

@@ -248,6 +248,9 @@ a computer with an authorized ADB connection to the head unit, run:
 adb shell touch /data/local/tmp/.strike_pin_reset
 ```
 
+DiLink 5 units such as the Shark 6 keep Strike's files elsewhere; the lock screen
+shows the right command for the unit.
+
 Reopen or refresh Strike, then set a new PIN under **Settings → Security**.
 This clears the PIN and failed-attempt lockout. Recordings and other settings
 are kept.
