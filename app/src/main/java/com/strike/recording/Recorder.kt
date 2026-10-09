@@ -210,7 +210,7 @@ class Recorder(
                 }
                 var open = current
                 if (open == null && gated && (ring?.count ?: 0) > 0) {
-                    open = openClip(format, null, preRoll = true)
+                    open = openClip(format, null, clipLengthMs, preRoll = true)
                     if (open == null) {
                         if (!waitingForStorage) break
                         if (sample != null) ring?.add(sample)
@@ -222,13 +222,13 @@ class Recorder(
                 if (sample == null) {
                     if (open != null) {
                         drainAudio(open, audioFromUs)
-                        if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
+                        if (running && clipIsDue(open, clipLengthMs)) encoder.splitAtNextKeyFrame()
                     }
                     continue
                 }
                 if (open == null) {
                     val sound = if (options.audio) audio?.takeForClip(sample.timeUs, AUDIO_WAIT_MS) else null
-                    open = openClip(format, sound, preRoll = gated)
+                    open = openClip(format, sound, clipLengthMs, preRoll = gated)
                     if (open == null) {
                         if (!waitingForStorage) break
                         ring?.add(sample)
@@ -250,7 +250,7 @@ class Recorder(
                     } else null
                     if (rotate || canJoinAudio && sound != null) {
                         val done = open
-                        open = openClip(format, sound)
+                        open = openClip(format, sound, clipLengthMs)
                         if (open == null) {
                             if (!waitingForStorage) break
                             current = null
@@ -269,7 +269,15 @@ class Recorder(
                 }
                 drainAudio(open, audioFromUs)
                 open.write(sample)
-                if (running && elapsed(open) >= clipLengthMs) encoder.splitAtNextKeyFrame()
+                if (open.writeFailure != null) {
+                    current = null
+                    clip = null
+                    encoder.rotation.complete()
+                    finish(open)
+                    encoder.requestKeyFrame()
+                    continue
+                }
+                if (running && clipIsDue(open, clipLengthMs)) encoder.splitAtNextKeyFrame()
             }
         } finally {
             current?.let { finish(it) }
@@ -290,9 +298,14 @@ class Recorder(
     }
 
     // Tracks cannot be added after muxer start; audio changes apply at a clip boundary.
-    private fun openClip(format: MediaFormat, sound: AudioStart?, preRoll: Boolean = false): ClipWriter? {
+    private fun openClip(
+        format: MediaFormat,
+        sound: AudioStart?,
+        clipLengthMs: Long,
+        preRoll: Boolean = false
+    ): ClipWriter? {
         val writer = createWriter(dir)
-        if (!writer.open(mode, format, sound)) {
+        if (!writer.open(mode, format, sound, clipLengthMs)) {
             val storageFailure = writer.outputFailure
             if (storageFailure != null && !writer.releaseFailed) {
                 storageRetryAtMs = monotonicMs() + STORAGE_RETRY_MS
@@ -364,8 +377,11 @@ class Recorder(
 
     private fun elapsed(writer: ClipWriter): Long = System.currentTimeMillis() - writer.startedAtMs
 
-    // Hand the clip to the closer and wait for a slot rather than closing it here; closing copies
-    // the whole file, and doing that on the writer thread stalls live frames.
+    private fun clipIsDue(writer: ClipWriter, clipLengthMs: Long): Boolean =
+        elapsed(writer) >= clipLengthMs || writer.isNearlyFull
+
+    // Hand the clip to the closer and wait for a slot rather than closing it here; closing waits
+    // for storage, and doing that on the writer thread stalls live frames.
     private fun finish(writer: ClipWriter) {
         try {
             toClose.put(writer)
@@ -374,8 +390,8 @@ class Recorder(
         }
     }
 
-    // Stop and rename only; the clip is listed and kept the moment this returns. The index move
-    // that makes it start quickly in the car runs on its own thread so it never delays rotation.
+    // The clip is listed and kept the moment this returns. A muxer clip's index move runs on its
+    // own thread so it never delays rotation.
     private fun closeFinished() {
         try {
             while (true) {
@@ -387,7 +403,7 @@ class Recorder(
                         running = false
                     }
                     if (finished != null) {
-                        toIndex.offer(finished)
+                        if (writer.needsIndexMove) toIndex.offer(finished)
                         onClipFinished()
                     }
                     continue

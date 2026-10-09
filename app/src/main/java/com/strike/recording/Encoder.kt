@@ -248,7 +248,9 @@ class Encoder(
             while (running) {
                 val index = codec.dequeueOutputBuffer(info, DEQUEUE_TIMEOUT_US)
                 if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    format = codec.outputFormat
+                    val changed = codec.outputFormat
+                    format = changed
+                    DaemonLog.d(TAG, "codec header ${headerHex(changed, "csd-0")} ${headerHex(changed, "csd-1")}")
                     continue
                 }
                 if (index < 0) continue
@@ -356,6 +358,9 @@ internal fun avcLevelFor(width: Int, height: Int): Int {
 internal fun encoderStalled(startedAtMs: Long, lastOutputAtMs: Long, nowMs: Long): Boolean =
     if (lastOutputAtMs == 0L) nowMs - startedAtMs >= STARTUP_WAIT_MS
     else nowMs - lastOutputAtMs >= OUTPUT_WAIT_MS
+
+private fun headerHex(format: MediaFormat, key: String): String =
+    headerOf(format, key)?.joinToString("") { "%02x".format(it.toInt() and 0xFF) } ?: "—"
 
 private fun codecFailure(error: IllegalStateException): String =
     if (error is MediaCodec.CodecException) {

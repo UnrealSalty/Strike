@@ -1,7 +1,6 @@
 package com.strike.recording
 
 import android.media.MediaFormat
-import android.media.MediaMuxer
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -177,7 +176,7 @@ class RecorderStorageTest {
 
     private fun recorder(mode: RecordingMode) = Recorder(card, mode, null,
         createWriter = { root ->
-            ClipWriter(root) { dir, name, mayUseInternal ->
+            ClipWriter(root) { dir, name, mayUseInternal, open ->
                 openClipOutput(dir, name, mayUseInternal, internal, recover = { false }) { file ->
                     opens++
                     destinations.add(file.parentFile!!)
@@ -186,8 +185,8 @@ class RecorderStorageTest {
                     if (file.parentFile == card && !cardReady || file.parentFile == internal && !internalReady) {
                         throw IOException("open failed: EIO (I/O error)")
                     }
-                    MediaMuxer(file.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-                }
+                    open(file)
+                }.first
             }.also { writers.add(it) }
         }, monotonicMs = { now }) {}
 

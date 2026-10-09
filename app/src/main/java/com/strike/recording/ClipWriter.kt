@@ -8,10 +8,8 @@ import com.strike.daemon.AudioStart
 import com.strike.daemon.DaemonLog
 import java.io.File
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-import java.nio.file.attribute.BasicFileAttributes
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -19,19 +17,23 @@ import java.util.Locale
 private const val TAG = "Clip"
 private const val WRITING = ".tmp"
 private const val BROKEN = ".broken"
-private const val FAST = ".fast"
+internal const val FAST = ".fast"
 private const val SWEEP_AGE_MS = 5 * 60_000L
 
-// Keep .tmp until the muxer closes successfully; stores only list finalized clips.
+// Covers the event pre-roll and the wait for the keyframe that ends a clip.
+private const val CLIP_SLACK_MS = 30_000L
+private val LONGEST_CLIP_MS =
+    RecordingSettings.choices.getValue(RecordingSettings.CLIP_LENGTH_MINUTES).options.maxOf { it.toLong() } * 60_000L
+
+// Keep .tmp until the clip closes successfully; stores only list finalized clips.
 class ClipWriter(
     private val dir: File,
-    private val output: (File, String, Boolean) -> Pair<File, MediaMuxer> = { root, name, internal ->
-        openClipOutput(root, name, internal) {
-            MediaMuxer(it.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-        }
+    private val output: (File, String, Boolean, (File) -> Unit) -> File = { root, name, internal, open ->
+        openClipOutput(root, name, internal, open = open).first
     }
 ) {
 
+    private var mp4: Mp4File? = null
     private var muxer: MediaMuxer? = null
     private var track = -1
     private var audioTrack = -1
@@ -39,6 +41,7 @@ class ClipWriter(
     private var out = dir
     private var videoSamples = 0L
     private var audioSamples = 0L
+    private var droppedSamples = 0L
 
     internal var releaseFailed = false
         private set
@@ -46,7 +49,17 @@ class ClipWriter(
     internal var outputFailure: IOException? = null
         private set
 
+    /** Writing stopped mid-clip; the clip keeps what its last index checkpoint names. */
+    internal var writeFailure: IOException? = null
+        private set
+
+    /** Written by Android's muxer, which leaves the index at the end. */
+    internal var needsIndexMove = false
+        private set
+
     internal val directory: File get() = out
+
+    internal val isNearlyFull: Boolean get() = mp4?.isNearlyFull == true
 
     val hasAudio: Boolean get() = audioTrack >= 0
 
@@ -56,30 +69,64 @@ class ClipWriter(
     var startedAtMs = 0L
         private set
 
-    fun open(mode: RecordingMode, format: MediaFormat, audio: AudioStart? = null): Boolean {
+    fun open(
+        mode: RecordingMode,
+        format: MediaFormat,
+        audio: AudioStart? = null,
+        clipLengthMs: Long = LONGEST_CLIP_MS
+    ): Boolean {
         val clip = clipName(mode, System.currentTimeMillis())
         outputFailure = null
-        var fresh: MediaMuxer? = null
+        writeFailure = null
+        val own = try {
+            videoTrackOf(format).also { if (audio != null) aacEntry(audio.config) }
+        } catch (e: UnreadableCodecHeader) {
+            DaemonLog.w(TAG, "${e.message}; clip $clip goes through Android's muxer")
+            null
+        }
+        var freshMuxer: MediaMuxer? = null
+        var freshFile: Mp4File? = null
         return try {
-            val (file, opened) = output(
-                dir, clip + WRITING, mode == RecordingMode.DRIVE || mode == RecordingMode.MANUAL
-            )
+            val file = output(dir, clip + WRITING, mode == RecordingMode.DRIVE || mode == RecordingMode.MANUAL) {
+                if (own == null) {
+                    freshMuxer = MediaMuxer(it.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                } else {
+                    val handle = RandomAccessFile(it, "rw")
+                    freshFile = try {
+                        Mp4File(handle, own, audio?.config, minOf(clipLengthMs, LONGEST_CLIP_MS) + CLIP_SLACK_MS)
+                    } catch (e: IOException) {
+                        handle.close()
+                        throw e
+                    }
+                }
+            }
             out = file.parentFile!!
-            fresh = opened
-            track = fresh.addTrack(format)
-            audioTrack = if (audio == null) -1 else fresh.addTrack(aacFormat(audio.config))
-            fresh.start()
-            muxer = fresh
+            val opened = freshMuxer
+            if (opened != null) {
+                track = opened.addTrack(format)
+                audioTrack = if (audio == null) -1 else opened.addTrack(aacFormat(audio.config))
+                opened.start()
+            } else {
+                track = 0
+                audioTrack = if (audio == null) -1 else 1
+            }
+            muxer = opened
+            mp4 = freshFile
+            needsIndexMove = opened != null
             writing = file
             name = clip
             startedAtMs = System.currentTimeMillis()
             if (audio != null) writeAudio(audio.first)
             true
         } catch (e: Exception) {
-            if (fresh == null && e is IOException) outputFailure = e
+            val openedMuxer = freshMuxer
+            val openedFile = freshFile
+            if (openedMuxer == null && openedFile == null && e is IOException) outputFailure = e
             else DaemonLog.e(TAG, "cannot start a clip on this volume: ${e.message}")
-            if (fresh != null) release(fresh, clip)
+            if (openedMuxer != null) release(openedMuxer, clip)
+            if (openedFile != null) abandon(openedFile, clip)
             muxer = null
+            mp4 = null
             writing = null
             name = null
             track = -1
@@ -96,6 +143,28 @@ class ClipWriter(
     }
 
     private fun writeTo(which: Int, sample: Sample) {
+        val own = mp4
+        if (own != null) {
+            if (writeFailure != null) return
+            val written = try {
+                if (which == track) {
+                    own.writeVideo(sample.bytes, sample.timeUs, sample.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0)
+                } else {
+                    own.writeAudio(sample.bytes, sample.timeUs)
+                }
+            } catch (e: IOException) {
+                writeFailure = e
+                DaemonLog.e(TAG, "clip $name stopped writing after $videoSamples video samples: ${e.message}")
+                return
+            }
+            if (!written && droppedSamples++ == 0L) {
+                DaemonLog.w(TAG, "clip $name has no index room left; dropping samples until it ends")
+            }
+            if (written) {
+                if (which == track) videoSamples++ else audioSamples++
+            }
+            return
+        }
         val open = muxer ?: return
         val info = MediaCodec.BufferInfo()
         info.set(0, sample.bytes.size, sample.timeUs, sample.flags)
@@ -103,9 +172,11 @@ class ClipWriter(
         if (which == track) videoSamples++ else audioSamples++
     }
 
-    // Only a successful stop writes the index a playable clip needs. The caller moves it to the
-    // front, off the muxing thread, because that copies the whole file.
+    // A muxer clip gets its index only from a successful stop, and the caller moves that index to
+    // the front off this thread because it copies the whole file.
     fun close(): File? {
+        val own = mp4
+        if (own != null) return closeOwn(own)
         val open = muxer ?: return null
         val file = writing
         muxer = null
@@ -129,6 +200,42 @@ class ClipWriter(
             file.renameTo(File(out, clip + BROKEN))
             return null
         }
+        return publish(file, clip)
+    }
+
+    // A clip that cannot be finished stays .tmp, so the next start publishes its last checkpoint.
+    private fun closeOwn(own: Mp4File): File? {
+        val file = writing
+        mp4 = null
+        writing = null
+        val clip = name
+        name = null
+        track = -1
+        audioTrack = -1
+        val finished = try {
+            own.finish()
+        } catch (e: IOException) {
+            DaemonLog.e(TAG, "clip $clip could not be finished ($videoSamples video, $audioSamples audio samples, " +
+                "${out.usableSpace / MB} MB free): ${e.message}; keeping what it saved")
+            return null
+        }
+        if (file == null || clip == null) return null
+        if (!finished) {
+            file.renameTo(File(out, clip + BROKEN))
+            return null
+        }
+        return publish(file, clip)
+    }
+
+    private fun abandon(file: Mp4File, clip: String) {
+        try {
+            file.abandon()
+        } catch (e: IOException) {
+            DaemonLog.w(TAG, "cannot close clip $clip: ${e.message}")
+        }
+    }
+
+    private fun publish(file: File, clip: String): File? {
         val finished = File(out, clip)
         val published = try {
             withClipFileLock(finished) { file.renameTo(finished) }
@@ -153,57 +260,6 @@ class ClipWriter(
         }
     }
 
-}
-
-// The head unit's WebView reads the index out of the first bytes it is given.
-fun indexUpFront(finished: File) {
-    val scratch = File(finished.parentFile, finished.name + FAST)
-    try {
-        val original = Files.readAttributes(finished.toPath(), BasicFileAttributes::class.java)
-        if (original.fileKey() != null && moovToFront(finished, scratch)) {
-            replaceIndexedClip(scratch, finished, original)
-            return
-        }
-        if (finished.exists()) {
-            DaemonLog.w(TAG, "clip ${finished.name} keeps its index at the end, the player may not start it")
-        }
-    } catch (e: IOException) {
-        if (finished.exists()) DaemonLog.w(TAG, "cannot move the index for ${finished.name}: ${e.message}")
-    } finally {
-        scratch.delete()
-    }
-}
-
-internal fun replaceIndexedClip(
-    scratch: File, finished: File, original: BasicFileAttributes
-): Boolean = withClipFileLock(finished) {
-    val current = try {
-        Files.readAttributes(finished.toPath(), BasicFileAttributes::class.java)
-    } catch (e: java.nio.file.NoSuchFileException) {
-        return@withClipFileLock false
-    }
-    if (original.fileKey() == null || original.fileKey() != current.fileKey() ||
-        original.size() != current.size() || original.lastModifiedTime() != current.lastModifiedTime()
-    ) return@withClipFileLock false
-    if (!swap(scratch, finished)) throw IOException("cannot replace the clip index")
-    true
-}
-
-// rename(2) replaces the clip in one step either way, so no reader ever sees a missing file.
-private fun swap(scratch: File, finished: File): Boolean {
-    if (!moved(scratch, finished) && !scratch.renameTo(finished)) return false
-    finished.setReadable(true, false)
-    return true
-}
-
-private fun moved(scratch: File, finished: File): Boolean = try {
-    Files.move(
-        scratch.toPath(), finished.toPath(),
-        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING
-    )
-    true
-} catch (e: IOException) {
-    false
 }
 
 internal fun ensureDir(dir: File): Boolean {
@@ -242,16 +298,32 @@ internal fun clipName(mode: RecordingMode, atMs: Long): String {
     return "${mode.name.lowercase(Locale.US)}_$stamp.mp4"
 }
 
-// An unfinished MP4 may lack the index required for playback.
+// A clip cut off mid-write is published if an index checkpoint reached it, and dropped if none did.
 fun sweepUnfinished(dir: File, nowMs: Long) {
     val files = dir.listFiles() ?: return
     var swept = 0
+    var recovered = 0
     for (file in files) {
         val leftover = file.name.endsWith(WRITING) || file.name.endsWith(BROKEN) ||
             file.name.endsWith(FAST)
         if (!leftover || nowMs - file.lastModified() <= SWEEP_AGE_MS) continue
-        if (file.name.endsWith(WRITING) && !lacksClipIndex(file)) continue
+        if (file.name.endsWith(WRITING) && !lacksClipIndex(file)) {
+            if (sealUnfinished(file) && publishRecovered(file)) recovered++
+            continue
+        }
         if (file.delete()) swept++
     }
     if (swept > 0) DaemonLog.w(TAG, "$swept clip(s) were cut off mid-write and could not be played")
+    if (recovered > 0) DaemonLog.w(TAG, "$recovered clip(s) were cut off mid-write and kept up to their last save")
+}
+
+private fun publishRecovered(file: File): Boolean {
+    val finished = File(file.parentFile, file.name.removeSuffix(WRITING))
+    return try {
+        withClipFileLock(finished) { !finished.exists() && file.renameTo(finished) }.also {
+            if (it) finished.setReadable(true, false)
+        }
+    } catch (e: IOException) {
+        false
+    }
 }

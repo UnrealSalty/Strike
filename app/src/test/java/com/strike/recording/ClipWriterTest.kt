@@ -78,6 +78,31 @@ class ClipWriterTest {
     }
 
     @Test
+    fun anUnreadableCodecHeaderStillRecordsThroughAndroidsMuxer() {
+        val writer = ClipWriter(folder.root)
+        assertTrue(writer.open(RecordingMode.DRIVE, MediaFormat()))
+        assertTrue(writer.needsIndexMove)
+    }
+
+    @Test
+    fun sweepPublishesAClipCutOffAfterACheckpoint() {
+        val now = System.currentTimeMillis()
+        val cutOff = File(folder.root, "drive_20260906_141233.mp4.tmp")
+        val written = Mp4File(
+            java.io.RandomAccessFile(cutOff, "rw"), avcTrack(320, 240, AVC_SPS, AVC_PPS), null, 60_000L
+        )
+        for (i in 0..250) written.writeVideo(frame(i, i % 15 == 0), i * CHECKPOINT_US / 240, i % 15 == 0)
+        written.abandon()
+        cutOff.setLastModified(now - 10 * MINUTE_MS)
+
+        sweepUnfinished(folder.root, now)
+
+        val published = File(folder.root, "drive_20260906_141233.mp4")
+        assertFalse(cutOff.exists())
+        assertEquals(241, tracks(published.readBytes()).single().sizes.size)
+    }
+
+    @Test
     fun sweepSparesTheClipTheDaemonIsWritingRightNow() {
         val now = System.currentTimeMillis()
         val inFlight = write("drive_20260906_141233.mp4.tmp", now - MINUTE_MS)

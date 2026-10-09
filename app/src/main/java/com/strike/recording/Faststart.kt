@@ -1,10 +1,15 @@
 package com.strike.recording
 
+import com.strike.daemon.DaemonLog
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.io.RandomAccessFile
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 
 private const val HEADER_BYTES = 8
 private const val LARGE_HEADER_BYTES = 16
@@ -18,6 +23,57 @@ private const val INDEX_MAX_BYTES = 64L * 1024 * 1024
 private val CONTAINERS = setOf("trak", "mdia", "minf", "stbl")
 
 private class Box(val type: String, val at: Long, val bytes: Long, val headerBytes: Long)
+
+// The head unit's WebView reads the index out of the first bytes it is given.
+fun indexUpFront(finished: File) {
+    val scratch = File(finished.parentFile, finished.name + FAST)
+    try {
+        val original = Files.readAttributes(finished.toPath(), BasicFileAttributes::class.java)
+        if (original.fileKey() != null && moovToFront(finished, scratch)) {
+            replaceIndexedClip(scratch, finished, original)
+            return
+        }
+        if (finished.exists()) {
+            DaemonLog.w("Clip", "clip ${finished.name} keeps its index at the end, the player may not start it")
+        }
+    } catch (e: IOException) {
+        if (finished.exists()) DaemonLog.w("Clip", "cannot move the index for ${finished.name}: ${e.message}")
+    } finally {
+        scratch.delete()
+    }
+}
+
+internal fun replaceIndexedClip(
+    scratch: File, finished: File, original: BasicFileAttributes
+): Boolean = withClipFileLock(finished) {
+    val current = try {
+        Files.readAttributes(finished.toPath(), BasicFileAttributes::class.java)
+    } catch (e: NoSuchFileException) {
+        return@withClipFileLock false
+    }
+    if (original.fileKey() == null || original.fileKey() != current.fileKey() ||
+        original.size() != current.size() || original.lastModifiedTime() != current.lastModifiedTime()
+    ) return@withClipFileLock false
+    if (!swap(scratch, finished)) throw IOException("cannot replace the clip index")
+    true
+}
+
+// rename(2) replaces the clip in one step either way, so no reader ever sees a missing file.
+private fun swap(scratch: File, finished: File): Boolean {
+    if (!moved(scratch, finished) && !scratch.renameTo(finished)) return false
+    finished.setReadable(true, false)
+    return true
+}
+
+private fun moved(scratch: File, finished: File): Boolean = try {
+    Files.move(
+        scratch.toPath(), finished.toPath(),
+        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING
+    )
+    true
+} catch (e: IOException) {
+    false
+}
 
 /**
  * Copies [source] to [target] with the moov index ahead of the media data. MediaMuxer leaves the
@@ -78,6 +134,7 @@ private fun topLevel(source: RandomAccessFile, totalBytes: Long): List<Box>? {
             bytes = readUInt64(header, HEADER_BYTES)
             headerBytes = LARGE_HEADER_BYTES.toLong()
         }
+        if (bytes == 0L) bytes = totalBytes - at
         if (bytes < headerBytes || bytes > totalBytes - at) return null
         boxes.add(Box(typeOf(header, 4), at, bytes, headerBytes))
         at += bytes
