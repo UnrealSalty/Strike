@@ -84,6 +84,8 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
     private var shader: StripShader? = null
     private var thread: Thread? = null
     private var stampedAtNs = 0L
+    private var capturedAtNs = 0L
+    private val timing = FrameTiming()
 
     // The texture samples this buffer until the next one is bound, so the
     // frame it came from cannot be closed before then.
@@ -247,6 +249,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
     }
 
     private fun announce() {
+        timing.arrived()
         synchronized(arrived) {
             pending = true
             arrived.notifyAll()
@@ -268,7 +271,9 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
             if (bind()) {
                 frameAtMs = System.currentTimeMillis()
                 frames++
-                paint(stamp())
+                val stampNs = stamp()
+                paint(stampNs)
+                timing.drawn(capturedAtNs, stampNs, System.nanoTime() - stampNs)
             }
         }
     }
@@ -289,6 +294,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int) {
         }
         held = fresh
         heldBuffer = buffer
+        capturedAtNs = fresh.timestamp
         return true
     }
 

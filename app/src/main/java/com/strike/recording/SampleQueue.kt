@@ -38,6 +38,8 @@ internal class SampleQueue(capacity: Int) {
 
     fun isNotEmpty(): Boolean = held.isNotEmpty()
 
+    val size: Int get() = held.size
+
     @Synchronized
     fun clear() {
         held.clear()

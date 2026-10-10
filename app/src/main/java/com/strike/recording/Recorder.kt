@@ -54,6 +54,7 @@ class Recorder(
 ) {
 
     private val samples = SampleQueue(QUEUED_SAMPLES)
+    private val timing = RecordingTiming(QUEUED_SAMPLES)
 
     // Surveillance encodes the whole time it is armed; only an event opens a clip.
     private val gated = mode == RecordingMode.EVENT
@@ -268,7 +269,9 @@ class Recorder(
                     }
                 }
                 drainAudio(open, audioFromUs)
+                val writeStartNs = System.nanoTime()
                 open.write(sample)
+                timing.wrote(System.nanoTime() - writeStartNs)
                 if (open.writeFailure != null) {
                     current = null
                     clip = null
@@ -354,6 +357,7 @@ class Recorder(
     private fun enqueue(sample: Sample) {
         if (!running) return
         val admission = samples.offer(sample)
+        timing.encoded(sample.timeUs, samples.size)
         if (admission == SampleAdmission.ACCEPTED) return
         if (admission == SampleAdmission.REQUEST_KEY_FRAME) encoder?.requestKeyFrame()
         val dropped = samples.dropped
