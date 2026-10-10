@@ -20,8 +20,8 @@ internal class Spread {
         if (ns > worstNs) worstNs = ns
     }
 
-    fun describe(): String =
-        if (count == 0) "—" else "avg ${millis(totalNs / count)} worst ${millis(worstNs)} ms"
+    fun describe(unit: String = "ms", show: (Long) -> String = ::millis): String =
+        if (count == 0) "—" else "avg ${show(totalNs / count)} worst ${show(worstNs)} $unit"
 
     fun reset() {
         count = 0
@@ -35,7 +35,7 @@ internal fun millis(ns: Long): String = String.format(Locale.US, "%.1f", ns / 1_
 // The reader thread calls [arrived]; everything else runs on the bus thread.
 internal class FrameTiming(
     private val nowNs: () -> Long = System::nanoTime,
-    private val gpuBusyPercent: () -> Int? = ::readGpuBusy,
+    private val gpuBusyPercent: () -> Int? = GpuBusy()::read,
     private val report: (String) -> Unit = { DaemonLog.d("FrameBus", it) }
 ) {
     private val arrivals = AtomicLong()
@@ -72,7 +72,8 @@ internal class FrameTiming(
         val unordered = if (unorderedStamps > 0) ", $unorderedStamps camera stamps out of order" else ""
         report(
             "${(now - reportedAtNs) / 1_000_000_000L} s: $drawn frames drawn, $dropped dropped, " +
-                "camera gap ${cameraGaps.describe()}, our clock gap ${clockGaps.describe()}, " +
+                "camera stamp step ${cameraGaps.describe("raw", Long::toString)}, " +
+                "our clock gap ${clockGaps.describe()}, " +
                 "draw ${draws.describe()}, GPU $gpu$unordered"
         )
         reportedAtNs = now
@@ -84,8 +85,14 @@ internal class FrameTiming(
     }
 }
 
-private fun readGpuBusy(): Int? = try {
-    File(GPU_BUSY_PATH).readText().trim().takeWhile { it.isDigit() }.toIntOrNull()
-} catch (e: IOException) {
-    null
+private class GpuBusy {
+    private var hasLoggedFailure = false
+
+    fun read(): Int? = try {
+        File(GPU_BUSY_PATH).readText().trim().takeWhile { it.isDigit() }.toIntOrNull()
+    } catch (e: IOException) {
+        if (!hasLoggedFailure) DaemonLog.d("FrameBus", "GPU load unreadable: ${e.message}")
+        hasLoggedFailure = true
+        null
+    }
 }
