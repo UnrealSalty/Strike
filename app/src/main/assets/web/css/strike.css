@@ -31,6 +31,36 @@ body {
     flex-direction: column;
 }
 
+::-webkit-scrollbar {
+    width: var(--scrollbar);
+    height: var(--scrollbar);
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--line);
+    border: 2px solid transparent;
+    border-radius: var(--radius);
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+    background-color: var(--text-dim);
+}
+
+/* Newer Chrome drops the -webkit- scrollbar styling once scrollbar-color is set, so only Firefox gets it. */
+@supports (-moz-appearance: none) {
+    html {
+        scrollbar-width: thin;
+        scrollbar-color: var(--line) transparent;
+    }
+}
+
 .topbar {
     display: flex;
     align-items: center;
@@ -1513,10 +1543,6 @@ main {
     border-radius: var(--radius);
     -webkit-overflow-scrolling: touch;
 }
-
-.log::-webkit-scrollbar { width: 8px; }
-.log::-webkit-scrollbar-track { background: transparent; }
-.log::-webkit-scrollbar-thumb { background: var(--line); border-radius: var(--radius); }
 
 .log__line {
     margin: 0;
