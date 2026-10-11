@@ -54,6 +54,10 @@ private val QUALITIES = mapOf(
     "premium" to "Premium",
     "max" to "Maximum"
 )
+private val RESOLUTIONS = mapOf(
+    "full" to "Full",
+    "reduced" to "Reduced"
+)
 private val PLACES = mapOf(
     "internal" to "Internal storage",
     "sd" to "SD card",
@@ -329,6 +333,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         fact(facts, "Clip length", setting(RecordingSettings.CLIP_LENGTH_MINUTES) + " min")
         fact(facts, "Quality", QUALITIES[setting(RecordingSettings.QUALITY)] ?: DASH)
         fact(facts, "Frame rate", setting(RecordingSettings.FRAME_RATE_FPS) + " fps")
+        fact(facts, "Resolution", RESOLUTIONS[setting(RecordingSettings.RESOLUTION)] ?: DASH)
         fact(facts, "Writing to", place())
         fact(facts, "Clips this run", status?.optInt("clips")?.toString() ?: DASH)
         card.put("facts", facts)

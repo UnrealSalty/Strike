@@ -65,6 +65,14 @@ fun frameOf(view: CameraView, stripWidth: Int, stripHeight: Int): Frame {
 private const val LIVE_MAX_WIDTH = 1280
 private const val LIVE_MAX_HEIGHT = 960
 private const val MACROBLOCK = 16
+private const val REDUCED_SCALE = 0.75f
+
+/** Scaled from the strip, so every car's camera keeps its own shape. */
+fun recordingFrameOf(stripWidth: Int, stripHeight: Int, isReduced: Boolean): Frame {
+    val full = frameOf(CameraView.ALL, stripWidth, stripHeight)
+    if (!isReduced) return full
+    return Frame(blocks(full.width * REDUCED_SCALE), blocks(full.height * REDUCED_SCALE))
+}
 
 // Scale Live separately to leave encoder capacity for full-resolution clips.
 fun liveFrameOf(view: CameraView, stripWidth: Int, stripHeight: Int): Frame =

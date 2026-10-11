@@ -9,6 +9,7 @@ object RecordingSettings {
     const val QUALITY = "recording.quality"
     const val CODEC = "recording.codec"
     const val FRAME_RATE_FPS = "recording.frameRateFps"
+    const val RESOLUTION = "recording.resolution"
     const val AUDIO = "recording.audio"
     const val LOCATION = "storage.location"
     const val BUDGET_MB = "storage.budgetMb"
@@ -27,6 +28,7 @@ object RecordingSettings {
         QUALITY to Choice(listOf("economy", "standard", "high", "premium", "max"), "standard"),
         CODEC to Choice(listOf("h264", "h265"), "h264"),
         FRAME_RATE_FPS to Choice(listOf("10", "15", "20", "25", "30"), "15"),
+        RESOLUTION to Choice(listOf("full", "reduced"), "full"),
         LOCATION to Choice(listOf("internal", "sd", "usb"), "internal")
     )
 

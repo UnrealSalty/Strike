@@ -167,7 +167,7 @@ class RecorderAudioTest {
             "writeClips", Encoder::class.java, RecordingOptions::class.java
         ).also { it.isAccessible = true }
         try {
-            method.invoke(recorder, encoder, RecordingOptions(Long.MAX_VALUE, "standard", "h264", 15, false))
+            method.invoke(recorder, encoder, RecordingOptions(Long.MAX_VALUE, "standard", "h264", 15, false, false))
         } catch (e: InvocationTargetException) {
             throw e.targetException
         }

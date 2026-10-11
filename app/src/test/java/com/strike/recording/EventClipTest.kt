@@ -67,7 +67,7 @@ class EventClipTest {
         val writeClips = Recorder::class.java
             .getDeclaredMethod("writeClips", Encoder::class.java, RecordingOptions::class.java)
         writeClips.isAccessible = true
-        val options = RecordingOptions(120_000L, "high", "h264", 30, false)
+        val options = RecordingOptions(120_000L, "high", "h264", 30, false, false)
         writer = Thread { writeClips.invoke(recorder, encoder, options) }.also { it.start() }
     }
 

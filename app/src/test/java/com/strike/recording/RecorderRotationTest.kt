@@ -108,7 +108,7 @@ class RecorderRotationTest {
             "writeClips", Encoder::class.java, RecordingOptions::class.java
         ).also { it.isAccessible = true }
         try {
-            method.invoke(recorder, encoder, RecordingOptions(clipLengthMs, "standard", "h264", 15, false))
+            method.invoke(recorder, encoder, RecordingOptions(clipLengthMs, "standard", "h264", 15, false, false))
             return finished(recorder).size
         } finally {
             set(recorder, "running", false)

@@ -69,6 +69,14 @@ class CameraViewTest {
     }
 
     @Test
+    fun reducedRecordingIsThreeQuartersOfEachCarsOwnMosaic() {
+        assertEquals(listOf(2560, 1920), sizeOf(recordingFrameOf(5120, 960, isReduced = false)))
+        assertEquals(listOf(1920, 1440), sizeOf(recordingFrameOf(5120, 960, isReduced = true)))
+        assertEquals(listOf(1920, 1088), sizeOf(recordingFrameOf(5120, 720, isReduced = true)))
+        assertEquals(listOf(1440, 976), sizeOf(recordingFrameOf(3840, 650, isReduced = true)))
+    }
+
+    @Test
     fun anUnknownAngleFallsBackToTheRoadAhead() {
         assertEquals(CameraView.FRONT, CameraView.of(null))
         assertEquals(CameraView.FRONT, CameraView.of("sideways"))
@@ -102,6 +110,8 @@ class CameraViewTest {
         assertEquals(0, fit.width % 16)
         assertEquals(0, fit.height % 16)
     }
+
+    private fun sizeOf(frame: Frame): List<Int> = listOf(frame.width, frame.height)
 
     private fun only(view: CameraView): Tile {
         val tiles = tilesOf(view)

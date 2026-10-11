@@ -6,7 +6,7 @@ import com.strike.camera.CameraView
 import com.strike.camera.Consumer
 import com.strike.camera.Frame
 import com.strike.camera.FrameBus
-import com.strike.camera.frameOf
+import com.strike.camera.recordingFrameOf
 import com.strike.daemon.AudioIngest
 import com.strike.daemon.AudioStart
 import com.strike.daemon.DaemonLog
@@ -40,7 +40,8 @@ data class RecordingOptions(
     val quality: String,
     val codec: String,
     val frameRateFps: Int,
-    val audio: Boolean
+    val audio: Boolean,
+    val isReduced: Boolean
 )
 
 // The writer thread owns muxing and rotates clips between encoded samples.
@@ -113,7 +114,7 @@ class Recorder(
     fun start(options: RecordingOptions, bus: FrameBus): Boolean {
         if (running) return true
         sweepUnfinished(dir, System.currentTimeMillis())
-        val wanted = frameOf(CameraView.ALL, bus.stripWidth, bus.stripHeight)
+        val wanted = recordingFrameOf(bus.stripWidth, bus.stripHeight, options.isReduced)
         val encoder = Encoder(
             wanted.width,
             wanted.height,

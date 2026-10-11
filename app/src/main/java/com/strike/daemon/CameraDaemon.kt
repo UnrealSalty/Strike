@@ -842,7 +842,8 @@ object CameraDaemon {
         quality = setting(RecordingSettings.QUALITY),
         codec = setting(RecordingSettings.CODEC),
         frameRateFps = frameRateFps(),
-        audio = audio
+        audio = audio,
+        isReduced = setting(RecordingSettings.RESOLUTION) == "reduced"
     )
 
     private fun clipLengthMs(): Long =
