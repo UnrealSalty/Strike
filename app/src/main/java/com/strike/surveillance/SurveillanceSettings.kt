@@ -22,6 +22,7 @@ object SurveillanceSettings {
     const val ARM = "surveillance.arm"
     const val DILINK5_KEEP_ALIVE = "surveillance.diLink5KeepAlive"
     const val PROXIMITY = "surveillance.proximity"
+    const val RESOLUTION = "surveillance.resolution"
     const val SCREEN = "surveillance.screen"
     const val MESSAGE = "surveillance.message"
     const val SCREEN_SECONDS = "surveillance.screenSeconds"
@@ -40,6 +41,7 @@ object SurveillanceSettings {
         MODE to Choice(listOf("smart", "continuous"), "smart"),
         ARM to Choice(listOf("off", "lock"), "off"),
         PROXIMITY to Choice(listOf("1", "2", "3", "4", "5"), "3"),
+        RESOLUTION to Choice(listOf("full", "reduced"), "full"),
         SCREEN_SECONDS to Choice(listOf("5", "10", "20", "30"), "10"),
         LOCATION to Choice(listOf("internal", "sd", "usb"), "internal")
     )

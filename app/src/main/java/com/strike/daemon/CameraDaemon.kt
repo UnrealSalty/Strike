@@ -604,7 +604,7 @@ object CameraDaemon {
                 noVolume("record")
                 return null
             }
-            return Target(dir, RecordingMode.DRIVE, options(clipLengthMs(), audio()))
+            return Target(dir, RecordingMode.DRIVE, options(clipLengthMs(), audio(), setting(RecordingSettings.RESOLUTION)))
         }
         if (sentryMode == SentryMode.OFF) return null
         val dir = eventsDir()
@@ -613,11 +613,11 @@ object CameraDaemon {
             return null
         }
         if (sentryMode == SentryMode.CONTINUOUS) {
-            return Target(dir, RecordingMode.WATCH, options(clipLengthMs(), false))
+            return Target(dir, RecordingMode.WATCH, options(clipLengthMs(), false, parkedResolution()))
         }
         // Armed Smart keeps the encoder up between events; without it there is no pre-roll to flush.
         if (sentry?.isArmed != true) return null
-        return Target(dir, RecordingMode.EVENT, options(EVENT_CLIP_CAP_MS, false))
+        return Target(dir, RecordingMode.EVENT, options(EVENT_CLIP_CAP_MS, false, parkedResolution()))
     }
 
     private fun noVolume(what: String) {
@@ -837,14 +837,17 @@ object CameraDaemon {
 
     private fun budgetMb(key: String, fallback: Int): Int = Config.getInt(key, fallback)
 
-    private fun options(clipLengthMs: Long, audio: Boolean) = RecordingOptions(
+    private fun options(clipLengthMs: Long, audio: Boolean, resolution: String) = RecordingOptions(
         clipLengthMs = clipLengthMs,
         quality = setting(RecordingSettings.QUALITY),
         codec = setting(RecordingSettings.CODEC),
         frameRateFps = frameRateFps(),
         audio = audio,
-        isReduced = setting(RecordingSettings.RESOLUTION) == "reduced"
+        isReduced = resolution == "reduced"
     )
+
+    private fun parkedResolution(): String =
+        Config.getString(SurveillanceSettings.RESOLUTION, SurveillanceSettings.fallback(SurveillanceSettings.RESOLUTION))
 
     private fun clipLengthMs(): Long =
         setting(RecordingSettings.CLIP_LENGTH_MINUTES).toLong() * 60_000L

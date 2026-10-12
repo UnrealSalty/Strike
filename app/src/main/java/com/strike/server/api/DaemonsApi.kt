@@ -373,6 +373,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
             fact(facts, "Proximity", surveillanceSetting(SurveillanceSettings.PROXIMITY) + " of 5")
             fact(facts, "Confirms with", confirmsWith(status))
         }
+        fact(facts, "Resolution", RESOLUTIONS[surveillanceSetting(SurveillanceSettings.RESOLUTION)] ?: DASH)
         fact(
             facts, "Screen message",
             if (Config.getBool(SurveillanceSettings.SCREEN, false)) "On" else "Off"

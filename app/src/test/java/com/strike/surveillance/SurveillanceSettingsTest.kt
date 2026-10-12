@@ -47,6 +47,13 @@ class SurveillanceSettingsTest {
     }
 
     @Test
+    fun parkedResolutionIsFullOrReducedAndStartsFull() {
+        assertTrue(SurveillanceSettings.accepts(SurveillanceSettings.RESOLUTION, "reduced"))
+        assertFalse(SurveillanceSettings.accepts(SurveillanceSettings.RESOLUTION, "half"))
+        assertEquals("full", SurveillanceSettings.fallback(SurveillanceSettings.RESOLUTION))
+    }
+
+    @Test
     fun anEmptyOrOverlongMessageIsRefused() {
         assertTrue(SurveillanceSettings.accepts(SurveillanceSettings.MESSAGE, "Smile."))
         assertFalse(SurveillanceSettings.accepts(SurveillanceSettings.MESSAGE, "   "))
