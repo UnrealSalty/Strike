@@ -91,6 +91,31 @@ class VolumesTest {
     }
 
     @Test
+    fun aCardIsMountedOnlyAfterSittingUnmountedForFifteenSeconds() {
+        val gate = MountGate()
+        val down = "public:8,97 unmounted 7000-8000"
+
+        assertTrue(gate.due(down, listOf("public:8,97"), 0L).isEmpty())
+        assertTrue(gate.due(down, listOf("public:8,97"), 10_000L).isEmpty())
+        assertEquals(listOf("public:8,97"), gate.due(down, listOf("public:8,97"), 15_000L))
+        assertTrue(gate.due(down, listOf("public:8,97"), 20_000L).isEmpty())
+        assertEquals(listOf("public:8,97"), gate.due(down, listOf("public:8,97"), 30_000L))
+    }
+
+    @Test
+    fun aCardSeenMountedOrEjectingStartsItsWaitAgain() {
+        val gate = MountGate()
+        val down = "public:8,97 unmounted 7000-8000"
+
+        gate.due(down, listOf("public:8,97"), 0L)
+        gate.due("public:8,97 mounted 7000-8000", listOf("public:8,97"), 10_000L)
+        assertTrue(gate.due(down, listOf("public:8,97"), 16_000L).isEmpty())
+        gate.due("public:8,97 ejecting 7000-8000", listOf("public:8,97"), 20_000L)
+        assertTrue(gate.due(down, listOf("public:8,97"), 30_000L).isEmpty())
+        assertEquals(listOf("public:8,97"), gate.due(down, listOf("public:8,97"), 45_000L))
+    }
+
+    @Test
     fun cardClipsAreHeldInTheirOwnInternalFolder() {
         assertEquals(
             "/storage/emulated/0/Strike/fallback/clips",

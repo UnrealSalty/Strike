@@ -58,7 +58,9 @@ class Triggers(
     /** The system drops the card when the key goes out. `sm mount` brings it back. */
     private fun remountCards() {
         val listing = shell.read(LIST_VOLUMES) ?: return
-        for (id in allPublicIds(listing)) shell.check("timeout -s KILL 3 sm mount $id")
+        for (id in cardMounts.due(listing, allPublicIds(listing), System.currentTimeMillis())) {
+            shell.check("timeout -s KILL 3 sm mount $id")
+        }
         forgetMounted()
     }
 

@@ -152,11 +152,39 @@ internal fun storageUuid(path: String): String? {
     return uuid
 }
 
+// BYD unmounts cards 5 s after ACC off and then cuts the reader's power.
+// A mount inside that window is left on a reader that loses power under it.
+private const val MOUNT_AFTER_MS = 15_000L
+
+/** Lets a volume be mounted once it has sat unmounted for 15 s, then once per 15 s while it stays down. */
+internal class MountGate {
+    private val downSinceMs = HashMap<String, Long>()
+
+    @Synchronized
+    fun due(listing: String, ids: List<String>, nowMs: Long): List<String> {
+        val due = ArrayList<String>()
+        for (id in ids) {
+            val state = volumeState(listing, id)
+            if (state != "unmounted" && state != "unmountable") {
+                downSinceMs.remove(id)
+                continue
+            }
+            val sinceMs = downSinceMs.getOrPut(id) { nowMs }
+            if (nowMs - sinceMs < MOUNT_AFTER_MS) continue
+            downSinceMs[id] = nowMs
+            due.add(id)
+        }
+        return due
+    }
+}
+
+internal val cardMounts = MountGate()
+
 /** Issues `sm mount`. Does not wait for FUSE; the supervisor cannot stall here. */
 internal fun remount(dir: File) {
     val uuid = storageUuid(dir.path) ?: return
-    val listing = exec("sm", "list-volumes", "all") ?: ""
-    for (id in mountIds(listing, uuid)) exec("sm", "mount", id)
+    val listing = exec("sm", "list-volumes", "all") ?: return
+    for (id in cardMounts.due(listing, mountIds(listing, uuid), System.currentTimeMillis())) exec("sm", "mount", id)
 }
 
 // FUSE may lag behind sm mount; wait until the recording directory can be created.
