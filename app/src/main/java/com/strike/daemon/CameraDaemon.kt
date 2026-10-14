@@ -541,13 +541,13 @@ object CameraDaemon {
         cameraRetryAtMs = SystemClock.elapsedRealtime() + RETRY_AFTER_MS
         if (strip.backend == CameraBackend.LEGACY) AvcHal.warmAndWait()
         if (!alive) return null
-        val fresh = FrameBus(strip.width, strip.height)
+        val fresh = FrameBus(strip.width, strip.height, cameraFps())
         val input = fresh.start()
         if (input == null) {
             if (!fresh.stop()) restart("the camera graphics thread did not stop")
             return null
         }
-        if (!camera.open(strip, frameRateFps(), input, nativeDir)) {
+        if (!camera.open(strip, fresh.cameraFps, input, nativeDir)) {
             if (!fresh.stop()) restart("the camera graphics thread did not stop")
             return null
         }
@@ -616,7 +616,7 @@ object CameraDaemon {
                 noVolume("record")
                 return null
             }
-            return Target(dir, RecordingMode.DRIVE, options(clipLengthMs(), audio(), setting(RecordingSettings.RESOLUTION)))
+            return Target(dir, RecordingMode.DRIVE, driveOptions())
         }
         if (sentryMode == SentryMode.OFF) return null
         val dir = eventsDir()?.let(::writable)
@@ -625,11 +625,11 @@ object CameraDaemon {
             return null
         }
         if (sentryMode == SentryMode.CONTINUOUS) {
-            return Target(dir, RecordingMode.WATCH, options(clipLengthMs(), false, parkedResolution()))
+            return Target(dir, RecordingMode.WATCH, parkedOptions(clipLengthMs()))
         }
         // Armed Smart keeps the encoder up between events; without it there is no pre-roll to flush.
         if (sentry?.isArmed != true) return null
-        return Target(dir, RecordingMode.EVENT, options(EVENT_CLIP_CAP_MS, false, parkedResolution()))
+        return Target(dir, RecordingMode.EVENT, parkedOptions(EVENT_CLIP_CAP_MS))
     }
 
     private fun writable(dir: File): File = if (cards.isDown(dir)) fallbackDir(dir) ?: dir else dir
@@ -776,7 +776,10 @@ object CameraDaemon {
         try {
             val inFlight = recorder?.clip
             val floorBytes = RecordingSettings.BUDGET_HEADROOM_MB * MB +
-                bitrateBps(setting(RecordingSettings.QUALITY), setting(RecordingSettings.CODEC)) / 8L * clipLengthMs() / 1000L
+                maxOf(
+                    bitrateBps(setting(RecordingSettings.QUALITY), setting(RecordingSettings.CODEC)),
+                    bitrateBps(parked(SurveillanceSettings.QUALITY), parked(SurveillanceSettings.CODEC))
+                ) / 8L * clipLengthMs() / 1000L
             val clipsBudgetMb = budgetMb(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB)
             val eventsBudgetMb = budgetMb(SurveillanceSettings.BUDGET_MB, SurveillanceSettings.BUDGET_FALLBACK_MB)
             clipsDir()?.let {
@@ -869,22 +872,34 @@ object CameraDaemon {
 
     private fun budgetMb(key: String, fallback: Int): Int = Config.getInt(key, fallback)
 
-    private fun options(clipLengthMs: Long, audio: Boolean, resolution: String) = RecordingOptions(
-        clipLengthMs = clipLengthMs,
+    private fun driveOptions() = RecordingOptions(
+        clipLengthMs = clipLengthMs(),
         quality = setting(RecordingSettings.QUALITY),
         codec = setting(RecordingSettings.CODEC),
-        frameRateFps = frameRateFps(),
-        audio = audio,
-        isReduced = resolution == "reduced"
+        frameRateFps = setting(RecordingSettings.FRAME_RATE_FPS).toInt(),
+        audio = audio(),
+        isReduced = setting(RecordingSettings.RESOLUTION) == "reduced"
     )
 
-    private fun parkedResolution(): String =
-        Config.getString(SurveillanceSettings.RESOLUTION, SurveillanceSettings.fallback(SurveillanceSettings.RESOLUTION))
+    private fun parkedOptions(clipLengthMs: Long) = RecordingOptions(
+        clipLengthMs = clipLengthMs,
+        quality = parked(SurveillanceSettings.QUALITY),
+        codec = parked(SurveillanceSettings.CODEC),
+        frameRateFps = parked(SurveillanceSettings.FRAME_RATE_FPS).toInt(),
+        audio = false,
+        isReduced = parked(SurveillanceSettings.RESOLUTION) == "reduced"
+    )
+
+    private fun parked(key: String): String = Config.getString(key, SurveillanceSettings.fallback(key))
 
     private fun clipLengthMs(): Long =
         setting(RecordingSettings.CLIP_LENGTH_MINUTES).toLong() * 60_000L
 
-    private fun frameRateFps(): Int = setting(RecordingSettings.FRAME_RATE_FPS).toInt()
+    // One camera feeds both recorders, so it runs at the faster of the two rates.
+    private fun cameraFps(): Int = maxOf(
+        setting(RecordingSettings.FRAME_RATE_FPS).toInt(),
+        parked(SurveillanceSettings.FRAME_RATE_FPS).toInt()
+    )
 
     private fun audio(): Boolean = Config.getBool(RecordingSettings.AUDIO, false)
 

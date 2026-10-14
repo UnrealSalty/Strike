@@ -374,6 +374,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
             fact(facts, "Proximity", surveillanceSetting(SurveillanceSettings.PROXIMITY) + " of 5")
             fact(facts, "Confirms with", confirmsWith(status))
         }
+        fact(facts, "Quality", QUALITIES[surveillanceSetting(SurveillanceSettings.QUALITY)] ?: DASH)
+        fact(facts, "Frame rate", surveillanceSetting(SurveillanceSettings.FRAME_RATE_FPS) + " fps")
         fact(facts, "Resolution", RESOLUTIONS[surveillanceSetting(SurveillanceSettings.RESOLUTION)] ?: DASH)
         fact(
             facts, "Screen message",

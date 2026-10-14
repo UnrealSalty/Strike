@@ -12,5 +12,5 @@ internal fun frameBusForTest(): FrameBus {
             field.set(null, constructor.newInstance())
         }
     }
-    return FrameBus(64, 64)
+    return FrameBus(64, 64, 15)
 }

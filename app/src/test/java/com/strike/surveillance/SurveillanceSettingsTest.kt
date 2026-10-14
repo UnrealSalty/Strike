@@ -54,6 +54,17 @@ class SurveillanceSettingsTest {
     }
 
     @Test
+    fun parkedQualityCodecAndFrameRateOfferWhatDrivingOffers() {
+        assertTrue(SurveillanceSettings.accepts(SurveillanceSettings.QUALITY, "max"))
+        assertTrue(SurveillanceSettings.accepts(SurveillanceSettings.CODEC, "h265"))
+        assertTrue(SurveillanceSettings.accepts(SurveillanceSettings.FRAME_RATE_FPS, "30"))
+        assertFalse(SurveillanceSettings.accepts(SurveillanceSettings.FRAME_RATE_FPS, "60"))
+        assertEquals("standard", SurveillanceSettings.fallback(SurveillanceSettings.QUALITY))
+        assertEquals("h264", SurveillanceSettings.fallback(SurveillanceSettings.CODEC))
+        assertEquals("15", SurveillanceSettings.fallback(SurveillanceSettings.FRAME_RATE_FPS))
+    }
+
+    @Test
     fun anEmptyOrOverlongMessageIsRefused() {
         assertTrue(SurveillanceSettings.accepts(SurveillanceSettings.MESSAGE, "Smile."))
         assertFalse(SurveillanceSettings.accepts(SurveillanceSettings.MESSAGE, "   "))

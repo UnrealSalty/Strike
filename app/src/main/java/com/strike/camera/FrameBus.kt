@@ -64,7 +64,7 @@ private class Retirement(val name: String, val done: CountDownLatch? = null) {
 
 // Owns capture and all EGL work on the bus thread.
 // Other threads enqueue consumer changes; they must not destroy EGL resources.
-class FrameBus(val stripWidth: Int, val stripHeight: Int) {
+class FrameBus(val stripWidth: Int, val stripHeight: Int, val cameraFps: Int) {
 
     private val consumers = CopyOnWriteArrayList<Consumer>()
     private val targets = HashMap<String, EGLSurface>()
