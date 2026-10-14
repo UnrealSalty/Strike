@@ -12,6 +12,15 @@ class RetentionTest {
     val folder = TemporaryFolder()
 
     @Test
+    fun heldClipsNeverTakeMoreThanAFifthOfInternalStorage() {
+        val internalBytes = 64_000L * MB
+
+        assertEquals(12_800, heldBudgetMb(50_000, internalBytes))
+        assertEquals(2_000, heldBudgetMb(2_000, internalBytes))
+        assertEquals(50_000, heldBudgetMb(50_000, 0L))
+    }
+
+    @Test
     fun keepsEverythingWhenUnderBudget() {
         write("drive_20260901_100000.mp4", 100)
         write("drive_20260902_100000.mp4", 100)

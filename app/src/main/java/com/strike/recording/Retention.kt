@@ -47,6 +47,10 @@ class Retention(private val store: Reapable, private val budgetBytes: Long, priv
     }
 }
 
+/** Held clips may take a fifth of internal storage; a volume that reports no size caps nothing. */
+fun heldBudgetMb(budgetMb: Int, volumeTotalBytes: Long): Int =
+    if (volumeTotalBytes <= 0L) budgetMb else minOf(budgetMb.toLong(), volumeTotalBytes / 5 / MB).toInt()
+
 /** A volume that reports no size at all is unreadable, not full; it frees nothing. */
 fun shortBytes(dir: File, floorBytes: Long): Long {
     if (dir.totalSpace <= 0L) return 0L

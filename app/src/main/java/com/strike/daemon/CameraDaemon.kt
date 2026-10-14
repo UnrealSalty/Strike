@@ -39,6 +39,7 @@ import com.strike.recording.Retention
 import com.strike.recording.bitrateBps
 import com.strike.recording.ensureDir
 import com.strike.recording.fallbackDir
+import com.strike.recording.heldBudgetMb
 import com.strike.recording.shortBytes
 import com.strike.recording.remount
 import com.strike.recording.storageUuid
@@ -781,13 +782,15 @@ object CameraDaemon {
             clipsDir()?.let {
                 free(ClipStore(it), it, "clips", clipsBudgetMb, floorBytes, inFlight)
                 fallbackDir(it)?.takeIf(File::isDirectory)?.let { held ->
-                    free(ClipStore(held), held, "clips held on internal storage", clipsBudgetMb, floorBytes, inFlight)
+                    free(ClipStore(held), held, "clips held on internal storage",
+                        heldBudgetMb(clipsBudgetMb, held.totalSpace), floorBytes, inFlight)
                 }
             }
             eventsDir()?.let {
                 free(EventStore(it), it, "events", eventsBudgetMb, floorBytes, inFlight)
                 fallbackDir(it)?.takeIf(File::isDirectory)?.let { held ->
-                    free(EventStore(held), held, "events held on internal storage", eventsBudgetMb, floorBytes, inFlight)
+                    free(EventStore(held), held, "events held on internal storage",
+                        heldBudgetMb(eventsBudgetMb, held.totalSpace), floorBytes, inFlight)
                 }
             }
             val writingTo = listOfNotNull(clipsDir()?.let(::writable), eventsDir()?.let(::writable))
