@@ -41,6 +41,8 @@ class ClipStore(private val root: File) : Reapable {
             false
         }
     }
+
+    fun moveInto(dir: File, nowMs: Long): Int = moveKept(root, dir, kept(), { emptyList() }, nowMs)
 }
 
 fun totalBytes(clips: List<Kept>): Long {

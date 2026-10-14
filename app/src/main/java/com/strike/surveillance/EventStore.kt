@@ -3,6 +3,7 @@ package com.strike.surveillance
 import com.strike.recording.Kept
 import com.strike.recording.Reapable
 import com.strike.recording.keptIn
+import com.strike.recording.moveKept
 import com.strike.recording.readStamp
 import com.strike.recording.withClipFileLock
 import org.json.JSONArray
@@ -100,6 +101,9 @@ class EventStore(internal val root: File) : Reapable {
             false
         }
     }
+
+    fun moveInto(dir: File, nowMs: Long): Int =
+        moveKept(root, dir, kept(), { id -> listOf(stem(id) + ".json", stem(id) + ".jpg") }, nowMs)
 
     // Sidecars written by shell UID 2000 must remain readable by the app.
     fun flag(clip: String, seen: String, score: Float, hero: ByteArray?) {

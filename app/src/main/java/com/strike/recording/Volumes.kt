@@ -173,8 +173,58 @@ internal fun remountUntil(dir: File): Boolean {
     return dir.exists() || (dir.mkdirs() && dir.exists())
 }
 
-private fun exec(vararg command: String): String? = try {
-    val process = ProcessBuilder("timeout", "-s", "KILL", "3", *command).redirectErrorStream(true).start()
+// vold refuses `sm mount` on a volume it still lists as mounted, even when every read fails.
+internal fun remountStuck(dir: File): String? {
+    val uuid = storageUuid(dir.path) ?: return null
+    val listing = exec("sm", "list-volumes", "all") ?: return null
+    val id = volumeIdFor(listing, uuid)
+    if (id == null) {
+        for (each in mountIds(listing, uuid)) exec("sm", "mount", each)
+        return null
+    }
+    val state = volumeState(listing, id)
+    if (state == "mounted") exec("sm", "unmount", id, seconds = 10)
+    exec("sm", "mount", id, seconds = 10)
+    return state
+}
+
+internal fun volumeState(listing: String, id: String): String? {
+    for (line in listing.lineSequence()) {
+        val fields = line.trim().split(Regex("\\s+"))
+        if (fields.size >= 2 && fields[0] == id) return fields[1]
+    }
+    return null
+}
+
+private const val PROBE = "mkdir -p \"\$1\" && echo ok > \"\$1/.probe\" && rm \"\$1/.probe\""
+
+/** True when a tiny write lands or the card is only full, null when the probe itself could not run. */
+internal fun cardAnswers(dir: File): Boolean? = try {
+    val process = ProcessBuilder("timeout", "-s", "KILL", "3", "sh", "-c", PROBE, "probe", dir.path)
+        .redirectErrorStream(true).start()
+    try {
+        val printed = process.inputStream.bufferedReader().use { it.readText() }
+        process.waitFor() == 0 || probeFoundFull(printed)
+    } finally {
+        if (process.isAlive) process.destroyForcibly()
+    }
+} catch (e: java.io.IOException) {
+    null
+} catch (e: InterruptedException) {
+    Thread.currentThread().interrupt()
+    null
+}
+
+internal fun probeFoundFull(printed: String): Boolean = printed.contains("No space left")
+
+/** Where clips meant for a card wait on internal storage until the card answers again. */
+internal fun fallbackDir(card: File): File? {
+    if (storageUuid(card.invariantSeparatorsPath) == null) return null
+    return File("/storage/emulated/0/Strike/fallback", card.name)
+}
+
+private fun exec(vararg command: String, seconds: Int = 3): String? = try {
+    val process = ProcessBuilder("timeout", "-s", "KILL", "$seconds", *command).redirectErrorStream(true).start()
     try {
         val printed = process.inputStream.bufferedReader().use { it.readText() }
         if (process.waitFor() == 0) printed else null

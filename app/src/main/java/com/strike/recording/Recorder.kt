@@ -81,7 +81,8 @@ class Recorder(
     private var muxerReleaseFailed = false
 
     @Volatile
-    private var waitingForStorage = false
+    var waitingForStorage = false
+        private set
     private var storageRetryAtMs = 0L
 
     @Volatile

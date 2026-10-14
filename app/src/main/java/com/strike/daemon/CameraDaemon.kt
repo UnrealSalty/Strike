@@ -38,6 +38,7 @@ import com.strike.recording.RecordingSettings
 import com.strike.recording.Retention
 import com.strike.recording.bitrateBps
 import com.strike.recording.ensureDir
+import com.strike.recording.fallbackDir
 import com.strike.recording.shortBytes
 import com.strike.recording.remount
 import com.strike.recording.storageUuid
@@ -153,6 +154,8 @@ object CameraDaemon {
     private val reaping = AtomicBoolean(false)
     private var cardFull = false
     private var clips = 0
+    @Volatile private var reviveWanted = false
+    private val cards = CardWatch({ listOfNotNull(clipsDir(), eventsDir()) }, { reviveWanted = true }, ::moveBack)
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -192,6 +195,7 @@ object CameraDaemon {
         Thread({ relay.serveForever() }, "packets").also { it.isDaemon = true }.start()
         Thread({ audio.serveForever() }, "audio").also { it.isDaemon = true }.start()
         Thread({ watchVehicle() }, "vehicle").also { it.isDaemon = true }.start()
+        Thread({ cards.watch { alive } }, "card-watch").also { it.isDaemon = true }.start()
         Looper.loop()
         lock.release()
     }
@@ -257,6 +261,8 @@ object CameraDaemon {
         payload.put("clip", held?.clip ?: JSONObject.NULL)
         payload.put("clipMs", if (held?.clip == null) 0 else System.currentTimeMillis() - held.mediaStartedAtMs)
         payload.put("clips", clips)
+        payload.put("clipsHeld", clipsDir()?.let { cards.isDown(it) } == true)
+        payload.put("eventsHeld", eventsDir()?.let { cards.isDown(it) } == true)
         payload.put("writing", target?.mode?.name?.lowercase() ?: JSONObject.NULL)
         payload.put("sentry", sentryMode.name.lowercase())
         payload.put("sentryReason", sentryReason)
@@ -351,6 +357,11 @@ object CameraDaemon {
             if (sentryMode != SentryMode.OFF && ParkedRails.tick()) {
                 if (!screen.isShowing) screen.sleepPanel()
             }
+            if (reviveWanted) {
+                reviveWanted = false
+                if (ParkedRails.revive() && !screen.isShowing) screen.sleepPanel()
+            }
+            if (recorder?.waitingForStorage == true && target?.dir?.let { storageUuid(it.path) } != null) cards.nudge()
             if (bus != null && cameraStartup?.choice?.backend == CameraBackend.LEGACY) {
                 AvcHal.keepAlive(if (sentryMode != SentryMode.OFF) 10_000L else 60_000L)
             }
@@ -599,7 +610,7 @@ object CameraDaemon {
 
     private fun targetNow(): Target? {
         if (wanted) {
-            val dir = clipsDir()
+            val dir = clipsDir()?.let(::writable)
             if (dir == null) {
                 noVolume("record")
                 return null
@@ -607,7 +618,7 @@ object CameraDaemon {
             return Target(dir, RecordingMode.DRIVE, options(clipLengthMs(), audio(), setting(RecordingSettings.RESOLUTION)))
         }
         if (sentryMode == SentryMode.OFF) return null
-        val dir = eventsDir()
+        val dir = eventsDir()?.let(::writable)
         if (dir == null) {
             noVolume("watch")
             return null
@@ -618,6 +629,17 @@ object CameraDaemon {
         // Armed Smart keeps the encoder up between events; without it there is no pre-roll to flush.
         if (sentry?.isArmed != true) return null
         return Target(dir, RecordingMode.EVENT, options(EVENT_CLIP_CAP_MS, false, parkedResolution()))
+    }
+
+    private fun writable(dir: File): File = if (cards.isDown(dir)) fallbackDir(dir) ?: dir else dir
+
+    // Runs on the card watch thread whenever the card answers.
+    private fun moveBack(card: File) {
+        val held = fallbackDir(card) ?: return
+        if (!held.isDirectory) return
+        val nowMs = System.currentTimeMillis()
+        val moved = if (card == eventsDir()) EventStore(held).moveInto(card, nowMs) else ClipStore(held).moveInto(card, nowMs)
+        if (moved > 0) DaemonLog.d(TAG, "moved $moved clips held on internal storage back to the card")
     }
 
     private fun noVolume(what: String) {
@@ -754,15 +776,22 @@ object CameraDaemon {
             val inFlight = recorder?.clip
             val floorBytes = RecordingSettings.BUDGET_HEADROOM_MB * MB +
                 bitrateBps(setting(RecordingSettings.QUALITY), setting(RecordingSettings.CODEC)) / 8L * clipLengthMs() / 1000L
+            val clipsBudgetMb = budgetMb(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB)
+            val eventsBudgetMb = budgetMb(SurveillanceSettings.BUDGET_MB, SurveillanceSettings.BUDGET_FALLBACK_MB)
             clipsDir()?.let {
-                free(ClipStore(it), it, "clips", budgetMb(RecordingSettings.BUDGET_MB, RecordingSettings.BUDGET_FALLBACK_MB),
-                    floorBytes, inFlight)
+                free(ClipStore(it), it, "clips", clipsBudgetMb, floorBytes, inFlight)
+                fallbackDir(it)?.takeIf(File::isDirectory)?.let { held ->
+                    free(ClipStore(held), held, "clips held on internal storage", clipsBudgetMb, floorBytes, inFlight)
+                }
             }
             eventsDir()?.let {
-                free(EventStore(it), it, "events", budgetMb(SurveillanceSettings.BUDGET_MB, SurveillanceSettings.BUDGET_FALLBACK_MB),
-                    floorBytes, inFlight)
+                free(EventStore(it), it, "events", eventsBudgetMb, floorBytes, inFlight)
+                fallbackDir(it)?.takeIf(File::isDirectory)?.let { held ->
+                    free(EventStore(held), held, "events held on internal storage", eventsBudgetMb, floorBytes, inFlight)
+                }
             }
-            val full = listOfNotNull(clipsDir(), eventsDir()).any { shortBytes(it, floorBytes) > 0L }
+            val writingTo = listOfNotNull(clipsDir()?.let(::writable), eventsDir()?.let(::writable))
+            val full = writingTo.any { shortBytes(it, floorBytes) > 0L }
             if (full && !cardFull) DaemonLog.e(TAG, "Storage is full and Strike has no older clips left to drop")
             cardFull = full
         } finally {

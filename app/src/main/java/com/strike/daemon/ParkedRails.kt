@@ -88,6 +88,18 @@ object ParkedRails {
         userActivity()
     }
 
+    /** Re-runs the parked wake now; true when it may have lit the panel. */
+    @Synchronized
+    fun revive(): Boolean {
+        if (!isHeld) return false
+        wakeMcu()
+        vote()
+        userActivity()
+        if (!cameraOwner) return false
+        wakeAp()
+        return true
+    }
+
     @Synchronized
     fun tick(): Boolean {
         if (!isHeld) return false

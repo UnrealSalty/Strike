@@ -1,6 +1,7 @@
 package com.strike.recording
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -78,6 +79,30 @@ class VolumesTest {
         assertEquals("/storage/7000-8000", volumePathFor("sd", listing, "7000-8000"))
         assertEquals("/storage/emulated/0", volumePathFor("internal", listing, null))
         assertEquals(listOf("public:8,1", "public:179,65"), allPublicIds(listing))
+    }
+
+    @Test
+    fun voldStateIsReadForTheExactVolume() {
+        val listing = "public:8,97 mounted 7000-8000\npublic:179,65 unmountable null"
+
+        assertEquals("mounted", volumeState(listing, "public:8,97"))
+        assertEquals("unmountable", volumeState(listing, "public:179,65"))
+        assertNull(volumeState(listing, "public:8,1"))
+    }
+
+    @Test
+    fun cardClipsAreHeldInTheirOwnInternalFolder() {
+        assertEquals(
+            "/storage/emulated/0/Strike/fallback/clips",
+            fallbackDir(java.io.File("/storage/7000-8000/Strike/clips"))!!.path.replace('\\', '/')
+        )
+        assertNull(fallbackDir(java.io.File("/storage/emulated/0/Strike/clips")))
+    }
+
+    @Test
+    fun aFullCardStillAnswers() {
+        assertTrue(probeFoundFull("sh: can't create /storage/7000-8000/Strike/clips/.probe: No space left on device"))
+        assertFalse(probeFoundFull("sh: can't create /storage/7000-8000/Strike/clips/.probe: I/O error"))
     }
 
     @Test
