@@ -135,7 +135,27 @@ class SurveillanceSettingsTest {
 
     @Test
     fun onlyTheSameVolumeReservesAnything() {
-        assertEquals(20_000, reservedOn("sd", "sd", 20_000))
-        assertEquals(0, reservedOn("sd", "usb", 20_000))
+        assertEquals(20_000, reservedOn("sd", "sd", 20_000, 0))
+        assertEquals(0, reservedOn("sd", "usb", 20_000, 0))
+    }
+
+    @Test
+    fun aCardFullOfStrikesOwnClipsAndEventsLeavesBothBudgetsAdjustable() {
+        val totalMb = 120_000
+        val clipsMb = 60_000
+        val eventsMb = 59_000
+        val freeMb = totalMb - clipsMb - eventsMb
+
+        val forEvents = reservedOn("sd", "sd", otherBudgetMb = 60_000, otherUsedMb = clipsMb)
+        val forClips = reservedOn("sd", "sd", otherBudgetMb = 60_000, otherUsedMb = eventsMb)
+
+        assertTrue(RecordingSettings.hasRoom(freeMb, totalMb, eventsMb, forEvents))
+        assertTrue(RecordingSettings.hasRoom(freeMb, totalMb, clipsMb, forClips))
+        assertEquals(59_744, RecordingSettings.budgetCeilingMb(freeMb, totalMb, eventsMb, forEvents))
+    }
+
+    @Test
+    fun aBudgetTheOtherFeatureHasOverrunHoldsNothingBack() {
+        assertEquals(0, reservedOn("sd", "sd", otherBudgetMb = 20_000, otherUsedMb = 25_000))
     }
 }

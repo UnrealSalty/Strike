@@ -153,7 +153,8 @@ class RecordingsApi(context: Context, private val shell: Shell) {
             row.put("mounted", volume != null)
             if (volume != null) {
                 val usedMb = (totalBytes(inventories.getValue(location).value.orEmpty()) / MB).toInt()
-                val reservedMb = reservedOn(location, eventsLocation, eventsBudgetMb)
+                val eventsUsedMb = if (location == eventsLocation) events.usedMb(volume) else 0
+                val reservedMb = reservedOn(location, eventsLocation, eventsBudgetMb, eventsUsedMb)
                 row.put("freeMb", volume.freeMb)
                 row.put("totalMb", volume.totalMb)
                 row.put("usedMb", usedMb)
