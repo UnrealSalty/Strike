@@ -9,7 +9,6 @@ import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.strike.core.Logs
@@ -40,7 +39,6 @@ object WebUi {
         settings.allowFileAccess = false
         settings.allowContentAccess = false
         settings.mediaPlaybackRequiresUserGesture = false
-        settings.cacheMode = WebSettings.LOAD_NO_CACHE
         view.overScrollMode = WebView.OVER_SCROLL_NEVER
         view.defaultFocusHighlightEnabled = false
         // Keep navigation inside the WebView rather than opening the external browser.

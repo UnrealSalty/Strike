@@ -89,6 +89,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
             var cookie: String? = null
             var host: String? = null
             var origin: String? = null
+            var seenTag: String? = null
             var forwarded = false
             var secure = false
             var headerBytes = 0
@@ -124,6 +125,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
                     if (origin != null) throw IOException("Duplicate origin")
                     origin = header.substringAfter(':').trim()
                 }
+                if (header.startsWith("If-None-Match:", ignoreCase = true)) seenTag = header.substringAfter(':').trim()
                 if (header.startsWith("Cf-Connecting-Ip:", ignoreCase = true)) forwarded = true
                 if (header.startsWith("X-Forwarded-Proto:", ignoreCase = true)) {
                     secure = header.substringAfter(':').trim().equals("https", ignoreCase = true)
@@ -155,7 +157,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
                     if (inCar) null else queryValue(requestLine, "quality"))
                 if (handedOff) return
             }
-            val response = respond(requestLine, body, range, token, inCar)
+            val response = respond(requestLine, body, range, seenTag, token, inCar)
             if (response.slice != null) {
                 handedOff = true
                 sendClip(client, response)
@@ -216,14 +218,21 @@ class HttpServer(private val port: Int, private val router: Router, private val 
         return String(chars, 0, filled)
     }
 
-    private fun respond(requestLine: String, body: String, range: String?, token: String?, inCar: Boolean): Response {
+    private fun respond(
+        requestLine: String,
+        body: String,
+        range: String?,
+        seenTag: String?,
+        token: String?,
+        inCar: Boolean
+    ): Response {
         val method = requestMethod(requestLine)
         val path = requestPath(requestLine)
         if (method == null || path == null) {
             return Response(400, TEXT, "Bad request".toByteArray())
         }
         return try {
-            route(method, path, body, range, token, inCar)
+            route(method, path, body, range, seenTag, token, inCar)
         } catch (e: RuntimeException) {
             Logs.e(TAG, "$method $path failed", e)
             Response(500, TEXT, "Strike could not answer that".toByteArray())
@@ -235,6 +244,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
         path: String,
         body: String,
         range: String?,
+        seenTag: String?,
         token: String?,
         inCar: Boolean
     ): Response {
@@ -248,7 +258,7 @@ class HttpServer(private val port: Int, private val router: Router, private val 
             path.startsWith(THUMBS_PATH) -> router.thumb(path.substring(THUMBS_PATH.length))
             path.startsWith(EVENTS_PATH) -> router.event(path.substring(EVENTS_PATH.length), range)
             path.startsWith(HEROES_PATH) -> router.hero(path.substring(HEROES_PATH.length))
-            else -> router.asset(path)
+            else -> router.asset(path, seenTag)
         }
     }
 
@@ -367,7 +377,8 @@ internal fun headerBlock(response: Response): String {
     for ((name, value) in response.headers) {
         headers.append(name).append(": ").append(value).append("\r\n")
     }
-    return headers.append("Cache-Control: no-store\r\n")
+    if (!response.headers.containsKey("Cache-Control")) headers.append("Cache-Control: no-store\r\n")
+    return headers
         .append("X-Frame-Options: DENY\r\n")
         .append("Referrer-Policy: no-referrer\r\n")
         .append("Connection: close\r\n\r\n").toString()

@@ -67,14 +67,13 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
     fun stream(socket: WebSocket, view: String?, quality: String?) =
         live.serve(socket, CameraView.of(view).id, LiveQuality.of(quality))
 
-    fun asset(path: String): Response {
+    // Tied to this install, so an update never leaves old scripts in the WebView's cache.
+    private val assetTag = context.packageManager.getPackageInfo(context.packageName, 0)
+        .let { "\"${it.longVersionCode}-${it.lastUpdateTime}\"" }
+
+    fun asset(path: String, seenTag: String? = null): Response {
         val assetPath = resolveAssetPath(path) ?: return notFound()
-        val body = try {
-            assets.open(assetPath).use { it.readBytes() }
-        } catch (e: IOException) {
-            return notFound()
-        }
-        return Response(200, contentTypeFor(assetPath), body)
+        return assetResponse(assetPath, assetTag, seenTag) { assets.open(assetPath).use { it.readBytes() } }
     }
 
     fun clip(name: String, range: String?): Response = recordings.clip(name, range)
@@ -195,6 +194,20 @@ internal fun resolveAssetPath(path: String): String? {
         null -> WEB_ROOT + path
         else -> "$WEB_ROOT$page.html"
     }
+}
+
+// Pages stay uncached: the lock page is served in place of whichever page was asked for.
+internal fun assetResponse(assetPath: String, tag: String, seenTag: String?, read: () -> ByteArray): Response {
+    val body = try {
+        read()
+    } catch (e: IOException) {
+        return notFound()
+    }
+    val type = contentTypeFor(assetPath)
+    if (assetPath.endsWith(".html")) return Response(200, type, body)
+    val headers = mapOf("Cache-Control" to "no-cache", "ETag" to tag)
+    if (seenTag == tag) return Response(304, type, headers = headers)
+    return Response(200, type, body, headers = headers)
 }
 
 internal fun contentTypeFor(path: String): String = when {

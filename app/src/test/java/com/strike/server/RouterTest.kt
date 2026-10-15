@@ -2,7 +2,9 @@ package com.strike.server
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 
 class RouterTest {
 
@@ -26,6 +28,38 @@ class RouterTest {
                 "/missing", "/online.html/extra", "/online.html.html", "//online", "online")) {
             assertNull(path, pagePath(path))
         }
+    }
+
+    @Test
+    fun scriptsAreCachedUntilTheInstallChanges() {
+        val first = assetResponse("web/js/strike.js", "\"7-100\"", null) { "code".toByteArray() }
+        assertEquals(200, first.status)
+        assertEquals("\"7-100\"", first.headers["ETag"])
+        assertEquals("no-cache", first.headers["Cache-Control"])
+
+        val again = assetResponse("web/js/strike.js", "\"7-100\"", "\"7-100\"") { "code".toByteArray() }
+        assertEquals(304, again.status)
+        assertEquals(0, again.body.size)
+
+        val updated = assetResponse("web/js/strike.js", "\"8-200\"", "\"7-100\"") { "new".toByteArray() }
+        assertEquals(200, updated.status)
+        assertEquals("new", String(updated.body))
+    }
+
+    @Test
+    fun pagesAreNeverCached() {
+        val page = assetResponse("web/index.html", "\"7-100\"", "\"7-100\"") { "<html>".toByteArray() }
+
+        assertEquals(200, page.status)
+        assertNull(page.headers["ETag"])
+        assertTrue(headerBlock(page).contains("Cache-Control: no-store"))
+    }
+
+    @Test
+    fun aMissingFileIsNotFoundEvenWithATag() {
+        val missing = assetResponse("web/js/gone.js", "\"7-100\"", "\"7-100\"") { throw IOException() }
+
+        assertEquals(404, missing.status)
     }
 
     @Test
