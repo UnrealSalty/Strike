@@ -16,6 +16,7 @@ import com.strike.camera.CameraView
 import com.strike.camera.FrameBus
 import com.strike.camera.LIVE_BITRATE_BPS
 import com.strike.camera.LIVE_FRAME_RATE_FPS
+import com.strike.camera.LensCorrection
 import com.strike.camera.LiveStreamer
 import com.strike.camera.LiveQuality
 import com.strike.camera.cameraStack
@@ -513,14 +514,14 @@ object CameraDaemon {
             if (streamer.isStreaming) stopLive()
             return
         }
-        if (streamer.isStreaming && streamer.view != liveView) {
+        if (streamer.isStreaming && (streamer.view != liveView || streamer.lens != driveLens())) {
             if (!stopLive()) return
         }
         if (streamer.isStreaming && !streamer.adjustBitrate(liveBitrateBps) && !stopLive()) return
         if (!streamer.isStreaming) {
             val bus = cameraUp() ?: return
             if (bus.frameCount == 0L) return
-            if (!streamer.start(bus, liveView, LIVE_FRAME_RATE_FPS, liveBitrateBps)) {
+            if (!streamer.start(bus, liveView, LIVE_FRAME_RATE_FPS, liveBitrateBps, driveLens())) {
                 liveWanted = false
             }
         }
@@ -878,7 +879,8 @@ object CameraDaemon {
         codec = setting(RecordingSettings.CODEC),
         frameRateFps = setting(RecordingSettings.FRAME_RATE_FPS).toInt(),
         audio = audio(),
-        isReduced = setting(RecordingSettings.RESOLUTION) == "reduced"
+        isReduced = setting(RecordingSettings.RESOLUTION) == "reduced",
+        lens = driveLens()
     )
 
     private fun parkedOptions(clipLengthMs: Long) = RecordingOptions(
@@ -887,10 +889,14 @@ object CameraDaemon {
         codec = parked(SurveillanceSettings.CODEC),
         frameRateFps = parked(SurveillanceSettings.FRAME_RATE_FPS).toInt(),
         audio = false,
-        isReduced = parked(SurveillanceSettings.RESOLUTION) == "reduced"
+        isReduced = parked(SurveillanceSettings.RESOLUTION) == "reduced",
+        lens = LensCorrection.of(parked(SurveillanceSettings.LENS))
     )
 
     private fun parked(key: String): String = Config.getString(key, SurveillanceSettings.fallback(key))
+
+    // Live follows the driving setting; detection always sees the uncorrected lens.
+    private fun driveLens(): LensCorrection = LensCorrection.of(setting(RecordingSettings.LENS))
 
     private fun clipLengthMs(): Long =
         setting(RecordingSettings.CLIP_LENGTH_MINUTES).toLong() * 60_000L

@@ -6,6 +6,7 @@ import com.strike.camera.CameraView
 import com.strike.camera.Consumer
 import com.strike.camera.Frame
 import com.strike.camera.FrameBus
+import com.strike.camera.LensCorrection
 import com.strike.camera.recordingFrameOf
 import com.strike.daemon.AudioIngest
 import com.strike.daemon.AudioStart
@@ -41,7 +42,8 @@ data class RecordingOptions(
     val codec: String,
     val frameRateFps: Int,
     val audio: Boolean,
-    val isReduced: Boolean
+    val isReduced: Boolean,
+    val lens: LensCorrection = LensCorrection.NONE
 )
 
 // The writer thread owns muxing and rotates clips between encoded samples.
@@ -131,7 +133,7 @@ class Recorder(
         running = true
         // Pacing at the camera's own rate would drop frames that arrive a little early.
         val paceFps = if (options.frameRateFps < bus.cameraFps) options.frameRateFps else 0
-        bus.add(Consumer(CONSUMER, surface, CameraView.ALL, wanted, encoder::inputFailed, paceFps))
+        bus.add(Consumer(CONSUMER, surface, CameraView.ALL, wanted, encoder::inputFailed, paceFps, options.lens))
         this.bus = bus
         this.encoder = encoder
         frame = wanted

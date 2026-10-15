@@ -35,7 +35,11 @@ class LiveStreamer(private val relay: PacketRelay) {
     var view = CameraView.FRONT
         private set
 
-    fun start(bus: FrameBus, view: CameraView, frameRateFps: Int, bitrateBps: Int): Boolean {
+    @Volatile
+    var lens = LensCorrection.NONE
+        private set
+
+    fun start(bus: FrameBus, view: CameraView, frameRateFps: Int, bitrateBps: Int, lens: LensCorrection): Boolean {
         if (isStreaming) return true
         val frame = liveFrameOf(view, bus.stripWidth, bus.stripHeight)
         val fresh = Encoder(
@@ -47,9 +51,10 @@ class LiveStreamer(private val relay: PacketRelay) {
             ::relay
         )
         val surface = fresh.start() ?: return false
-        bus.add(Consumer(CONSUMER, surface, view, frame, frameRateFps = frameRateFps))
+        bus.add(Consumer(CONSUMER, surface, view, frame, frameRateFps = frameRateFps, lens = lens))
         this.bus = bus
         this.view = view
+        this.lens = lens
         this.bitrateBps = bitrateBps
         encoder = fresh
         sentConfig = false

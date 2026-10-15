@@ -33,7 +33,8 @@ class Consumer(
     val view: CameraView,
     val frame: Frame,
     private val onSurfaceFailure: (() -> Unit)? = null,
-    frameRateFps: Int = 0
+    frameRateFps: Int = 0,
+    val lens: LensCorrection = LensCorrection.NONE
 ) {
     private val pacing = if (frameRateFps > 0) FramePacing(frameRateFps) else null
     private var rejectedFrames = 0
@@ -82,6 +83,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int, val cameraFps: Int) {
     private var reader: ImageReader? = null
     private var readerThread: HandlerThread? = null
     private var shader: StripShader? = null
+    private var lensShader: StripShader? = null
     private var thread: Thread? = null
     private var stampedAtNs = 0L
 
@@ -191,6 +193,7 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int, val cameraFps: Int) {
 
         val compiled = StripShader.compile() ?: return false
         shader = compiled
+        lensShader = StripShader.compileLens()
         texture = compiled.newTexture()
         DaemonLog.d(TAG, "graphics: " + CameraTexture.report())
 
@@ -315,7 +318,9 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int, val cameraFps: Int) {
                 fault(consumer, "cannot be drawn on")
                 continue
             }
-            program.draw(texture, tilesOf(consumer.view), consumer.frame)
+            val bent = if (consumer.lens == LensCorrection.NONE) null else lensShader
+            if (bent != null) bent.draw(texture, tilesOf(consumer.view), consumer.frame, consumer.lens)
+            else program.draw(texture, tilesOf(consumer.view), consumer.frame)
             EGLExt.eglPresentationTimeANDROID(display, target, timestampNs)
             if (!EGL14.eglSwapBuffers(display, target)) {
                 fault(consumer, "would not take the frame")
@@ -379,6 +384,8 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int, val cameraFps: Int) {
         targets.clear()
         shader?.release()
         shader = null
+        lensShader?.release()
+        lensShader = null
         release()
         reader?.close()
         reader = null

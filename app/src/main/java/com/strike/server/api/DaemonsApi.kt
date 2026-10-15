@@ -59,6 +59,13 @@ private val RESOLUTIONS = mapOf(
     "full" to "Full",
     "reduced" to "Reduced"
 )
+
+private val LENSES = mapOf(
+    "none" to "None",
+    "light" to "Light",
+    "medium" to "Medium",
+    "strong" to "Strong"
+)
 private val PLACES = mapOf(
     "internal" to "Internal storage",
     "sd" to "SD card",
@@ -335,6 +342,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         fact(facts, "Quality", QUALITIES[setting(RecordingSettings.QUALITY)] ?: DASH)
         fact(facts, "Frame rate", setting(RecordingSettings.FRAME_RATE_FPS) + " fps")
         fact(facts, "Resolution", RESOLUTIONS[setting(RecordingSettings.RESOLUTION)] ?: DASH)
+        fact(facts, "Lens correction", LENSES[setting(RecordingSettings.LENS)] ?: DASH)
         fact(facts, "Writing to", if (status?.optBoolean("clipsHeld") == true) HELD else place())
         fact(facts, "Clips this run", status?.optInt("clips")?.toString() ?: DASH)
         card.put("facts", facts)
@@ -377,6 +385,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         fact(facts, "Quality", QUALITIES[surveillanceSetting(SurveillanceSettings.QUALITY)] ?: DASH)
         fact(facts, "Frame rate", surveillanceSetting(SurveillanceSettings.FRAME_RATE_FPS) + " fps")
         fact(facts, "Resolution", RESOLUTIONS[surveillanceSetting(SurveillanceSettings.RESOLUTION)] ?: DASH)
+        fact(facts, "Lens correction", LENSES[surveillanceSetting(SurveillanceSettings.LENS)] ?: DASH)
         fact(
             facts, "Screen message",
             if (Config.getBool(SurveillanceSettings.SCREEN, false)) "On" else "Off"

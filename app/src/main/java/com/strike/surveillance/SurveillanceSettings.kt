@@ -26,6 +26,7 @@ object SurveillanceSettings {
     const val QUALITY = "surveillance.quality"
     const val CODEC = "surveillance.codec"
     const val FRAME_RATE_FPS = "surveillance.frameRateFps"
+    const val LENS = "surveillance.lens"
     const val SCREEN = "surveillance.screen"
     const val MESSAGE = "surveillance.message"
     const val SCREEN_SECONDS = "surveillance.screenSeconds"
@@ -48,6 +49,7 @@ object SurveillanceSettings {
         QUALITY to RecordingSettings.choices.getValue(RecordingSettings.QUALITY),
         CODEC to RecordingSettings.choices.getValue(RecordingSettings.CODEC),
         FRAME_RATE_FPS to RecordingSettings.choices.getValue(RecordingSettings.FRAME_RATE_FPS),
+        LENS to RecordingSettings.choices.getValue(RecordingSettings.LENS),
         SCREEN_SECONDS to Choice(listOf("5", "10", "20", "30"), "10"),
         LOCATION to Choice(listOf("internal", "sd", "usb"), "internal")
     )

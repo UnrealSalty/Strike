@@ -32,6 +32,28 @@ void main() {
 }
 """
 
+// Must agree with lensSource. slice is the camera's x and width in the strip; lens is k1, k2, tile aspect.
+// mediump is 16-bit on Adreno, a few pixels of error across the strip.
+private const val LENS_FRAGMENT = """
+#extension GL_OES_EGL_image_external : require
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 source;
+uniform samplerExternalOES camera;
+uniform vec2 slice;
+uniform vec3 lens;
+void main() {
+    vec2 offset = vec2((source.x - slice.x) / slice.y, source.y) - 0.5;
+    float aspect2 = lens.z * lens.z;
+    float r2 = (offset.x * offset.x * aspect2 + offset.y * offset.y) / (0.25 * (aspect2 + 1.0));
+    vec2 bent = clamp(0.5 + offset * (1.0 + lens.x * r2 + lens.y * r2 * r2), 0.0, 1.0);
+    gl_FragColor = texture2D(camera, vec2(slice.x + bent.x * slice.y, bent.y));
+}
+"""
+
 private val QUAD = floatArrayOf(
     -1f, -1f,
     1f, -1f,
@@ -43,7 +65,9 @@ class StripShader private constructor(
     private val program: Int,
     private val positionSlot: Int,
     private val sourceSlot: Int,
-    private val cameraSlot: Int
+    private val cameraSlot: Int,
+    private val sliceSlot: Int,
+    private val lensSlot: Int
 ) {
 
     private val positions = buffer(QUAD)
@@ -69,7 +93,7 @@ class StripShader private constructor(
         return id
     }
 
-    fun draw(texture: Int, tiles: List<Tile>, frame: Frame) {
+    fun draw(texture: Int, tiles: List<Tile>, frame: Frame, correction: LensCorrection = LensCorrection.NONE) {
         clear()
         GLES20.glUseProgram(program)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
@@ -82,6 +106,11 @@ class StripShader private constructor(
         )
         for (tile in tiles) {
             viewport(tile, frame)
+            if (lensSlot >= 0) {
+                GLES20.glUniform2f(sliceSlot, tile.sourceX, tile.sourceWidth)
+                val aspect = (tile.destWidth * frame.width) / (tile.destHeight * frame.height)
+                GLES20.glUniform3f(lensSlot, correction.k1, correction.k2, aspect)
+            }
             sources.clear()
             sources.put(sourceCoords(tile)).position(0)
             GLES20.glVertexAttribPointer(
@@ -99,9 +128,13 @@ class StripShader private constructor(
 
     companion object {
 
-        fun compile(): StripShader? {
+        fun compile(): StripShader? = compile(FRAGMENT)
+
+        fun compileLens(): StripShader? = compile(LENS_FRAGMENT)
+
+        private fun compile(source: String): StripShader? {
             val vertex = stage(GLES20.GL_VERTEX_SHADER, VERTEX) ?: return null
-            val fragment = stage(GLES20.GL_FRAGMENT_SHADER, FRAGMENT) ?: return null
+            val fragment = stage(GLES20.GL_FRAGMENT_SHADER, source) ?: return null
             val program = GLES20.glCreateProgram()
             GLES20.glAttachShader(program, vertex)
             GLES20.glAttachShader(program, fragment)
@@ -119,7 +152,9 @@ class StripShader private constructor(
                 program = program,
                 positionSlot = GLES20.glGetAttribLocation(program, "position"),
                 sourceSlot = GLES20.glGetAttribLocation(program, "sourceCoord"),
-                cameraSlot = GLES20.glGetUniformLocation(program, "camera")
+                cameraSlot = GLES20.glGetUniformLocation(program, "camera"),
+                sliceSlot = GLES20.glGetUniformLocation(program, "slice"),
+                lensSlot = GLES20.glGetUniformLocation(program, "lens")
             )
         }
 
