@@ -106,6 +106,9 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         if (!SurveillanceSettings.accepts(key, value, DiLink5.isSupported)) {
             return Response(400, TEXT, "That setting does not take that value".toByteArray())
         }
+        if (key == SurveillanceSettings.BUDGET_MB && !budgetFits(value.toInt())) {
+            return Response(400, TEXT, "That leaves too little room for recording on this volume".toByteArray())
+        }
         val stored = when (key) {
             SurveillanceSettings.ENABLED, SurveillanceSettings.SCREEN, SurveillanceSettings.DILINK5_KEEP_ALIVE ->
                 Config.put(shell, key, value == "true")
@@ -156,6 +159,15 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
         return values
     }
 
+    private fun budgetFits(requestedMb: Int): Boolean {
+        val location = events.location()
+        val volume = events.mounted()[location] ?: return true
+        val sharedMb = sharedOn(location, clips.location(), clips.budgetMb())
+        return RecordingSettings.budgetFits(
+            requestedMb, events.budgetMb(), RecordingSettings.budgetCeilingMb(volume.totalMb, sharedMb)
+        )
+    }
+
     private fun volumesPayload(): JSONArray {
         val mounted = events.mounted()
         val recordingLocation = clips.location()
@@ -172,9 +184,10 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
                 row.put("freeMb", volume.freeMb)
                 row.put("totalMb", volume.totalMb)
                 row.put("usedMb", usedMb)
-                row.put("sharedMb", sharedOn(location, recordingLocation, recordingBudgetMb))
+                val sharedMb = sharedOn(location, recordingLocation, recordingBudgetMb)
+                row.put("sharedMb", sharedMb)
                 row.put("usable", RecordingSettings.hasRoom(volume.freeMb, volume.totalMb, usedMb))
-                row.put("ceilingMb", RecordingSettings.budgetCeilingMb(volume.totalMb))
+                row.put("ceilingMb", RecordingSettings.budgetCeilingMb(volume.totalMb, sharedMb))
             }
             rows.put(row)
         }

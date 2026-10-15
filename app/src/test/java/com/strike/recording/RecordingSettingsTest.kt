@@ -45,13 +45,29 @@ class RecordingSettingsTest {
     }
 
     @Test
-    fun theCeilingIsTheWholeVolumeLessHeadroom() {
-        assertEquals(64_000 - RecordingSettings.BUDGET_HEADROOM_MB, RecordingSettings.budgetCeilingMb(64_000))
+    fun aVolumeToItselfOffersEverythingButTheHeadroom() {
+        assertEquals(64_000 - RecordingSettings.BUDGET_HEADROOM_MB, RecordingSettings.budgetCeilingMb(64_000, 0))
+    }
+
+    @Test
+    fun fiftyGigabytesOfRecordingLeaveSurveillanceTheRestOfAHundredGigabyteCard() {
+        val ceilingMb = RecordingSettings.budgetCeilingMb(totalMb = 100_000, sharedMb = 50_000)
+
+        assertEquals(50_000 - RecordingSettings.BUDGET_HEADROOM_MB, ceilingMb)
+        assertFalse(RecordingSettings.budgetFits(100_000, currentMb = 500, ceilingMb = ceilingMb))
+        assertTrue(RecordingSettings.budgetFits(ceilingMb, currentMb = 500, ceilingMb = ceilingMb))
+    }
+
+    @Test
+    fun aBudgetAlreadyOverTheCeilingCanStayOrComeDownButNotGrow() {
+        assertTrue(RecordingSettings.budgetFits(60_000, currentMb = 60_000, ceilingMb = 40_000))
+        assertTrue(RecordingSettings.budgetFits(50_000, currentMb = 60_000, ceilingMb = 40_000))
+        assertFalse(RecordingSettings.budgetFits(60_100, currentMb = 60_000, ceilingMb = 40_000))
     }
 
     @Test
     fun aTinyVolumeStillOffersTheFloor() {
-        assertEquals(RecordingSettings.BUDGET_FLOOR_MB, RecordingSettings.budgetCeilingMb(200))
+        assertEquals(RecordingSettings.BUDGET_FLOOR_MB, RecordingSettings.budgetCeilingMb(200, 0))
     }
 
     @Test

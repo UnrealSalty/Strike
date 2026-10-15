@@ -105,6 +105,9 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         if (!RecordingSettings.accepts(key, value)) {
             return Response(400, TEXT, "That setting does not take that value".toByteArray())
         }
+        if (key == RecordingSettings.BUDGET_MB && !budgetFits(value.toInt())) {
+            return Response(400, TEXT, "That leaves too little room for surveillance on this volume".toByteArray())
+        }
         val stored = when (key) {
             RecordingSettings.AUDIO -> Config.put(shell, key, value == "true")
             RecordingSettings.BUDGET_MB -> Config.put(shell, key, value.toInt())
@@ -122,6 +125,15 @@ class RecordingsApi(context: Context, private val shell: Shell) {
             LibraryScan.forget()
         }
         return Response(200, JSON, "{}".toByteArray())
+    }
+
+    private fun budgetFits(requestedMb: Int): Boolean {
+        val location = storage.location()
+        val volume = storage.volumeSnapshot().volumes[location] ?: return true
+        val sharedMb = sharedOn(location, events.location(), events.budgetMb())
+        return RecordingSettings.budgetFits(
+            requestedMb, storage.budgetMb(), RecordingSettings.budgetCeilingMb(volume.totalMb, sharedMb)
+        )
     }
 
     private fun values(): JSONObject {
@@ -156,9 +168,10 @@ class RecordingsApi(context: Context, private val shell: Shell) {
                 row.put("freeMb", volume.freeMb)
                 row.put("totalMb", volume.totalMb)
                 row.put("usedMb", usedMb)
-                row.put("sharedMb", sharedOn(location, eventsLocation, eventsBudgetMb))
+                val sharedMb = sharedOn(location, eventsLocation, eventsBudgetMb)
+                row.put("sharedMb", sharedMb)
                 row.put("usable", RecordingSettings.hasRoom(volume.freeMb, volume.totalMb, usedMb))
-                row.put("ceilingMb", RecordingSettings.budgetCeilingMb(volume.totalMb))
+                row.put("ceilingMb", RecordingSettings.budgetCeilingMb(volume.totalMb, sharedMb))
             }
             rows.put(row)
         }

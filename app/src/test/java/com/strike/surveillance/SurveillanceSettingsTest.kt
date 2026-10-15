@@ -129,12 +129,15 @@ class SurveillanceSettingsTest {
     }
 
     @Test
-    fun aCardFullOfClipsAndEventsStillOffersEitherBudgetTheWholeCard() {
+    fun aCardFullOfClipsAndEventsKeepsTheCeilingTheCardLessTheOtherBudget() {
         val totalMb = 120_000
         val freeMb = 4_300
 
         assertTrue(RecordingSettings.hasRoom(freeMb, totalMb, usedMb = 10_750))
         assertTrue(RecordingSettings.hasRoom(freeMb, totalMb, usedMb = 104_950))
-        assertEquals(totalMb - RecordingSettings.BUDGET_HEADROOM_MB, RecordingSettings.budgetCeilingMb(totalMb))
+        assertEquals(
+            totalMb - RecordingSettings.BUDGET_HEADROOM_MB - 48_000,
+            RecordingSettings.budgetCeilingMb(totalMb, sharedOn("sd", "sd", 48_000))
+        )
     }
 }

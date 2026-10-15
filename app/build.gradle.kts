@@ -16,8 +16,8 @@ android {
         // targetSdk 25: keeps parked surveillance free of O background limits.
         minSdk = 28
         targetSdk = 25
-        versionCode = 7
-        versionName = "0.7"
+        versionCode = 8
+        versionName = "0.8"
 
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=none" } }
     }

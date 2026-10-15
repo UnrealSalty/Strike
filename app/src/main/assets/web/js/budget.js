@@ -73,8 +73,8 @@
                 return;
             }
             note.hidden = false;
-            note.textContent = plan.other + ' can also keep up to ' +
-                megabytes(volume.sharedMb) + ' on this volume.';
+            note.textContent = plan.other + ' keeps up to ' +
+                megabytes(volume.sharedMb) + ' of this volume.';
         }
 
         document.getElementById('location').onclick = function (event) {

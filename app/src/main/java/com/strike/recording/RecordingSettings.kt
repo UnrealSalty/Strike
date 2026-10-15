@@ -47,8 +47,13 @@ object RecordingSettings {
         return false
     }
 
-    // A budget is where deleting starts; a card that fills first is freed by the daemon's retention.
-    fun budgetCeilingMb(totalMb: Int): Int = maxOf(totalMb - BUDGET_HEADROOM_MB, BUDGET_FLOOR_MB)
+    /** The volume less headroom and whatever the other feature may keep on it, so both budgets always fit. */
+    fun budgetCeilingMb(totalMb: Int, sharedMb: Int): Int =
+        maxOf(totalMb - BUDGET_HEADROOM_MB - sharedMb, BUDGET_FLOOR_MB)
+
+    // A budget saved before the other one grew may stay; it can only come down.
+    fun budgetFits(requestedMb: Int, currentMb: Int, ceilingMb: Int): Boolean =
+        requestedMb <= maxOf(ceilingMb, currentMb)
 
     fun hasRoom(freeMb: Int, totalMb: Int, usedMb: Int): Boolean =
         minOf(freeMb + usedMb - BUDGET_HEADROOM_MB, totalMb) >= BUDGET_FLOOR_MB
