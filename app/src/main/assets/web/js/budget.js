@@ -52,15 +52,16 @@
             var volume = volumeOf(payload, payload.values[plan.location]);
             var usable = volume && volume.usable;
             var budgetMb = payload.values[plan.budget];
+            // A budget saved above today's ceiling stays reachable, so dragging never loses it.
             if (usable) {
-                slider.max = volume.ceilingMb;
+                slider.max = Math.max(volume.ceilingMb, budgetMb);
             }
             slider.disabled = !usable;
             slider.value = budgetMb;
             document.getElementById('budget').textContent = usable ? megabytes(budgetMb) : Strike.core.dash;
             document.getElementById('budgetFloor').textContent = megabytes(Number(slider.min));
             document.getElementById('budgetCeiling').textContent =
-                usable ? megabytes(volume.ceilingMb) : Strike.core.dash;
+                usable ? megabytes(Number(slider.max)) : Strike.core.dash;
             paintUsage(usable ? volume.usedMb : null, budgetMb);
             paintShared(volume);
         }
