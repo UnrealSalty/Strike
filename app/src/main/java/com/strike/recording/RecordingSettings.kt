@@ -47,13 +47,9 @@ object RecordingSettings {
         return false
     }
 
-    // Reclaimable clip space excludes headroom and the other feature's reservation.
-    fun budgetCeilingMb(freeMb: Int, totalMb: Int, usedMb: Int, reservedMb: Int = 0): Int =
-        maxOf(reachableMb(freeMb, totalMb, usedMb) - reservedMb, BUDGET_FLOOR_MB)
+    // A budget is where deleting starts; a card that fills first is freed by the daemon's retention.
+    fun budgetCeilingMb(totalMb: Int): Int = maxOf(totalMb - BUDGET_HEADROOM_MB, BUDGET_FLOOR_MB)
 
-    fun hasRoom(freeMb: Int, totalMb: Int, usedMb: Int, reservedMb: Int = 0): Boolean =
-        reachableMb(freeMb, totalMb, usedMb) - reservedMb >= BUDGET_FLOOR_MB
-
-    private fun reachableMb(freeMb: Int, totalMb: Int, usedMb: Int): Int =
-        minOf(freeMb + usedMb - BUDGET_HEADROOM_MB, totalMb)
+    fun hasRoom(freeMb: Int, totalMb: Int, usedMb: Int): Boolean =
+        minOf(freeMb + usedMb - BUDGET_HEADROOM_MB, totalMb) >= BUDGET_FLOOR_MB
 }

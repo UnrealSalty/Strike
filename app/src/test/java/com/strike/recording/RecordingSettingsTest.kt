@@ -45,27 +45,13 @@ class RecordingSettingsTest {
     }
 
     @Test
-    fun theCeilingIsWhatIsFreePlusWhatTheClipsAlreadyHold() {
-        assertEquals(
-            10_000 + 4_000 - RecordingSettings.BUDGET_HEADROOM_MB,
-            RecordingSettings.budgetCeilingMb(freeMb = 10_000, totalMb = 64_000, usedMb = 4_000)
-        )
+    fun theCeilingIsTheWholeVolumeLessHeadroom() {
+        assertEquals(64_000 - RecordingSettings.BUDGET_HEADROOM_MB, RecordingSettings.budgetCeilingMb(64_000))
     }
 
     @Test
-    fun theCeilingNeverExceedsTheVolume() {
-        assertEquals(
-            64_000,
-            RecordingSettings.budgetCeilingMb(freeMb = 64_000, totalMb = 64_000, usedMb = 8_000)
-        )
-    }
-
-    @Test
-    fun aFullVolumeStillOffersTheFloor() {
-        assertEquals(
-            RecordingSettings.BUDGET_FLOOR_MB,
-            RecordingSettings.budgetCeilingMb(freeMb = 0, totalMb = 64_000, usedMb = 0)
-        )
+    fun aTinyVolumeStillOffersTheFloor() {
+        assertEquals(RecordingSettings.BUDGET_FLOOR_MB, RecordingSettings.budgetCeilingMb(200))
     }
 
     @Test

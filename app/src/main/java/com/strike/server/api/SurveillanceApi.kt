@@ -6,13 +6,11 @@ import com.strike.core.DiLink5
 import com.strike.daemon.DaemonClient
 import com.strike.daemon.Shell
 import com.strike.recording.ClipThumbs
-import com.strike.recording.MB
 import com.strike.recording.RecordingSettings
 import com.strike.recording.Storage
-import com.strike.recording.totalBytes
 import com.strike.surveillance.EventStorage
 import com.strike.surveillance.SurveillanceSettings
-import com.strike.surveillance.reservedOn
+import com.strike.surveillance.sharedOn
 import com.strike.server.FileSlice
 import com.strike.server.JSON
 import com.strike.server.Response
@@ -159,8 +157,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
     }
 
     private fun volumesPayload(): JSONArray {
-        val mounts = events.volumeSnapshot()
-        val mounted = mounts.volumes
+        val mounted = events.mounted()
         val recordingLocation = clips.location()
         val recordingBudgetMb = clips.budgetMb()
         val rows = JSONArray()
@@ -172,22 +169,12 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
             row.put("mounted", volume != null)
             if (volume != null) {
                 val usedMb = events.usedMb(volume)
-                // Until the clip scan lands, recording holds its whole budget.
-                val clipsUsedMb = if (location != recordingLocation) 0 else
-                    (totalBytes(LibraryScan.clips(volume, mounts.revision).value.orEmpty()) / MB).toInt()
-                val reservedMb = reservedOn(location, recordingLocation, recordingBudgetMb, clipsUsedMb)
                 row.put("freeMb", volume.freeMb)
                 row.put("totalMb", volume.totalMb)
                 row.put("usedMb", usedMb)
-                row.put("reservedMb", reservedMb)
-                row.put(
-                    "usable",
-                    RecordingSettings.hasRoom(volume.freeMb, volume.totalMb, usedMb, reservedMb)
-                )
-                row.put(
-                    "ceilingMb",
-                    RecordingSettings.budgetCeilingMb(volume.freeMb, volume.totalMb, usedMb, reservedMb)
-                )
+                row.put("sharedMb", sharedOn(location, recordingLocation, recordingBudgetMb))
+                row.put("usable", RecordingSettings.hasRoom(volume.freeMb, volume.totalMb, usedMb))
+                row.put("ceilingMb", RecordingSettings.budgetCeilingMb(volume.totalMb))
             }
             rows.put(row)
         }

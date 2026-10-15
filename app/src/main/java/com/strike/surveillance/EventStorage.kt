@@ -70,7 +70,5 @@ private fun publishedStore(path: String): EventStore? {
 
 internal fun eventsDir(volume: Volume): File = File(publicRoot(volume.dir.path), EVENTS_DIR)
 
-// Recording and surveillance budgets share capacity when they use the same volume.
-// What the other has already written is gone from free space, so only its unused budget is held back.
-fun reservedOn(location: String, otherLocation: String, otherBudgetMb: Int, otherUsedMb: Int): Int =
-    if (location == otherLocation) maxOf(otherBudgetMb - otherUsedMb, 0) else 0
+fun sharedOn(location: String, otherLocation: String, otherBudgetMb: Int): Int =
+    if (location == otherLocation) otherBudgetMb else 0

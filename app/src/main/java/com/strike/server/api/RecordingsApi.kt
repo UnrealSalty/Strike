@@ -10,7 +10,7 @@ import com.strike.recording.ClipThumbs
 import com.strike.recording.RecordingSettings
 import com.strike.recording.Storage
 import com.strike.surveillance.EventStorage
-import com.strike.surveillance.reservedOn
+import com.strike.surveillance.sharedOn
 import com.strike.server.FileSlice
 import com.strike.server.JSON
 import com.strike.server.Response
@@ -153,20 +153,12 @@ class RecordingsApi(context: Context, private val shell: Shell) {
             row.put("mounted", volume != null)
             if (volume != null) {
                 val usedMb = (totalBytes(inventories.getValue(location).value.orEmpty()) / MB).toInt()
-                val eventsUsedMb = if (location == eventsLocation) events.usedMb(volume) else 0
-                val reservedMb = reservedOn(location, eventsLocation, eventsBudgetMb, eventsUsedMb)
                 row.put("freeMb", volume.freeMb)
                 row.put("totalMb", volume.totalMb)
                 row.put("usedMb", usedMb)
-                row.put("reservedMb", reservedMb)
-                row.put(
-                    "usable",
-                    RecordingSettings.hasRoom(volume.freeMb, volume.totalMb, usedMb, reservedMb)
-                )
-                row.put(
-                    "ceilingMb",
-                    RecordingSettings.budgetCeilingMb(volume.freeMb, volume.totalMb, usedMb, reservedMb)
-                )
+                row.put("sharedMb", sharedOn(location, eventsLocation, eventsBudgetMb))
+                row.put("usable", RecordingSettings.hasRoom(volume.freeMb, volume.totalMb, usedMb))
+                row.put("ceilingMb", RecordingSettings.budgetCeilingMb(volume.totalMb))
             }
             rows.put(row)
         }

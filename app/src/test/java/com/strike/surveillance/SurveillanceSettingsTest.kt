@@ -123,39 +123,18 @@ class SurveillanceSettingsTest {
     }
 
     @Test
-    fun anotherFeaturesBudgetComesOffTheCeiling() {
-        val alone = RecordingSettings.budgetCeilingMb(
-            freeMb = 60_000, totalMb = 128_000, usedMb = 2_000
-        )
-        val shared = RecordingSettings.budgetCeilingMb(
-            freeMb = 60_000, totalMb = 128_000, usedMb = 2_000, reservedMb = 20_000
-        )
-        assertEquals(alone - 20_000, shared)
+    fun onlyTheSameVolumeMentionsTheOtherFeaturesBudget() {
+        assertEquals(20_000, sharedOn("sd", "sd", 20_000))
+        assertEquals(0, sharedOn("sd", "usb", 20_000))
     }
 
     @Test
-    fun onlyTheSameVolumeReservesAnything() {
-        assertEquals(20_000, reservedOn("sd", "sd", 20_000, 0))
-        assertEquals(0, reservedOn("sd", "usb", 20_000, 0))
-    }
-
-    @Test
-    fun aCardFullOfStrikesOwnClipsAndEventsLeavesBothBudgetsAdjustable() {
+    fun aCardFullOfClipsAndEventsStillOffersEitherBudgetTheWholeCard() {
         val totalMb = 120_000
-        val clipsMb = 60_000
-        val eventsMb = 59_000
-        val freeMb = totalMb - clipsMb - eventsMb
+        val freeMb = 4_300
 
-        val forEvents = reservedOn("sd", "sd", otherBudgetMb = 60_000, otherUsedMb = clipsMb)
-        val forClips = reservedOn("sd", "sd", otherBudgetMb = 60_000, otherUsedMb = eventsMb)
-
-        assertTrue(RecordingSettings.hasRoom(freeMb, totalMb, eventsMb, forEvents))
-        assertTrue(RecordingSettings.hasRoom(freeMb, totalMb, clipsMb, forClips))
-        assertEquals(59_744, RecordingSettings.budgetCeilingMb(freeMb, totalMb, eventsMb, forEvents))
-    }
-
-    @Test
-    fun aBudgetTheOtherFeatureHasOverrunHoldsNothingBack() {
-        assertEquals(0, reservedOn("sd", "sd", otherBudgetMb = 20_000, otherUsedMb = 25_000))
+        assertTrue(RecordingSettings.hasRoom(freeMb, totalMb, usedMb = 10_750))
+        assertTrue(RecordingSettings.hasRoom(freeMb, totalMb, usedMb = 104_950))
+        assertEquals(totalMb - RecordingSettings.BUDGET_HEADROOM_MB, RecordingSettings.budgetCeilingMb(totalMb))
     }
 }

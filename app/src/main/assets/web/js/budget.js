@@ -66,16 +66,15 @@
             paintShared(volume);
         }
 
-        // Budgets on the same volume must account for each other's reservation.
         function paintShared(volume) {
             var note = document.getElementById('shared');
-            if (!volume || !volume.reservedMb) {
+            if (!volume || !volume.sharedMb) {
                 note.hidden = true;
                 return;
             }
             note.hidden = false;
-            note.textContent = plan.other + ' has reserved ' +
-                megabytes(volume.reservedMb) + ' of this volume.';
+            note.textContent = plan.other + ' can also keep up to ' +
+                megabytes(volume.sharedMb) + ' on this volume.';
         }
 
         document.getElementById('location').onclick = function (event) {
