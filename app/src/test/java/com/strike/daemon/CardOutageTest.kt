@@ -29,18 +29,41 @@ class CardOutageTest {
     }
 
     @Test
-    fun wakesBackOffUntilEightMinutesApart() {
+    fun aHungReaderGetsThreeWakesThenAsksForAReplugAndLeavesTheCarAsleep() {
         val outage = CardOutage()
-        val wakes = ArrayList<Long>()
+        val steps = ArrayList<Pair<Long, CardStep>>()
         var nowMs = 0L
-        while (nowMs <= 40 * 60_000L) {
-            if (outage.observe(false, nowMs) == CardStep.REVIVE) wakes.add(nowMs)
+        while (nowMs <= 8 * 60 * 60_000L) {
+            val step = outage.observe(false, nowMs)
+            if (step != CardStep.NONE) steps.add(nowMs to step)
             nowMs += 10_000L
         }
-        val gaps = wakes.zipWithNext { a, b -> b - a }
 
-        assertEquals(listOf(60_000L, 120_000L, 240_000L, 480_000L), gaps.take(4))
-        assertTrue(gaps.drop(4).all { it == 480_000L })
+        assertEquals(
+            listOf(
+                30_000L to CardStep.REVIVE, 40_000L to CardStep.REMOUNT,
+                90_000L to CardStep.REVIVE, 100_000L to CardStep.REMOUNT,
+                210_000L to CardStep.REVIVE, 220_000L to CardStep.REMOUNT,
+                450_000L to CardStep.REPLUG
+            ),
+            steps
+        )
+        assertTrue(outage.needsReplug)
+    }
+
+    @Test
+    fun aReplugClearsTheRequestAndTheNextOutageWakesTheCarAgain() {
+        val outage = CardOutage()
+        var nowMs = 0L
+        while (!outage.needsReplug) {
+            outage.observe(false, nowMs)
+            nowMs += 10_000L
+        }
+
+        outage.observe(true, nowMs)
+        assertFalse(outage.needsReplug)
+        outage.observe(false, nowMs + 10_000L)
+        assertEquals(CardStep.REVIVE, outage.observe(false, nowMs + 40_000L))
     }
 
     @Test

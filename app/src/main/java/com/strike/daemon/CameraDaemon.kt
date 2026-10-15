@@ -265,6 +265,7 @@ object CameraDaemon {
         payload.put("clips", clips)
         payload.put("clipsHeld", clipsDir()?.let { cards.isDown(it) } == true)
         payload.put("eventsHeld", eventsDir()?.let { cards.isDown(it) } == true)
+        payload.put("cardReplug", listOfNotNull(clipsDir(), eventsDir()).any { cards.needsReplug(it) })
         payload.put("writing", target?.mode?.name?.lowercase() ?: JSONObject.NULL)
         payload.put("sentry", sentryMode.name.lowercase())
         payload.put("sentryReason", sentryReason)
@@ -655,6 +656,7 @@ object CameraDaemon {
     private fun bringUp(dir: File?) {
         val target = dir ?: return
         val uuid = storageUuid(target.path) ?: return
+        if (cards.isDown(target)) return
         val now = System.currentTimeMillis()
         if (now - remountedAtMs < 15_000L) return
         remountedAtMs = now

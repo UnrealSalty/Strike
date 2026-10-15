@@ -98,10 +98,24 @@ class VolumesTest {
         assertTrue(gate.due(down, listOf("public:8,97"), 0L).isEmpty())
         assertTrue(gate.due(down, listOf("public:8,97"), 10_000L).isEmpty())
         assertEquals(listOf("public:8,97"), gate.due(down, listOf("public:8,97"), 15_000L))
-        assertTrue(gate.due(down, listOf("public:8,97"), 20_000L).isEmpty())
-        assertEquals(listOf("public:8,97"), gate.due(down, listOf("public:8,97"), 30_000L))
     }
 
+    @Test
+    fun aCardThatKeepsRefusingIsTriedLessOftenUpToSixteenMinutesApart() {
+        val gate = MountGate()
+        val refused = "public:8,97 unmountable null"
+        val mounts = ArrayList<Long>()
+        var nowMs = 0L
+        while (nowMs <= 2 * 60 * 60_000L) {
+            if (gate.due(refused, listOf("public:8,97"), nowMs).isNotEmpty()) mounts.add(nowMs)
+            nowMs += 5_000L
+        }
+        val gaps = mounts.zipWithNext { a, b -> b - a }
+
+        assertEquals(15_000L, mounts.first())
+        assertEquals(listOf(30_000L, 60_000L, 120_000L, 240_000L, 480_000L, 960_000L), gaps.take(6))
+        assertTrue(gaps.drop(6).all { it == 960_000L })
+    }
     @Test
     fun aCardSeenMountedOrEjectingStartsItsWaitAgain() {
         val gate = MountGate()

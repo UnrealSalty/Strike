@@ -3,7 +3,7 @@ package com.strike.daemon
 import android.os.SystemClock
 import com.strike.core.systemProperty
 import com.strike.recording.cardAnswers
-import com.strike.recording.remountStuck
+import com.strike.recording.remount
 import com.strike.recording.storageUuid
 import java.io.File
 import java.util.concurrent.ArrayBlockingQueue
@@ -22,11 +22,17 @@ internal class CardWatch(
 ) {
     private val outages = HashMap<String, CardOutage>()
     private val down: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val replug: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val nudges = ArrayBlockingQueue<Unit>(1)
 
     fun isDown(dir: File): Boolean {
         val uuid = storageUuid(dir.path) ?: return false
         return uuid in down
+    }
+
+    fun needsReplug(dir: File): Boolean {
+        val uuid = storageUuid(dir.path) ?: return false
+        return uuid in replug
     }
 
     fun nudge() {
@@ -52,9 +58,10 @@ internal class CardWatch(
                 DaemonLog.w(TAG, "waking the car so the card reader at $uuid gets power back")
                 revive()
             }
-            CardStep.REMOUNT -> {
-                val state = remountStuck(cards.first())
-                DaemonLog.w(TAG, "the card at $uuid is still not answering; mounted it again from vold state ${state ?: "unlisted"}")
+            CardStep.REMOUNT -> remount(cards.first())
+            CardStep.REPLUG -> {
+                replug.add(uuid)
+                DaemonLog.e(TAG, "the card reader at $uuid is hung; the card needs to be taken out and put back")
             }
             CardStep.NONE -> Unit
         }
@@ -64,6 +71,7 @@ internal class CardWatch(
         }
         if (since != null && !outage.isDown) {
             down.remove(uuid)
+            replug.remove(uuid)
             DaemonLog.d(TAG, "the card at $uuid is back after ${(nowMs - since) / 1000}s")
         }
         if (!outage.isDown) cards.forEach(answering)

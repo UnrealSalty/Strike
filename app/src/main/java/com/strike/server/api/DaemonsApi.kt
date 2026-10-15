@@ -40,6 +40,7 @@ private const val LOG_TAIL_LINES = 60
 private const val CARDS_CACHE_MS = 2_000L
 private const val DASH = "\u2014"
 private const val HELD = "Internal. The card is not answering"
+private const val REPLUG = "Internal. Take the SD card out and put it back"
 
 internal const val RECORDER_API = "/api/daemons/recorder"
 
@@ -343,7 +344,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         fact(facts, "Frame rate", setting(RecordingSettings.FRAME_RATE_FPS) + " fps")
         fact(facts, "Resolution", RESOLUTIONS[setting(RecordingSettings.RESOLUTION)] ?: DASH)
         fact(facts, "Lens correction", LENSES[setting(RecordingSettings.LENS)] ?: DASH)
-        fact(facts, "Writing to", if (status?.optBoolean("clipsHeld") == true) HELD else place())
+        fact(facts, "Writing to", if (status?.optBoolean("clipsHeld") == true) held(status) else place())
         fact(facts, "Clips this run", status?.optInt("clips")?.toString() ?: DASH)
         card.put("facts", facts)
         return card
@@ -391,7 +392,7 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
             if (Config.getBool(SurveillanceSettings.SCREEN, false)) "On" else "Off"
         )
         fact(facts, "Events this run", status?.optInt("events")?.toString() ?: DASH)
-        fact(facts, "Writing to", if (status?.optBoolean("eventsHeld") == true) HELD else eventsPlace())
+        fact(facts, "Writing to", if (status?.optBoolean("eventsHeld") == true) held(status) else eventsPlace())
         card.put("facts", facts)
         return card
     }
@@ -462,6 +463,8 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
     }
 
     private fun setting(key: String): String = Config.getString(key, RecordingSettings.fallback(key))
+
+    private fun held(status: JSONObject): String = if (status.optBoolean("cardReplug")) REPLUG else HELD
 
     private fun place(): String {
         val name = PLACES[storage.location()] ?: return DASH

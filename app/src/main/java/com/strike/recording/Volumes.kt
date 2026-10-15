@@ -155,10 +155,14 @@ internal fun storageUuid(path: String): String? {
 // BYD unmounts cards 5 s after ACC off and then cuts the reader's power.
 // A mount inside that window is left on a reader that loses power under it.
 private const val MOUNT_AFTER_MS = 15_000L
+// Each refused mount holds vold in a minute of blkid retries against the reader.
+private const val LONGEST_MOUNT_WAIT_MS = 16 * 60_000L
 
-/** Lets a volume be mounted once it has sat unmounted for 15 s, then once per 15 s while it stays down. */
+/** Lets a volume be mounted once it has sat unmounted for 15 s, then backs off while mounts keep failing. */
 internal class MountGate {
-    private val downSinceMs = HashMap<String, Long>()
+    private class Wait(var atMs: Long, var waitMs: Long)
+
+    private val waits = HashMap<String, Wait>()
 
     @Synchronized
     fun due(listing: String, ids: List<String>, nowMs: Long): List<String> {
@@ -166,12 +170,13 @@ internal class MountGate {
         for (id in ids) {
             val state = volumeState(listing, id)
             if (state != "unmounted" && state != "unmountable") {
-                downSinceMs.remove(id)
+                waits.remove(id)
                 continue
             }
-            val sinceMs = downSinceMs.getOrPut(id) { nowMs }
-            if (nowMs - sinceMs < MOUNT_AFTER_MS) continue
-            downSinceMs[id] = nowMs
+            val wait = waits.getOrPut(id) { Wait(nowMs + MOUNT_AFTER_MS, MOUNT_AFTER_MS) }
+            if (nowMs < wait.atMs) continue
+            wait.waitMs = minOf(wait.waitMs * 2, LONGEST_MOUNT_WAIT_MS)
+            wait.atMs = nowMs + wait.waitMs
             due.add(id)
         }
         return due
@@ -199,21 +204,6 @@ internal fun remountUntil(dir: File): Boolean {
         }
     }
     return dir.exists() || (dir.mkdirs() && dir.exists())
-}
-
-// vold refuses `sm mount` on a volume it still lists as mounted, even when every read fails.
-internal fun remountStuck(dir: File): String? {
-    val uuid = storageUuid(dir.path) ?: return null
-    val listing = exec("sm", "list-volumes", "all") ?: return null
-    val id = volumeIdFor(listing, uuid)
-    if (id == null) {
-        for (each in mountIds(listing, uuid)) exec("sm", "mount", each)
-        return null
-    }
-    val state = volumeState(listing, id)
-    if (state == "mounted") exec("sm", "unmount", id, seconds = 10)
-    exec("sm", "mount", id, seconds = 10)
-    return state
 }
 
 internal fun volumeState(listing: String, id: String): String? {
@@ -251,8 +241,8 @@ internal fun fallbackDir(card: File): File? {
     return File("/storage/emulated/0/Strike/fallback", card.name)
 }
 
-private fun exec(vararg command: String, seconds: Int = 3): String? = try {
-    val process = ProcessBuilder("timeout", "-s", "KILL", "$seconds", *command).redirectErrorStream(true).start()
+private fun exec(vararg command: String): String? = try {
+    val process = ProcessBuilder("timeout", "-s", "KILL", "3", *command).redirectErrorStream(true).start()
     try {
         val printed = process.inputStream.bufferedReader().use { it.readText() }
         if (process.waitFor() == 0) printed else null
