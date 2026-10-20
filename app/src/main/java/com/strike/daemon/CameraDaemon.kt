@@ -7,7 +7,6 @@ import android.os.Build
 import android.os.SystemClock
 import com.strike.camera.CAMERA_PROFILE
 import com.strike.camera.CAMERA_FIRST_FRAME_MS
-import com.strike.camera.CameraBackend
 import com.strike.camera.CameraChoice
 import com.strike.camera.CameraProfile
 import com.strike.camera.CameraSource
@@ -21,7 +20,6 @@ import com.strike.camera.LiveStreamer
 import com.strike.camera.LiveQuality
 import com.strike.camera.cameraStack
 import com.strike.camera.cameras
-import com.strike.camera.AvcHal
 import com.strike.camera.CameraTexture
 import com.strike.camera.fallbackCamera
 import com.strike.camera.loadCameraLibraries
@@ -365,9 +363,6 @@ object CameraDaemon {
                 if (ParkedRails.revive() && !screen.isShowing) screen.sleepPanel()
             }
             if (recorder?.waitingForStorage == true && target?.dir?.let { storageUuid(it.path) } != null) cards.nudge()
-            if (bus != null && cameraStartup?.choice?.backend == CameraBackend.LEGACY) {
-                AvcHal.keepAlive(if (sentryMode != SentryMode.OFF) 10_000L else 60_000L)
-            }
             if (nothingWatching() && wantedTarget == null && !(liveWanted && relay.hasReader) && !awakeArmingDrive()) {
                 cameraDown()
             } else {
@@ -541,8 +536,6 @@ object CameraDaemon {
         inventoryNow()
         val strip = cameraStartup?.choice ?: return null
         cameraRetryAtMs = SystemClock.elapsedRealtime() + RETRY_AFTER_MS
-        if (strip.backend == CameraBackend.LEGACY) AvcHal.warmAndWait()
-        if (!alive) return null
         val fresh = FrameBus(strip.width, strip.height)
         val input = fresh.start()
         if (input == null) {
