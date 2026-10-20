@@ -7,6 +7,7 @@ import com.strike.recording.Storage
 import com.strike.recording.Volume
 import com.strike.recording.clipsDir
 import com.strike.recording.totalBytes
+import com.strike.surveillance.Event
 import com.strike.surveillance.EventStorage
 import com.strike.surveillance.EventStore
 import com.strike.surveillance.EventSummary
@@ -38,9 +39,13 @@ object LibraryScan {
     }
     private val recordings = DirectoryInventory({ root -> ClipStore(root).list() }, worker)
     private val summaries = DirectoryInventory({ root -> EventStore(root).summary() }, worker)
+    private val events = DirectoryInventory({ root -> EventStore(root).list() }, worker)
 
     internal fun clips(volume: Volume, revision: Long): DirectorySnapshot<List<Clip>> =
         recordings.snapshot(clipsDir(volume), revision)
+
+    internal fun events(store: EventStore, revision: Long): DirectorySnapshot<List<Event>> =
+        events.snapshot(store.root, revision)
 
     fun stats(storage: Storage, events: EventStorage): LibraryStats {
         val mounts = storage.volumeSnapshot()
@@ -64,5 +69,6 @@ object LibraryScan {
     fun forget() {
         recordings.forget()
         summaries.forget()
+        events.forget()
     }
 }

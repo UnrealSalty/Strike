@@ -36,8 +36,11 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
     fun events(): Response {
         val mounts = events.volumeSnapshot()
         if (mounts.pending) return libraryPending()
+        val mounted = events.selected() != null
+        val inventory = if (mounted) LibraryScan.events(events.store(), mounts.revision) else null
+        if (inventory?.pending == true) return libraryPending()
         val rows = JSONArray()
-        for (event in events.store().list()) {
+        for (event in inventory?.value.orEmpty()) {
             val row = JSONObject()
             row.put("id", event.id)
             row.put("kind", event.kind.name.lowercase(Locale.US))
@@ -58,7 +61,7 @@ class SurveillanceApi(context: Context, private val shell: Shell) {
             rows.put(row)
         }
         val payload = JSONObject()
-        payload.put("mounted", events.selected() != null)
+        payload.put("mounted", mounted)
         payload.put("location", events.location())
         payload.put("storageRevision", mounts.revision)
         payload.put("enabled", Config.getBool(SurveillanceSettings.ENABLED, false))
