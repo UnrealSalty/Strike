@@ -420,24 +420,20 @@ body {
     display: none;
     flex: none;
     align-items: center;
-    white-space: nowrap;
-    min-height: var(--touch);
-    padding: 0 12px;
-    border: 1px solid var(--line);
+    justify-content: center;
+    width: var(--touch);
+    height: var(--touch);
+    padding: 0;
+    border: 0;
     border-radius: var(--radius);
-    background: var(--surface);
+    background: transparent;
     color: var(--text);
-    font: inherit;
-    font-size: 15px;
-    font-weight: 600;
     cursor: pointer;
 }
 
 .menu > svg {
-    flex: none;
-    width: 20px;
-    height: 20px;
-    margin-right: 10px;
+    width: 24px;
+    height: 24px;
 }
 
 .topbar[data-menu="open"] > .menu {
@@ -2748,7 +2744,8 @@ main {
 
     .menu {
         display: flex;
-        margin-left: auto;
+        order: 1;
+        margin-left: 4px;
     }
 
     .nav {
@@ -2782,7 +2779,7 @@ main {
     }
 
     .topbar > .nav__link--icon {
-        margin-left: var(--gap);
+        margin-left: auto;
     }
 
     .columns,
