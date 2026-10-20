@@ -416,6 +416,34 @@ body {
     color: var(--accent-text);
 }
 
+.menu {
+    display: none;
+    flex: none;
+    align-items: center;
+    white-space: nowrap;
+    min-height: var(--touch);
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.menu > svg {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+}
+
+.topbar[data-menu="open"] > .menu {
+    background: var(--surface-2);
+}
+
 main {
     flex: 1;
     min-height: 0;
@@ -1339,6 +1367,7 @@ main {
 .row--link,
 .daemon__open,
 .nav__link,
+.menu,
 .action,
 .switch,
 .pad__key {
@@ -2710,10 +2739,116 @@ main {
 }
 
 @media (max-width: 720px) {
+    .topbar {
+        position: relative;
+        flex-wrap: nowrap;
+        height: 64px;
+        padding: 0 var(--pad);
+    }
+
+    .menu {
+        display: flex;
+        margin-left: auto;
+    }
+
+    .nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        flex-direction: column;
+        width: auto;
+        margin: 0;
+        padding: 4px var(--pad) var(--pad);
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+        box-shadow: var(--shadow);
+    }
+
+    .topbar[data-menu="open"] > .nav {
+        display: flex;
+    }
+
+    .nav__link {
+        flex: none;
+        justify-content: flex-start;
+        padding: 0 12px;
+    }
+
+    .nav__link + .nav__link {
+        margin-left: 0;
+    }
+
+    .topbar > .nav__link--icon {
+        margin-left: var(--gap);
+    }
+
     .columns,
     .boxes,
     .live {
         flex-direction: column;
+    }
+
+    .columns {
+        align-items: stretch;
+    }
+
+    .card__actions,
+    .online .card__actions {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    .card__actions > *,
+    .card__actions > .card__lead,
+    .online .card__actions > .card__lead {
+        flex: 1 0 100%;
+        padding-right: 0;
+    }
+
+    .card__actions > .card__tools,
+    .online .card__tools {
+        position: static;
+        flex: 1 0 100%;
+        margin: var(--gap) 0 0;
+    }
+
+    .card__tools > .btn {
+        flex: 1;
+    }
+
+    .camera-profile {
+        display: block;
+    }
+
+    .camera-profile > .card__lead {
+        margin: 0 0 var(--gap);
+    }
+
+    .camera-profile .pick__btn {
+        width: 100%;
+    }
+
+    .row--clip {
+        min-height: 96px;
+    }
+
+    .clip__shot {
+        width: 104px;
+        height: 78px;
+        margin-right: var(--gap);
+    }
+
+    .clip__shot > svg {
+        left: 38px;
+        top: 25px;
+    }
+
+    .clip__acts {
+        flex-direction: column;
+        padding-left: 4px;
     }
 
     .live {
@@ -2736,10 +2871,6 @@ main {
         margin: var(--gap) 0 0;
     }
 
-    .online > .columns {
-        align-items: stretch;
-    }
-
     .box + .box {
         margin: var(--gap) 0 0;
     }
@@ -2758,24 +2889,44 @@ main {
     }
 
     .toolbar--stack {
-        display: block;
+        flex-wrap: wrap;
     }
 
-    .toolbar--stack > * + * {
-        margin-left: 0;
-        margin-top: var(--gap);
+    .toolbar--stack > .seg {
+        flex: 1 1 50%;
+        width: auto;
+        min-width: 0;
     }
 
-    .toolbar--stack .pick {
-        display: block;
+    .toolbar--stack > .pick {
+        flex: 0 0 38%;
+        min-width: 0;
     }
 
     .toolbar--stack .pick__btn {
         width: 100%;
+        min-width: 0;
     }
 
-    .count {
-        margin-left: 0;
+    .toolbar--stack .pick__btn > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .toolbar--stack .pick__menu {
+        left: auto;
+        right: 0;
+    }
+
+    .toolbar--stack > .count {
+        flex: 1 1 auto;
+        margin: 8px 0 0;
+    }
+
+    .toolbar--stack > .btn {
+        margin-top: 8px;
     }
 
     .row--control {

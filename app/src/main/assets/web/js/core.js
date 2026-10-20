@@ -252,7 +252,7 @@ Strike.pick = function (id, onChange) {
 };
 
 (function () {
-    var RIPPLES = ['nav__link', 'action', 'btn', 'seg__btn', 'choice__row', 'pick__btn',
+    var RIPPLES = ['nav__link', 'menu', 'action', 'btn', 'seg__btn', 'choice__row', 'pick__btn',
         'pick__item', 'row--clip', 'clip__act', 'row--link', 'daemon__open', 'pad__key'];
     var LINKS = ['nav__link', 'action', 'row--link'];
 
@@ -260,9 +260,30 @@ Strike.pick = function (id, onChange) {
         document.documentElement.classList.add('is-leaving');
     }
 
+    var menu = document.getElementById('menu');
+
+    function showMenu(open) {
+        if (!menu) return;
+        menu.parentNode.setAttribute('data-menu', open ? 'open' : 'closed');
+        menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    if (menu) {
+        menu.onclick = function () {
+            showMenu(menu.getAttribute('aria-expanded') !== 'true');
+        };
+        document.addEventListener('mousedown', function (event) {
+            if (!menu.parentNode.contains(event.target)) showMenu(false);
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') showMenu(false);
+        });
+    }
+
     window.addEventListener('pagehide', leaving);
     window.addEventListener('pageshow', function () {
         document.documentElement.classList.remove('is-leaving');
+        showMenu(false);
     });
 
     // Whole-word match: a substring test lets `row` hit `choice__row`, which
