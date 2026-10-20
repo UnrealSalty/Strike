@@ -5,6 +5,7 @@ import java.util.concurrent.Executor
 
 private const val INVENTORY_TTL_MS = 30_000L
 private const val INVENTORY_ROOTS = 8
+private const val SETTLE_SCANS = 3
 
 internal class DirectorySnapshot<T : Any>(val value: T?, val pending: Boolean)
 
@@ -17,6 +18,7 @@ internal class DirectoryInventory<T : Any>(
         var value: T? = null
         var readAtMs: Long? = null
         var generation = 0L
+        var epoch = 0L
         var pending = false
     }
 
@@ -44,6 +46,7 @@ internal class DirectoryInventory<T : Any>(
                 entry.value = null
                 entry.readAtMs = null
                 entry.generation++
+                entry.epoch++
             }
             if (entry.stamp != stamp) {
                 entry.stamp = stamp
@@ -67,6 +70,7 @@ internal class DirectoryInventory<T : Any>(
             entry.value = null
             entry.readAtMs = null
             entry.generation++
+            entry.epoch++
         }
     }
 
@@ -81,22 +85,29 @@ internal class DirectoryInventory<T : Any>(
 
     private fun refresh(entry: Entry<T>) {
         try {
-            val before = entry.root.lastModified()
-            val generation = synchronized(lock) {
-                if (entry.stamp != before) {
-                    entry.stamp = before
-                    entry.readAtMs = null
-                    entry.generation++
+            for (scan in 1..SETTLE_SCANS) {
+                val before = entry.root.lastModified()
+                val (generation, epoch) = synchronized(lock) {
+                    if (entry.stamp != before) {
+                        entry.stamp = before
+                        entry.readAtMs = null
+                        entry.generation++
+                    }
+                    entry.generation to entry.epoch
                 }
-                entry.generation
-            }
-            val value = read(entry.root)
-            val after = entry.root.lastModified()
-            val completedAt = nowMs()
-            synchronized(lock) {
-                if (entry.generation == generation && before == after && entry.stamp == after) {
-                    entry.value = value
-                    entry.readAtMs = completedAt
+                val value = read(entry.root)
+                val after = entry.root.lastModified()
+                val completedAt = nowMs()
+                synchronized(lock) {
+                    if (entry.epoch != epoch) return
+                    val unchanged = entry.generation == generation && before == after && entry.stamp == after
+                    // Parked recording can change the folder during every scan; the last one lists anyway.
+                    if (unchanged || scan == SETTLE_SCANS) {
+                        entry.value = value
+                        entry.stamp = after
+                        entry.readAtMs = completedAt
+                        return
+                    }
                 }
             }
         } finally {

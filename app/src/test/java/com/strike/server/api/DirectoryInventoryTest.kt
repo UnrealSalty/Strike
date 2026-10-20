@@ -240,7 +240,7 @@ class DirectoryInventoryTest {
     }
 
     @Test
-    fun aDirectoryChangedDuringScanningCannotPublishAnObsoleteListing() {
+    fun aDirectoryChangedDuringScanningIsRescannedBeforeItLists() {
         File(folder.root, "first.mp4").writeText("clip")
         stamp(1_000_000L)
         val executor = QueuedExecutor()
@@ -255,9 +255,30 @@ class DirectoryInventoryTest {
         }, executor)
         inventory.snapshot(folder.root, 1L)
         executor.runNext()
-        assertNull(inventory.snapshot(folder.root, 1L).value)
-        executor.runNext()
         assertEquals(listOf("first.mp4", "second.mp4"), inventory.snapshot(folder.root, 1L).value)
+        assertEquals(2, scans)
+    }
+
+    @Test
+    fun aDirectoryThatChangesDuringEveryScanStillLists() {
+        File(folder.root, "first.mp4").writeText("clip")
+        stamp(1_000_000L)
+        val executor = QueuedExecutor()
+        var scans = 0
+        val inventory = DirectoryInventory({ root: File ->
+            clips(root).also {
+                scans++
+                File(root, "clip-$scans.mp4").writeText("clip")
+                stamp(1_000_000L + scans * 2_000L)
+            }
+        }, executor)
+        assertTrue(inventory.snapshot(folder.root, 1L).pending)
+        executor.runNext()
+        val listed = inventory.snapshot(folder.root, 1L)
+        assertFalse(listed.pending)
+        assertEquals(listOf("clip-1.mp4", "clip-2.mp4", "first.mp4"), listed.value)
+        assertEquals(3, scans)
+        assertEquals(0, executor.size)
     }
 
     @Test(timeout = 5_000L)
