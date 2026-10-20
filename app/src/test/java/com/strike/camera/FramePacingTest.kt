@@ -32,10 +32,26 @@ class FramePacingTest {
         val pacing = FramePacing(12)
         assertTrue(pacing.take(0L))
         assertTrue(pacing.take(10_000_000_000L))
-        repeat(82) { offsetMs ->
+        repeat(61) { offsetMs ->
             assertFalse(pacing.take(10_001_000_000L + offsetMs * 1_000_000L))
         }
         assertTrue(pacing.take(10_084_000_000L))
+    }
+
+    @Test
+    fun aJitteryCameraAtThePacedRateKeepsEveryFrame() {
+        val pacing = FramePacing(30)
+        repeat(30 * 60) { frame ->
+            val jitterNs = if (frame % 2 == 0) 3_000_000L else -3_000_000L
+            assertTrue(pacing.take(frame * 1_000_000_000L / 30 + jitterNs))
+        }
+    }
+
+    @Test
+    fun aThirtyFpsCameraFeedsTenFpsWithoutDrift() {
+        val pacing = FramePacing(10)
+        val accepted = (0 until 30 * 60).count { frame -> pacing.take(frame * 1_000_000_000L / 30) }
+        assertEquals(600, accepted)
     }
 
     @Test

@@ -131,9 +131,7 @@ class Recorder(
         waitingForStorage = false
         storageRetryAtMs = 0L
         running = true
-        // Pacing at the camera's own rate would drop frames that arrive a little early.
-        val paceFps = if (options.frameRateFps < bus.cameraFps) options.frameRateFps else 0
-        bus.add(Consumer(CONSUMER, surface, CameraView.ALL, wanted, encoder::inputFailed, paceFps, options.lens))
+        bus.add(Consumer(CONSUMER, surface, CameraView.ALL, wanted, encoder::inputFailed, options.frameRateFps, options.lens))
         this.bus = bus
         this.encoder = encoder
         frame = wanted

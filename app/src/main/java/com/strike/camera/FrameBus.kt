@@ -65,7 +65,7 @@ private class Retirement(val name: String, val done: CountDownLatch? = null) {
 
 // Owns capture and all EGL work on the bus thread.
 // Other threads enqueue consumer changes; they must not destroy EGL resources.
-class FrameBus(val stripWidth: Int, val stripHeight: Int, val cameraFps: Int) {
+class FrameBus(val stripWidth: Int, val stripHeight: Int) {
 
     private val consumers = CopyOnWriteArrayList<Consumer>()
     private val targets = HashMap<String, EGLSurface>()
@@ -268,12 +268,20 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int, val cameraFps: Int) {
             }
             retire()
             if (!arrivedNow) continue
-            if (bind()) {
+            val timestampNs = stamp()
+            val wanting = consumers.filter { it.wantsFrame(timestampNs) }
+            if (if (wanting.isEmpty()) discard() else bind()) {
                 frameAtMs = System.currentTimeMillis()
                 frames++
-                paint(stamp())
+                paint(wanting, timestampNs)
             }
         }
+    }
+
+    private fun discard(): Boolean {
+        val fresh = reader?.acquireLatestImage() ?: return false
+        fresh.close()
+        return true
     }
 
     private fun bind(): Boolean {
@@ -309,10 +317,9 @@ class FrameBus(val stripWidth: Int, val stripHeight: Int, val cameraFps: Int) {
         return stampedAtNs
     }
 
-    private fun paint(timestampNs: Long) {
+    private fun paint(wanting: List<Consumer>, timestampNs: Long) {
         val program = shader ?: return
-        for (consumer in consumers) {
-            if (!consumer.wantsFrame(timestampNs)) continue
+        for (consumer in wanting) {
             val target = targetFor(consumer) ?: continue
             if (!EGL14.eglMakeCurrent(display, target, target, context)) {
                 fault(consumer, "cannot be drawn on")

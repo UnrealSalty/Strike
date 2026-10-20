@@ -39,7 +39,8 @@ class FrameSink(private val everyMs: Long) {
             thread = spinner
             warnedRead = false
         }
-        bus.add(Consumer(NAME, fresh.surface, CameraView.ALL, Frame(SINK_WIDTH, SINK_HEIGHT)))
+        val frameRateFps = (2_000L / everyMs).toInt().coerceAtLeast(1)
+        bus.add(Consumer(NAME, fresh.surface, CameraView.ALL, Frame(SINK_WIDTH, SINK_HEIGHT), frameRateFps = frameRateFps))
         DaemonLog.d(TAG, "reading back ${SINK_WIDTH}x$SINK_HEIGHT every ${everyMs}ms")
     }
 

@@ -543,13 +543,13 @@ object CameraDaemon {
         cameraRetryAtMs = SystemClock.elapsedRealtime() + RETRY_AFTER_MS
         if (strip.backend == CameraBackend.LEGACY) AvcHal.warmAndWait()
         if (!alive) return null
-        val fresh = FrameBus(strip.width, strip.height, cameraFps())
+        val fresh = FrameBus(strip.width, strip.height)
         val input = fresh.start()
         if (input == null) {
             if (!fresh.stop()) restart("the camera graphics thread did not stop")
             return null
         }
-        if (!camera.open(strip, fresh.cameraFps, input, nativeDir)) {
+        if (!camera.open(strip, cameraFps(), input, nativeDir)) {
             if (!fresh.stop()) restart("the camera graphics thread did not stop")
             return null
         }
@@ -903,7 +903,7 @@ object CameraDaemon {
     private fun clipLengthMs(): Long =
         setting(RecordingSettings.CLIP_LENGTH_MINUTES).toLong() * 60_000L
 
-    // One camera feeds both recorders, so it runs at the faster of the two rates.
+    // Only DiLink 5 takes a rate at start. One camera feeds both recorders, so it is the faster one.
     private fun cameraFps(): Int = maxOf(
         setting(RecordingSettings.FRAME_RATE_FPS).toInt(),
         parked(SurveillanceSettings.FRAME_RATE_FPS).toInt()

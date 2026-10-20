@@ -61,7 +61,7 @@ class CameraSource {
                 .newInstance(choice.id)
             if (call(avm, opened, "open") != true) return fail("camera ${choice.id} refused to open")
             camera = opened
-            call(avm, opened, "setCameraFps", Int::class.javaPrimitiveType to frameRateFps)
+            // The car's own camera views share this camera's rate, so Strike never sets it.
             avm.getDeclaredMethod("addPreviewSurface", Surface::class.java, Int::class.javaPrimitiveType)
                 .also { it.isAccessible = true }
                 .invoke(opened, target, PREVIEW_CHANNEL)
