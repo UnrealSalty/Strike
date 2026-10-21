@@ -10,6 +10,7 @@ import com.strike.core.Logs
 import com.strike.daemon.AUDIO_KIND_CONFIG
 import com.strike.daemon.AUDIO_KIND_FRAME
 import com.strike.daemon.AUDIO_PORT
+import java.io.BufferedOutputStream
 import java.io.DataOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
@@ -22,6 +23,7 @@ private const val SAMPLE_RATE = 48_000
 private const val CHANNELS = 1
 private const val BITRATE_BPS = 64_000
 private const val DEQUEUE_TIMEOUT_US = 10_000L
+private const val LINK_BUFFER_BYTES = 4_096
 
 // Encode microphone audio in the app and send it to the daemon's muxer.
 class CabinAudio internal constructor(private val capture: (CabinAudio) -> Unit) {
@@ -149,7 +151,7 @@ class CabinAudio internal constructor(private val capture: (CabinAudio) -> Unit)
                 microphone.startRecording()
                 inputStarted = true
             }
-            val link = DataOutputStream(socket.getOutputStream())
+            val link = DataOutputStream(BufferedOutputStream(socket.getOutputStream(), LINK_BUFFER_BYTES))
             val pcm = ByteArray(minBytes)
             val info = MediaCodec.BufferInfo()
             val clock = AudioClock(System.nanoTime() / 1_000, SAMPLE_RATE)

@@ -1,6 +1,7 @@
 package com.strike.daemon
 
 import com.strike.recording.Sample
+import java.io.BufferedInputStream
 import java.io.DataInputStream
 import java.io.EOFException
 import java.io.IOException
@@ -101,7 +102,7 @@ class AudioIngest {
     private fun read(client: Socket) {
         client.tcpNoDelay = true
         try {
-            client.use { accept(DataInputStream(it.getInputStream())) }
+            client.use { accept(DataInputStream(BufferedInputStream(it.getInputStream()))) }
         } catch (e: EOFException) {
             DaemonLog.d(TAG, "the app stopped sending cabin audio")
         } catch (e: IOException) {
