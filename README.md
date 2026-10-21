@@ -224,6 +224,22 @@ Parked capture uses power to keep the cameras and head unit awake. Battery use
 has not been measured across vehicles. A sudden power cut can leave the clip
 being written unplayable.
 
+## BYD services
+
+Strike only reads from the car, with one exception. **Settings → Services** can
+switch off BYD apps you don't use, so they stop competing with recording for the
+head unit's CPU and cameras:
+
+- **Factory dashcam** (`com.byd.cdr`) holds the cameras while it runs.
+- **Traffic monitor** (`com.byd.trafficmonitor`)
+- **Telenav navigation** (`com.telenav.app.arp`)
+- **Voice assistant wake word**
+
+Nothing changes until you flip a switch. Strike never turns these off on its
+own. An app turned off here stays off after a restart until you switch it back
+on in the same place. Apps the head unit does not have show as **Not installed**.
+Changing them needs authorized ADB access.
+
 ## Updates
 
 Open **Settings → Updates** to check, download, and install a release. Strike
