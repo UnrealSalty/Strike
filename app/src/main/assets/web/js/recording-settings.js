@@ -60,6 +60,8 @@
         storage.paint(payload);
         paintApp('dashcam', payload.bydApps.dashcam, payload.bydAppsWritable);
         paintApp('trafficMonitor', payload.bydApps.trafficMonitor, payload.bydAppsWritable);
+        paintApp('navigation', payload.bydApps.navigation, payload.bydAppsWritable);
+        paintApp('wakeWord', payload.bydApps.wakeWord, payload.bydAppsWritable);
     }
 
     function load() {

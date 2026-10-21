@@ -234,10 +234,14 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         val name = when (app) {
             "dashcam" -> BydApps.DASHCAM
             "trafficMonitor" -> BydApps.TRAFFIC_MONITOR
+            "navigation" -> BydApps.NAVIGATION
+            "wakeWord" -> null
             else -> return notFound()
         }
         val wanted = formValue(body, "enabled") ?: return Response(400, TEXT, "No state given".toByteArray())
-        if (!bydApps.setEnabled(name, wanted == "true")) {
+        val changed = if (name == null) bydApps.setWakeWord(wanted == "true")
+            else bydApps.setEnabled(name, wanted == "true")
+        if (!changed) {
             return Response(503, TEXT, "Strike has no shell access, so it cannot change that".toByteArray())
         }
         forget()

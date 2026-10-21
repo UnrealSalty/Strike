@@ -182,6 +182,8 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         val apps = JSONObject()
         apps.put("dashcam", bydApps.state(BydApps.DASHCAM))
         apps.put("trafficMonitor", bydApps.state(BydApps.TRAFFIC_MONITOR))
+        apps.put("navigation", bydApps.state(BydApps.NAVIGATION))
+        apps.put("wakeWord", bydApps.wakeWordState())
         return apps
     }
 }
