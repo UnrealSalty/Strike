@@ -1,5 +1,4 @@
 fast_cam_capture, packaged as libstrike_capture.so
-Source: https://github.com/yash-srivastava/Overdrive-release/blob/51adadc65a97bda42351953ccf8e2866aa649074/app/src/main/assets/dilink5/fast_cam_capture
 SHA-256: c93c529aced1c975157e2905ff3c3b0c317dd0b9469998662a584bf0690244f4
 
 MIT License

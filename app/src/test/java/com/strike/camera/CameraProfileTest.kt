@@ -80,7 +80,7 @@ class CameraProfileTest {
     }
 
     @Test
-    fun attoThreeAndYuanPlusUseOverdrivesCameraZeroException() {
+    fun attoThreeAndYuanPlusUseCameraZero() {
         for (model in listOf("Atto 3", "BYD ATTO-3", "byd_atto_3", "Yuan Plus", "yuan_plus")) {
             val camera = roadCamera(emptyList(), model)!!
             assertEquals(0, camera.id)

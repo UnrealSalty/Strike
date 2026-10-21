@@ -28,7 +28,7 @@ internal fun strikeDirSetup(dir: String = STRIKE_DIR): String =
     else "{ chmod 711 $SHELL_DATA_DIR; [ -f $dir/config.json ] || [ ! -r $LEGACY_DIR/config.json ] || " +
         "{ cp $LEGACY_DIR/config.json $dir/config.json && chmod 644 $dir/config.json; }; }"
 
-/** Overdrive holds 19876 on this same head unit and both may be installed. */
+/** Another BYD app holds 19876 on these head units and both may be installed. */
 const val COMMAND_PORT = 19886
 
 const val PACKET_PORT = 19887

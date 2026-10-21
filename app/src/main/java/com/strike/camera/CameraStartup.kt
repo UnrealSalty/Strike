@@ -36,7 +36,6 @@ class CameraStartup(
             waitingMs < CAMERA_FIRST_FRAME_MS
         ) return false
 
-        // Overdrive's PanoCameraFallbackOrder tries raw camera 0 after the panoramic hint.
         choice = RAW_STRIP
         switched = true
         return true

@@ -4,7 +4,7 @@ import java.util.Locale
 
 const val CAMERA_PROFILE = "camera.profile"
 
-// Legacy AVMCamera geometry from Overdrive's CameraProfiles; Atto 2 is verified in Strike.
+// Only Atto 2 is verified on a car; the other legacy AVMCamera geometries are untested.
 enum class CameraProfile(val id: String, val label: String, val camera: CameraChoice?) {
     AUTO("auto", "Automatic", null),
     ATTO_2("atto2", "Atto 2", RAW_STRIP),

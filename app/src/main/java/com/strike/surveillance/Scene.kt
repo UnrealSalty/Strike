@@ -1,6 +1,6 @@
 package com.strike.surveillance
 
-/** Overdrive's DetectionBaseline match. Same car, same place. */
+/** Same car, same place. */
 private const val MATCH = 0.7f
 
 /** Two quiet looks before a vehicle is scenery. One frame is a passer-by. */

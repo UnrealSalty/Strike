@@ -8,7 +8,7 @@ import org.junit.Test
 class CameraSelectionTest {
 
     @Test
-    fun unnamedFirmwareUsesOverdrivesLegacyCamera() {
+    fun unnamedFirmwareUsesTheLegacyCamera() {
         val camera = roadCamera(emptyList())!!
         assertEquals(1, camera.id)
         assertEquals(5120, camera.width)

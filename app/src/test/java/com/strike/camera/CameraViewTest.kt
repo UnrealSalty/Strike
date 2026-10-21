@@ -40,7 +40,7 @@ class CameraViewTest {
     }
 
     @Test
-    fun theMosaicCornersFollowOverdrivesLayout() {
+    fun theMosaicPutsEachCameraInItsCorner() {
         val corners = tilesOf(CameraView.ALL).associate { Pair(it.destX, it.destY) to it.sourceX }
 
         assertEquals(0.75f, corners.getValue(Pair(0f, 0f)))

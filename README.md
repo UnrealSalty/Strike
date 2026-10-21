@@ -148,10 +148,10 @@ Testing so far has been on a BYD Atto 2. Other models and firmware versions have
 not yet been verified.
 
 If the camera views are split incorrectly, **Settings → Cameras** offers legacy
-profiles for Seal, Atto 3, and Tang 2022 using Overdrive's camera mappings, plus
+profiles for Seal, Atto 3, and Tang 2022, plus
 Strike's Atto 2 profile. After choosing one, turn **Recorder** off and on in
 **Daemons**. Automatic uses camera-tag discovery, then recognizable Atto 2 or
-Atto 3 model names, otherwise Overdrive's legacy camera-1 profile. If that camera
+Atto 3 model names, otherwise the legacy camera-1 profile. If that camera
 opens but sends no frames for 25 seconds, Automatic tries raw camera 0 and remembers
 it after frames arrive. A firmware change clears that preference. These profiles
 still need testing on each head unit.
@@ -276,13 +276,13 @@ are kept.
 Build setup, emulator instructions, release publishing, and contribution guidelines
 are in [CONTRIBUTING.md](CONTRIBUTING.md#build).
 
-## Credits
+## Third-party components
 
-Strike builds on [Overdrive](https://github.com/yash-srivastava/Overdrive-release)'s
-work on BYD camera access, vehicle integration, and parked operation. It also
-reuses assets from that project, including the car graphic and bundled detection
-model. Thanks to Yash Srivastava and the Overdrive contributors.
+Third-party components keep their upstream licenses:
 
-Overdrive is not required to install or build Strike. Third-party components keep
-their upstream licenses; see [Overdrive's notices](https://github.com/yash-srivastava/Overdrive-release/blob/main/THIRD_PARTY_NOTICES.md)
-and the bundled [Cloudflare connector notices](app/src/main/assets/cloudflared-notices.txt).
+- The DiLink 5 capture helper and the car graphic, © 2026 Yash Srivastava, MIT
+  License. See [the notice](app/src/main/assets/licenses/fast_cam.txt).
+- The person and vehicle detection model, from [Ultralytics YOLO](https://github.com/ultralytics/ultralytics),
+  AGPL-3.0.
+- The [Cloudflare connector](app/src/main/assets/cloudflared-notices.txt) and
+  [zrok](app/src/main/assets/zrok-notices.txt) notices.

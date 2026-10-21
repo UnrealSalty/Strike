@@ -16,7 +16,7 @@ enum class CameraView(val id: String) {
 private const val SLICES = 4
 private const val SLICE_WIDTH = 1f / SLICES
 
-// Camera order matches Overdrive's PanoramicSlice mapping.
+// The strip's camera order on the legacy AVMCamera.
 private val SLICE_X = mapOf(
     CameraView.REAR to 0.00f,
     CameraView.LEFT to 0.25f,

@@ -169,7 +169,7 @@ object CameraDaemon {
         Thread({ watchCapture() }, "capture-watch").also { it.isDaemon = true; it.start() }
         cameraProfile = CameraProfile.of(Config.getString(CAMERA_PROFILE, "auto")) ?: CameraProfile.AUTO
         DaemonLog.d(TAG, "camera profile: ${cameraProfile.label}")
-        // The camera HAL posts its callbacks to the main looper, as in Overdrive's daemon.
+        // The camera HAL posts its callbacks to the main looper.
         Looper.prepareMainLooper()
         DaemonFonts.install()
         if (cameraProfile != CameraProfile.AUTO || !DiLink5.isSupported) loadCameraLibraries()

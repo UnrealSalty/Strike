@@ -198,12 +198,7 @@ APK checksum, package, signing key, version, Android requirement, and processor
 architecture before installation. A debug build cannot update to an APK signed
 with a different key.
 
-## Reference code and reports
-
-[Overdrive](https://github.com/yash-srivastava/Overdrive-release) is a reference
-for BYD hardware integration. When using it to support a change, identify the
-relevant implementation and what it confirms. Keep unrelated
-architecture, dependencies, and UI out of Strike.
+## Reports
 
 Bug reports should include the vehicle and firmware, Strike build, steps to
 reproduce, and expected versus actual behavior. Add relevant logs or screenshots

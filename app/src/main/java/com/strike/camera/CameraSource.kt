@@ -15,7 +15,7 @@ private const val PREVIEW_CHANNEL = 0
 
 private val TAGS = arrayOf("pano_h", "pano_l", "byd_apa", "apa", "front")
 
-/** Overdrive's tag list, for firmware with no getValidCameraTag. */
+/** For firmware with no getValidCameraTag. */
 private val KNOWN_TAGS =
     listOf("front", "rear", "rvs", "rf", "dms", "face", "pano_h", "pano_l", "byd_apa", "apa")
 

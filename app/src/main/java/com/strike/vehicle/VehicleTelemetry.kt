@@ -180,7 +180,7 @@ internal fun gearOf(mode: Int?): String? =
 internal fun accOnOf(powerLevel: Int?): Boolean? =
     if (powerLevel != null && powerLevel in 0..3) powerLevel >= 2 else null
 
-// Overdrive's heartbeat skips accessory level 1 while power is transitioning.
+// Accessory level 1 appears while power is transitioning.
 internal fun polledAccOnOf(powerLevel: Int?): Boolean? =
     if (powerLevel == 1) null else accOnOf(powerLevel)
 

@@ -2,7 +2,7 @@ package com.strike.recording
 
 import android.media.MediaFormat
 
-// Bitrate presets match Overdrive; H.264 uses 1.5 times the H.265 bitrate.
+// H.264 uses 1.5 times the H.265 bitrate.
 private val H265_BPS = mapOf(
     "economy" to 1_000_000,
     "standard" to 2_000_000,

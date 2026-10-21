@@ -291,7 +291,7 @@ class RedScreen(
         null
     }
 
-    // Match Overdrive's ScreenDeterrent layer order; BYD's parked compositor rejects lower layers.
+    // BYD's parked compositor rejects lower layers.
     private fun place(held: Any) {
         transact { transaction, controlClass, transactionClass ->
             try {
