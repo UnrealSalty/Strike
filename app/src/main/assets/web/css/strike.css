@@ -2168,16 +2168,43 @@ main {
 .switch {
     position: relative;
     flex: none;
-    width: 56px;
+    width: 72px;
     height: var(--touch);
     padding: 0;
-    border: 0;
+    border: 1px solid var(--line);
     border-radius: 24px;
-    background: transparent;
+    background: var(--bg);
     cursor: pointer;
 }
 
-.switch::before {
+.switch__knob {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: left var(--quick) var(--ease), background-color var(--quick) linear;
+}
+
+.switch[aria-pressed="true"] {
+    border-color: transparent;
+    background: var(--accent);
+}
+
+.switch[aria-pressed="true"] > .switch__knob {
+    left: 28px;
+    background: var(--on-accent);
+}
+
+.switch--small {
+    width: 56px;
+    border: 0;
+    background: transparent;
+}
+
+.switch--small::before {
     content: "";
     position: absolute;
     top: 50%;
@@ -2192,26 +2219,21 @@ main {
     transition: background-color var(--quick) linear;
 }
 
-.switch__knob {
-    position: absolute;
+.switch--small > .switch__knob {
     top: 50%;
     left: 8px;
     width: 20px;
     height: 20px;
     margin-top: -10px;
-    border-radius: 50%;
-    background: var(--text-dim);
-    transition: left var(--quick) var(--ease), background-color var(--quick) linear;
 }
 
-.switch[aria-pressed="true"]::before {
+.switch--small[aria-pressed="true"] {
+    background: transparent;
+}
+
+.switch--small[aria-pressed="true"]::before {
     border-color: transparent;
     background: var(--accent);
-}
-
-.switch[aria-pressed="true"] > .switch__knob {
-    left: 28px;
-    background: var(--on-accent);
 }
 
 .switch[disabled] {
