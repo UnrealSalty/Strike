@@ -40,17 +40,6 @@
         toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
 
-    function paintApp(name, state, writable) {
-        var cell = document.querySelector('[data-app="' + name + '"]');
-        if (state === 'notInstalled') {
-            cell.textContent = 'Not installed';
-            return;
-        }
-        var toggle = cell.getElementsByTagName('button')[0];
-        toggle.disabled = !writable;
-        paintSwitch(toggle, state === 'enabled');
-    }
-
     function paint(payload) {
         var segs = document.querySelectorAll('.seg[data-key]');
         for (var i = 0; i < segs.length; i++) {
@@ -58,10 +47,6 @@
         }
         paintSwitch(document.querySelector('.switch[data-key="recording.audio"]'), payload.values['recording.audio']);
         storage.paint(payload);
-        paintApp('dashcam', payload.bydApps.dashcam, payload.bydAppsWritable);
-        paintApp('trafficMonitor', payload.bydApps.trafficMonitor, payload.bydAppsWritable);
-        paintApp('navigation', payload.bydApps.navigation, payload.bydAppsWritable);
-        paintApp('wakeWord', payload.bydApps.wakeWord, payload.bydAppsWritable);
     }
 
     function load() {
@@ -157,20 +142,6 @@
         audio.onclick = function () {
             save('recording.audio', this.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
         };
-
-        var apps = document.querySelectorAll('[data-app]');
-        for (var a = 0; a < apps.length; a++) {
-            apps[a].onclick = function (event) {
-                var toggle = Strike.core.buttonIn(event, this);
-                if (!toggle) {
-                    return;
-                }
-                var on = toggle.getAttribute('aria-pressed') === 'true';
-                var body = 'enabled=' + (on ? 'false' : 'true');
-                post('/api/byd/' + this.getAttribute('data-app'), body, null, 'Could not confirm the factory app change');
-            };
-        }
-
         document.getElementById('settingsOpen').onclick = function () {
             show(true);
         };

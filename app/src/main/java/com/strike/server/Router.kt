@@ -150,6 +150,7 @@ class Router(context: Context, private val pin: Pin, shell: Shell, online: Onlin
         }
         path == "/api/report/file" -> if (method == "GET") report.file() else methodNotAllowed()
         path == "/api/report/save" -> if (method == "POST") report.save() else methodNotAllowed()
+        path == "/api/byd" -> if (method == "GET") daemons.byd() else methodNotAllowed()
         path.startsWith(BYD_API) -> {
             if (method == "POST") daemons.setByd(path.substring(BYD_API.length), body)
             else methodNotAllowed()

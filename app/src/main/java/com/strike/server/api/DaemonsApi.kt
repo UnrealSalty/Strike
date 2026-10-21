@@ -230,6 +230,18 @@ class DaemonsApi(context: Context, private val shell: Shell, private val online:
         return merged
     }
 
+    fun byd(): Response {
+        val apps = JSONObject()
+        apps.put("dashcam", bydApps.state(BydApps.DASHCAM))
+        apps.put("trafficMonitor", bydApps.state(BydApps.TRAFFIC_MONITOR))
+        apps.put("navigation", bydApps.state(BydApps.NAVIGATION))
+        apps.put("wakeWord", bydApps.wakeWordState())
+        val payload = JSONObject()
+        payload.put("apps", apps)
+        payload.put("writable", shell.isAuthorised())
+        return Response(200, JSON, payload.toString().toByteArray())
+    }
+
     fun setByd(app: String, body: String): Response {
         val name = when (app) {
             "dashcam" -> BydApps.DASHCAM

@@ -2,7 +2,6 @@ package com.strike.server.api
 
 import android.content.Context
 import com.strike.core.Config
-import com.strike.daemon.BydApps
 import com.strike.daemon.Shell
 import com.strike.recording.MB
 import com.strike.recording.totalBytes
@@ -26,7 +25,6 @@ import java.util.Locale
 private const val MP4 = "video/mp4"
 class RecordingsApi(context: Context, private val shell: Shell) {
 
-    private val bydApps = BydApps(context, shell)
     private val storage = Storage(context, shell)
     private val events = EventStorage(context, shell)
     private val thumbs = ClipThumbs(File(context.cacheDir, "thumbs"))
@@ -94,8 +92,6 @@ class RecordingsApi(context: Context, private val shell: Shell) {
         val payload = JSONObject()
         payload.put("values", values())
         payload.put("volumes", volumes)
-        payload.put("bydApps", bydAppStates())
-        payload.put("bydAppsWritable", shell.isAuthorised())
         return Response(200, JSON, payload.toString().toByteArray())
     }
 
@@ -176,14 +172,5 @@ class RecordingsApi(context: Context, private val shell: Shell) {
             rows.put(row)
         }
         return rows
-    }
-
-    private fun bydAppStates(): JSONObject {
-        val apps = JSONObject()
-        apps.put("dashcam", bydApps.state(BydApps.DASHCAM))
-        apps.put("trafficMonitor", bydApps.state(BydApps.TRAFFIC_MONITOR))
-        apps.put("navigation", bydApps.state(BydApps.NAVIGATION))
-        apps.put("wakeWord", bydApps.wakeWordState())
-        return apps
     }
 }

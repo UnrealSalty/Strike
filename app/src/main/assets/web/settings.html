@@ -45,7 +45,7 @@
     <main class="page">
         <div class="hero">
             <h1 class="hero__title">Settings</h1>
-            <p class="hero__sub">Updates, cameras, the screen PIN and the model report.</p>
+            <p class="hero__sub">Updates, cameras, the screen PIN, BYD services and the model report.</p>
         </div>
         <div class="columns">
             <section class="card columns__wide" id="updates">
@@ -104,6 +104,17 @@
                         <div class="pick__menu" hidden></div>
                     </span>
                 </section>
+                <section class="card" id="services">
+                    <div class="card__actions">
+                        <div class="card__lead">
+                            <h2 class="card__name">Services</h2>
+                            <p class="note">Turn off BYD apps you don't use to free up the car.</p>
+                        </div>
+                        <span class="card__tools">
+                            <button class="btn" id="servicesOpen" type="button">Manage</button>
+                        </span>
+                    </div>
+                </section>
                 <section class="card" id="modelReport">
                     <div class="card__actions">
                         <div class="card__lead">
@@ -133,6 +144,43 @@
         </section>
     </div>
 
+    <div class="modal" id="servicesModal" hidden>
+        <section class="modal__panel modal__panel--narrow" role="dialog" aria-modal="true" aria-labelledby="servicesTitle">
+            <div class="modal__head">
+                <span class="modal__title" id="servicesTitle">Services</span>
+                <button class="btn" id="servicesClose" type="button">Close</button>
+            </div>
+            <div class="modal__body">
+                <div class="list">
+                    <div class="row">
+                        <span class="row__label">Factory dashcam</span>
+                        <span class="row__value" data-app="dashcam">
+                            <button class="switch" type="button" aria-pressed="false" disabled><span class="switch__knob"></span></button>
+                        </span>
+                    </div>
+                    <div class="row">
+                        <span class="row__label">Traffic monitor</span>
+                        <span class="row__value" data-app="trafficMonitor">
+                            <button class="switch" type="button" aria-pressed="false" disabled><span class="switch__knob"></span></button>
+                        </span>
+                    </div>
+                    <div class="row">
+                        <span class="row__label">Telenav navigation</span>
+                        <span class="row__value" data-app="navigation">
+                            <button class="switch" type="button" aria-pressed="false" disabled><span class="switch__knob"></span></button>
+                        </span>
+                    </div>
+                    <div class="row">
+                        <span class="row__label">Voice assistant wake word</span>
+                        <span class="row__value" data-app="wakeWord">
+                            <button class="switch" type="button" aria-pressed="false" disabled><span class="switch__knob"></span></button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
     <div class="modal" id="security" hidden>
         <div class="modal__panel modal__panel--narrow">
             <div class="modal__head">
@@ -157,5 +205,6 @@
     <script src="js/updates.js"></script>
     <script src="js/camera-settings.js"></script>
     <script src="js/model-report.js"></script>
+    <script src="js/services.js"></script>
 </body>
 </html>

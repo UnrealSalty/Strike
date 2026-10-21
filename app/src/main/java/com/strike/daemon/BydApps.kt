@@ -2,13 +2,11 @@ package com.strike.daemon
 
 import android.content.Context
 import android.content.pm.PackageManager
-import android.provider.Settings
 
 // Package and system setting changes require shell UID access.
 class BydApps(context: Context, private val shell: Shell) {
 
     private val packages = context.packageManager
-    private val resolver = context.contentResolver
 
     fun state(name: String): String = try {
         when (packages.getApplicationEnabledSetting(name)) {
@@ -26,13 +24,14 @@ class BydApps(context: Context, private val shell: Shell) {
         return shell.run("$verb 2>&1") == 0
     }
 
-    fun wakeWordState(): String = when (Settings.System.getString(resolver, WAKE_WORD)) {
+    // The dashboard runs under app_process, which has no app record for the settings provider.
+    fun wakeWordState(): String = when (shell.read("settings get system $WAKE_WORD")?.trim()) {
+        null -> UNKNOWN
         "true" -> ENABLED
         "false" -> DISABLED
         else -> NOT_INSTALLED
     }
 
-    // The voice assistant applies this live; its speech engine idles while it is false.
     fun setWakeWord(enabled: Boolean): Boolean =
         shell.run("settings put system $WAKE_WORD $enabled 2>&1") == 0
 
@@ -45,5 +44,6 @@ class BydApps(context: Context, private val shell: Shell) {
         const val ENABLED = "enabled"
         const val DISABLED = "disabled"
         const val NOT_INSTALLED = "notInstalled"
+        const val UNKNOWN = "unknown"
     }
 }
