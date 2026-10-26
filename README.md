@@ -13,7 +13,7 @@ the same dashboard from your phone.
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/DTBZRgHX3s)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=flat-square&logo=buymeacoffee&logoColor=000)](https://buymeacoffee.com/unrealsalty)
 
-[**Download the APK**](https://github.com/UnrealSalty/Strike/releases/latest) &nbsp;·&nbsp; [strikebyd.com](https://strikebyd.com) &nbsp;·&nbsp; [Get started](#get-started) &nbsp;·&nbsp; [Report a bug](https://github.com/UnrealSalty/Strike/issues)
+[**Download the APK**](https://github.com/UnrealSalty/Strike/releases/latest) &nbsp;·&nbsp; [Installation guide](docs/installation.md) &nbsp;·&nbsp; [AI detector source](ai/README.md) &nbsp;·&nbsp; [strikebyd.com](https://strikebyd.com) &nbsp;·&nbsp; [Report a bug](https://github.com/UnrealSalty/Strike/issues)
 
 <a href="https://buymeacoffee.com/unrealsalty"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="140"></a>
 
@@ -26,7 +26,9 @@ the same dashboard from your phone.
 </div>
 
 This is the public home for Strike's official APK releases, documentation, and bug
-reports. Application development is maintained in a private repository.
+reports. The [AI detector source snapshot](ai/README.md) includes the published
+implementation, model details, and build notes. Application development is
+maintained in a private repository.
 
 ## Features
 
@@ -89,9 +91,9 @@ saves what happened.
 - **Clip length cap** — about 2 minutes per event.
 - **Optional deterrent** — fills the screen with red and a message you set.
 
-On an Atto 2 with surveillance armed, this used about **1–2 % of the battery over
-one day parked**. Other cars and settings will differ; it keeps the head unit and
-cameras awake, so a fixed number of days is not promised.
+Surveillance keeps the head unit and cameras awake. Battery use depends on the
+vehicle, firmware, settings, and activity around the car; a fixed number of days
+parked is not promised.
 
 <br clear="all">
 
@@ -121,17 +123,18 @@ The head unit has to be awake and online. A tunnel cannot wake a sleeping car.
 
 ## Get started
 
-1. Download **Strike.apk** from the [latest release](https://github.com/UnrealSalty/Strike/releases/latest)
-  and install it on the head unit.
-2. Open Strike and grant storage and microphone permissions. Audio is recorded
+Follow the [installation guide](docs/installation.md) to connect through ADB and
+install the APK from Windows, macOS, Linux, or an Android phone. Once installed:
+
+1. Open Strike and grant storage and microphone permissions. Audio is recorded
   only when you enable cabin audio.
-3. Enable the head unit's ADB access, then select **Daemons → Connect** if needed
+2. Select **Daemons → Connect** if needed
   and accept the debugging prompt. Strike restarts once after initial access and
-   permissions are ready.
-4. Open **Recordings → Settings**. Choose a recording mode, storage location,
-  space limit, and clip length. Recording starts out switched off.
-5. Turn on **Recorder** in **Daemons**.
-6. For parked recording, open **Surveillance → Settings**, enable **Watch the car
+  permissions are ready.
+3. Open **Recordings → Settings**. Choose **Continuous** or **Driving only**, a
+  storage location, storage limit, and clip length. Recording starts out **Off**.
+4. Turn on **Recorder** in **Daemons**.
+5. For parked recording, open **Surveillance → Settings**, enable **Watch the car
   when it is off**, and choose Smart or Continuous mode.
 
 <table>
@@ -281,6 +284,6 @@ Third-party components keep their upstream licenses:
 - The DiLink 5 capture helper and the car graphic, © 2026 Yash Srivastava, MIT
   License. See [the notice](licenses/fast_cam.txt).
 - The person and vehicle detection model, from [Ultralytics YOLO](https://github.com/ultralytics/ultralytics),
-  AGPL-3.0.
+  AGPL-3.0. See the [AI detector source snapshot and its scope](ai/README.md).
 - The [Cloudflare connector](licenses/cloudflared-notices.txt) and
   [zrok](licenses/zrok-notices.txt) notices.
