@@ -1,0 +1,135 @@
+{
+  "source_repository": "UnrealSalty/Strike-Core",
+  "source_revision": "92f37d9b4bdefad509129ba7505d38787e29a880",
+  "snapshot_scope": "Original detector and model, narrow original declaration excerpts, and a separate Android library build. This is not a standalone detector service or complete Strike application source.",
+  "publication_license": "AGPL-3.0-only for the Strike snapshot source and build/check files; upstream licenses retained for model, runtime, and Gradle Wrapper.",
+  "build": {
+    "gradle": "8.13",
+    "android_gradle_plugin": "8.13.2",
+    "kotlin": "2.0.21",
+    "tensorflow_lite": "2.14.0",
+    "compile_sdk": 36,
+    "min_sdk": 28,
+    "jvm_target": 11
+  },
+  "model": {
+    "name": "Ultralytics YOLO26n",
+    "sha256": "fc6755446dcb17a01d926420c1b6becc69e58b60b8371d3b802054a401c16602",
+    "bytes": 3153640,
+    "input": [
+      1,
+      640,
+      640,
+      3
+    ],
+    "output": [
+      1,
+      300,
+      6
+    ],
+    "original_checkpoint": "not recorded in source checkout",
+    "original_export_script": "not recorded in source checkout",
+    "export_reproducibility": "not established",
+    "input_output_tensors": "FLOAT32",
+    "embedded_conversion_metadata": {
+      "minimum_runtime": "2.9.0",
+      "converter": "TensorFlow 2.19.0",
+      "conversion_api_version": 2,
+      "source_model_type": "TF_CONCRETE_FUNCTIONS",
+      "optimization": "PTQ_DYNAMIC_RANGE (1002)",
+      "allow_custom_ops": false,
+      "enable_select_tf_ops": true,
+      "scope": "Embedded metadata only, not a complete or verified export recipe"
+    }
+  },
+  "files": [
+    {
+      "public_path": "src/main/java/com/strike/surveillance/Yolo.kt",
+      "source_path": "app/src/main/java/com/strike/surveillance/Yolo.kt",
+      "source_kind": "unchanged complete file",
+      "source_sha256": "094cd6a7a13c6867ca8787b3bdb781b9d0dab5dc00971939c2091f9b3cf2200a",
+      "public_sha256": "094cd6a7a13c6867ca8787b3bdb781b9d0dab5dc00971939c2091f9b3cf2200a",
+      "bytes": 8540
+    },
+    {
+      "public_path": "src/main/assets/models/yolo26n.tflite",
+      "source_path": "app/src/main/assets/models/yolo26n.tflite",
+      "source_kind": "unchanged complete file",
+      "source_sha256": "fc6755446dcb17a01d926420c1b6becc69e58b60b8371d3b802054a401c16602",
+      "public_sha256": "fc6755446dcb17a01d926420c1b6becc69e58b60b8371d3b802054a401c16602",
+      "bytes": 3153640
+    },
+    {
+      "public_path": "gradlew",
+      "source_path": "gradlew",
+      "source_kind": "unchanged complete file",
+      "source_sha256": "734b3879d3501dce471cf0522d3bcbafe76873d9fc5129345b67fb43bd15e933",
+      "public_sha256": "734b3879d3501dce471cf0522d3bcbafe76873d9fc5129345b67fb43bd15e933",
+      "bytes": 8752
+    },
+    {
+      "public_path": "gradlew.bat",
+      "source_path": "gradlew.bat",
+      "source_kind": "unchanged complete file",
+      "source_sha256": "2209f919a22528af59a2af2ad97e8d056cca18e39f7d87aa3fd549a73b180150",
+      "public_sha256": "2209f919a22528af59a2af2ad97e8d056cca18e39f7d87aa3fd549a73b180150",
+      "bytes": 2872
+    },
+    {
+      "public_path": "gradle/wrapper/gradle-wrapper.jar",
+      "source_path": "gradle/wrapper/gradle-wrapper.jar",
+      "source_kind": "unchanged complete file",
+      "source_sha256": "e996d452d2645e70c01c11143ca2d3742734a28da2bf61f25c82bdc288c9e637",
+      "public_sha256": "e996d452d2645e70c01c11143ca2d3742734a28da2bf61f25c82bdc288c9e637",
+      "bytes": 59203
+    },
+    {
+      "public_path": "gradle/wrapper/gradle-wrapper.properties",
+      "source_path": "gradle/wrapper/gradle-wrapper.properties",
+      "source_kind": "unchanged complete file",
+      "source_sha256": "7c8ad13e68c4a62a8500b386d751dfa67483b76b7b5a9f069da3f28fa3281b17",
+      "public_sha256": "7c8ad13e68c4a62a8500b386d751dfa67483b76b7b5a9f069da3f28fa3281b17",
+      "bytes": 231
+    },
+    {
+      "public_path": "src/main/java/com/strike/camera/Mosaic.kt",
+      "source_path": "app/src/main/java/com/strike/camera/FrameSink.kt",
+      "source_kind": "unchanged declaration excerpt with original package header",
+      "source_lines": [
+        18,
+        19
+      ],
+      "source_file_sha256": "f7a87b413e7bc692d819c6535696f94107e7962188a5ff3b24523f27522cde2a",
+      "excerpt_sha256": "54265617d7b2e052b6728ab7ed6e9b82c4573f8fc37aaf1bb3388295dda57045",
+      "public_sha256": "e0376cefc481a450e5580eca1e5c70d662d37a91424a1fbf62626042cc210b29",
+      "bytes": 169
+    },
+    {
+      "public_path": "src/main/java/com/strike/daemon/DaemonLog.kt",
+      "source_path": "app/src/main/java/com/strike/daemon/DaemonLog.kt",
+      "source_kind": "unchanged declaration excerpt with original package header",
+      "source_lines": [
+        5,
+        28
+      ],
+      "source_file_sha256": "c720537201ff8a5466b9c095fd066225afade1b3cdaa0051628069cfb48f6162",
+      "excerpt_sha256": "abb155acef827c5b7cd7fb1460ee485dec64c75fc14cd8101b781217a4235743",
+      "public_sha256": "a4b9cdf0b980e381dbe9a310621d6e37ec0163cd12ceea80f76487e5eaf98382",
+      "bytes": 880
+    },
+    {
+      "public_path": "src/main/java/com/strike/surveillance/Kinds.kt",
+      "source_path": "app/src/main/java/com/strike/surveillance/EventStore.kt",
+      "source_kind": "unchanged declaration excerpt with original package header",
+      "source_lines": [
+        18,
+        19
+      ],
+      "source_file_sha256": "a2be590f2d567f1d4b13160386106dc05d2849618c1d4fc66f3ec6a30cf4fa3a",
+      "excerpt_sha256": "a723e97dc6252e7d6827ebae233e4642b0f65ab3ed88bbb3bfeed7a1784b9745",
+      "public_sha256": "3e5d89368387cd8422d8d13d89813506388904cb69d8046f59a47790abeb42dd",
+      "bytes": 91
+    }
+  ],
+  "hash_scope": "Source hashes use the exact Git blob bytes at source_revision, not platform-converted working-tree files. Excerpt hashes include the recorded source lines and their line terminators. Public text files use LF line endings."
+}

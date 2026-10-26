@@ -1,0 +1,25 @@
+Strike detector source snapshot
+Copyright 2026 UnrealSalty (https://github.com/UnrealSalty)
+
+The Strike source files and source excerpts identified in source-manifest.json,
+and the Strike-authored build and verification files in this ai directory, are offered under
+GNU Affero General Public License version 3.0. See LICENSE. This grant applies
+to this published snapshot; it does not state a license for the rest of Strike.
+The root repository's PolyForm Strict license does not restrict the AGPL rights
+granted for these files.
+
+The bundled yolo26n.tflite model is an Ultralytics YOLO26n model. Ultralytics
+publishes its models under AGPL-3.0 unless separate permission applies.
+https://github.com/ultralytics/ultralytics
+https://www.ultralytics.com/license
+
+TensorFlow Lite 2.14.0 is a build/runtime dependency from the TensorFlow project,
+licensed under Apache License 2.0. It is resolved from Maven Central rather than
+vendored in this source snapshot.
+https://github.com/tensorflow/tensorflow/tree/v2.14.0
+
+The Gradle Wrapper files are copied unchanged from the source checkout and
+download Gradle 8.13. Gradle is licensed under Apache License 2.0.
+https://github.com/gradle/gradle/tree/v8.13.0
+
+The Apache License 2.0 text is included in third_party/APACHE-2.0.txt.
