@@ -5,15 +5,15 @@
 # Your car. On watch.
 
 **Dashcam and parked surveillance for BYD head units.**
-Records locally on the car's own cameras, watches while you're parked, and opens
-the same dashboard from your phone.
+Records locally on the car's own cameras and watches while you're parked.
+Check in from a browser, or pair a phone with Strike Connect in Strike 1.0.
 
 [![Latest release](https://img.shields.io/github/v/release/UnrealSalty/Strike?style=flat-square&label=release&color=2b6cff)](https://github.com/UnrealSalty/Strike/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/UnrealSalty/Strike/total?style=flat-square&label=downloads&color=2b6cff)](https://github.com/UnrealSalty/Strike/releases)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/DTBZRgHX3s)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=flat-square&logo=buymeacoffee&logoColor=000)](https://buymeacoffee.com/unrealsalty)
 
-[**Download the APK**](https://github.com/UnrealSalty/Strike/releases/latest) &nbsp;·&nbsp; [Installation guide](docs/installation.md) &nbsp;·&nbsp; [AI detector source](ai/README.md) &nbsp;·&nbsp; [strikebyd.com](https://strikebyd.com) &nbsp;·&nbsp; [Report a bug](https://github.com/UnrealSalty/Strike/issues)
+[**Download the car APK**](https://github.com/UnrealSalty/Strike/releases/latest) &nbsp;·&nbsp; [**Download Strike Connect**](https://strikebyd.com/pair) &nbsp;·&nbsp; [Installation guide](docs/installation.md) &nbsp;·&nbsp; [AI detector source](ai/README.md) &nbsp;·&nbsp; [strikebyd.com](https://strikebyd.com) &nbsp;·&nbsp; [Report a bug](https://github.com/UnrealSalty/Strike/issues)
 
 <a href="https://buymeacoffee.com/unrealsalty"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="140"></a>
 
@@ -21,7 +21,7 @@ the same dashboard from your phone.
 
 <sub>Records while you drive &nbsp;·&nbsp; Watches while you're parked &nbsp;·&nbsp; Opens in any browser</sub>
 
-<sub>Interface previews use sample vehicle, storage, and connection values.</sub>
+<sub>Preview of Strike 1.0 with sample data. The current public car release is v0.8. Strike Connect is in testing; store downloads are not available yet.</sub>
 
 </div>
 
@@ -41,8 +41,9 @@ an optional red screen deterrent.
 angle. Browse recordings and surveillance events in separate libraries.
 - 💾 **Your storage.** Save to internal storage, SD, or USB. Give recordings and
 surveillance their own space limits; the oldest finished clips rotate out.
-- 📱 **Access from your phone.** Open the dashboard on your local network, or use
-your own domain with an optional Cloudflare tunnel.
+- 📱 **Phone and browser access.** Use the browser dashboard through your local
+network, Cloudflare, or zrok. Strike 1.0 also adds Strike Services for pairing the
+separate Strike Connect phone app.
 
 Footage is stored on the car, and detection runs on the head unit. Remote access
 is optional. Strike has no account or subscription of its own.
@@ -56,10 +57,10 @@ is optional. Strike has no account or subscription of its own.
 </tr>
 <tr>
 <td width="50%"><img src="art/screenshots/surveillance.webp" alt="Surveillance events with person and vehicle detections"><br><sub><b>Surveillance</b> — parked events, with person and vehicle detections.</sub></td>
-<td width="50%"><img src="art/screenshots/online.webp" alt="Online page with Cloudflare and zrok, addresses masked"><br><sub><b>Online</b> — remote access with Cloudflare and zrok.</sub></td>
+<td width="50%"><img src="art/screenshots/online.webp" alt="Online page with Strike Services, Cloudflare and zrok"><br><sub><b>Online</b> — choose Strike Services, Cloudflare, or zrok.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="art/screenshots/daemons.webp" alt="Daemons page showing recorder, surveillance, remote access and the log"><br><sub><b>Daemons</b> — recorder, surveillance, remote access, and the log.</sub></td>
+<td width="50%"><img src="art/screenshots/daemons.webp" alt="Services page showing recorder, surveillance, remote access and the log"><br><sub><b>Services</b> — recorder, surveillance, remote access, and the log.</sub></td>
 <td width="50%"><img src="art/screenshots/settings.webp" alt="Settings page showing versions and the Automatic camera profile"><br><sub><b>Settings</b> — versions, camera profile, and the in-car PIN.</sub></td>
 </tr>
 </table>
@@ -97,43 +98,61 @@ parked is not promised.
 
 <br clear="all">
 
-## Built lean
+## Built for the car
 
-- 📦 **One APK.** No companion app, no Play services, no installer.
-- 🧩 **Four dependencies.** core-ktx, coroutines, `dadb` for the local ADB
-connection, and TensorFlow Lite for detection.
-- ⚡ **An interface of about 230 KB.** Plain HTML, CSS, and JavaScript. No
-framework, no bundler, no build step, no CDN, and no remote fonts, so every
-screen loads with the car offline.
-- 🔒 **No telemetry, analytics, or crash reporting.** The only address Strike calls
-on its own is GitHub's release API, at most once a day.
+- **Local recording and detection.** Footage stays on the selected storage, and
+  detection runs on the head unit.
+- **Shared camera feed.** Recording, surveillance, and live view share the same
+  camera source.
+- **Offline interface.** The car app bundles its interface and fonts locally.
+  Remote access is optional.
 
-## Away from the car. Still in the picture.
+## Strike Connect for your phone
 
-<img src="art/screenshots/phone.webp" alt="A phone showing the Strike dashboard with vehicle status and quick actions" align="right" width="220">
+<img src="art/screenshots/phone.webp" alt="Strike Connect phone app showing a paired car" align="right" width="220">
 
-Strike serves its own interface. Open the car's address and you get the same live
-view and recordings, behind an access code. Connect on your local network, or
-reach the car from anywhere with your own domain over a Cloudflare tunnel, or a
-public zrok link. Only one remote service runs at a time.
+Strike Connect is the separate iPhone and Android app for Strike 1.0. View live
+cameras, play and save clips, check surveillance activity, and manage Strike's
+settings from your phone.
 
-The head unit has to be awake and online. A tunnel cannot wake a sleeping car.
+On the car, choose **Online → Strike Services → Pair a phone**. In the phone app,
+scan the QR code or enter its six-digit code, then approve the matching
+confirmation number on the car. No account is needed.
+
+[**Download Strike Connect for iPhone or Android**](https://strikebyd.com/pair)
+
+Strike Connect is in testing. The phone download page shows availability for
+each platform; store downloads are not available yet.
+
+Strike Services connects the paired car and phone through Strike's backend,
+with a relay when needed. The car must be awake and online for live access.
+Clips saved to the phone remain available offline.
 
 <br clear="all">
+
+## Browser access
+
+Strike also serves its own browser interface. Open the car's address for live
+view and recordings, protected by a browser access code. Connect on your local
+network, through your own Cloudflare domain, or through a public zrok link.
+Only one remote service runs at a time.
+
+The head unit has to be awake and online. A tunnel cannot wake a sleeping car.
 
 ## Get started
 
 Follow the [installation guide](docs/installation.md) to connect through ADB and
-install the APK from Windows, macOS, Linux, or an Android phone. Once installed:
+install the APK from Windows, macOS, Linux, or an Android phone. Once installed,
+use the steps below. **Services** is named **Daemons** in v0.8.
 
 1. Open Strike and grant storage and microphone permissions. Audio is recorded
   only when you enable cabin audio.
-2. Select **Daemons → Connect** if needed
+2. Select **Services → Connect** if needed
   and accept the debugging prompt. Strike restarts once after initial access and
   permissions are ready.
 3. Open **Recordings → Settings**. Choose **Continuous** or **Driving only**, a
   storage location, storage limit, and clip length. Recording starts out **Off**.
-4. Turn on **Recorder** in **Daemons**.
+4. Turn on **Recorder** in **Services**.
 5. For parked recording, open **Surveillance → Settings**, enable **Watch the car
   when it is off**, and choose Smart or Continuous mode.
 
@@ -156,7 +175,7 @@ not yet been verified.
 If the camera views are split incorrectly, **Settings → Cameras** offers legacy
 profiles for Seal, Atto 3, and Tang 2022, plus
 Strike's Atto 2 profile. After choosing one, turn **Recorder** off and on in
-**Daemons**. Automatic uses camera-tag discovery, then recognizable Atto 2 or
+**Services**. Automatic uses camera-tag discovery, then recognizable Atto 2 or
 Atto 3 model names, otherwise the legacy camera-1 profile. If that camera
 opens but sends no frames for 25 seconds, Automatic tries raw camera 0 and remembers
 it after frames arrive. A firmware change clears that preference. These profiles
@@ -175,7 +194,9 @@ car's cameras.
 Automatic parked operation requires working ignition readings. Local ADB must be
 available on port 5555 and authorized on the head unit.
 
-## Access from your phone
+<a id="access-from-your-phone"></a>
+
+## Set up browser access
 
 On the car's **Online** page, copy a local address and open it on a phone or
 computer that can reach the car's network. Enter the **Browser access** code
@@ -205,7 +226,7 @@ token, Cloudflare can send requests to either device.
 
 The tunnel can run **Always**, when the **Car is off**, or **On lock**. On lock
 requires a confirmed lock reading. Automatic modes stop if ignition readings are
-unavailable. The same tunnel switch appears in **Daemons**; turning it off cancels
+unavailable. The same tunnel switch appears in **Services**; turning it off cancels
 automatic starts too. Tunnel controls and setup are available from the car;
 browsers show their status.
 
@@ -230,9 +251,9 @@ Parked capture uses power to keep the cameras and head unit awake. Battery use
 has not been measured across vehicles. A sudden power cut can leave the clip
 being written unplayable.
 
-## BYD services
+## BYD features
 
-Strike only reads from the car, with one exception. **Settings → Services** can
+Strike only reads from the car, with one exception. **Settings → BYD features** can
 switch off BYD apps you don't use, so they stop competing with recording for the
 head unit's CPU and cameras:
 

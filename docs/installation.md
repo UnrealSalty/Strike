@@ -1,6 +1,6 @@
 # Install Strike
 
-[Download Strike.apk](https://github.com/UnrealSalty/Strike/releases/latest) · [Website](https://strikebyd.com) · [Back to Strike](../README.md)
+[Download Strike.apk](https://github.com/UnrealSalty/Strike/releases/latest) · [Strike Connect for phones](https://strikebyd.com/pair) · [Website](https://strikebyd.com) · [Back to Strike](../README.md)
 
 This guide installs the official APK through an authorized ADB connection to the
 car's head unit. It works from Windows, macOS, Linux, or an Android phone with a
@@ -93,16 +93,18 @@ only when the device is authorized and installation reports **`Success`**.
 
 ## Set up your first recording
 
+The screenshots preview Strike 1.0. In v0.8, **Services** is named **Daemons**.
+
 1. Open **Strike** on the car and grant its storage and microphone permissions.
    Microphone permission alone does not start audio recording; **Cabin audio**
    is controlled in recording settings.
-2. Open **Daemons**. If **Shell access** is not authorized, select **Connect** and
+2. Open **Services**. If **Shell access** is not authorized, select **Connect** and
    accept Strike's own debugging prompt on the head unit. Approving your computer
    earlier does not approve Strike's separate connection. Initial setup restarts
    Strike once access and permissions are ready.
 3. Open **Recordings → Settings**. Change **Mode** from **Off** to **Continuous**
    or **Driving only**. Choose **Storage**, **Storage limit**, and **Clip length**.
-4. Open **Daemons** and turn **Recorder** on.
+4. Open **Services** and turn **Recorder** on.
 5. Check **Live** for the camera picture. Let a clip finish, then open it in
    **Recordings** to check playback and the selected storage.
 
@@ -120,7 +122,7 @@ confirmed driving state. Parked recording is configured separately below.
 4. Choose whether surveillance **Starts** on ignition off or locking, and select
    its storage and storage limit.
 
-Keep **Recorder** enabled in **Daemons**. If the head unit has a **Disable
+Keep **Recorder** enabled in **Services**. If the head unit has a **Disable
 Autostart** list, make sure Strike is not disabled there. In a list with that
 title, enabling the disable switch blocks autostart.
 
@@ -158,7 +160,7 @@ settings, PIN, and browser access.
 
 For an unresolved problem, include the car model, DiLink/Android version, Strike
 version, and exact error in a [bug report](https://github.com/UnrealSalty/Strike/issues)
-or [Discord](https://discord.gg/DTBZRgHX3s). Logs can be exported from **Daemons → Export**;
+or [Discord](https://discord.gg/DTBZRgHX3s). Logs can be exported from **Services → Log → Export**;
 review them for personal details before sharing.
 
 The connection and installation commands follow Google's [ADB documentation](https://developer.android.com/tools/adb).
