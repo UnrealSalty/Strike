@@ -160,7 +160,7 @@ The car app needs a **BYD head unit running Android 9 or newer**, **64-bit ARM**
 compatible camera and vehicle-state interfaces, and authorized **ADB on port 5555**.
 Installing Strike does not enable ADB or add cameras the vehicle does not have.
 
-Strike 1.0 includes legacy/DiLink 3, DiLink 4 and DiLink 5 camera paths. Compatibility
+Strike 1.0 includes legacy/DiLink 3 and DiLink 4 camera paths. Compatibility
 depends on the head unit, firmware and camera equipment, not just a model name or
 DiLink label. **Atto 2 is the reference car tested by the maintainer**; other vehicles
 and firmware combinations need verification. Some units need an explicit camera profile.
@@ -195,6 +195,6 @@ implementation, model and build notes; its scope is explained there.
 
 Third-party components retain their upstream licenses:
 
-- DiLink 5 capture helper and car graphic, copyright 2026 Yash Srivastava, MIT. See [the notice](licenses/fast_cam.txt).
+- Camera capture helper and car graphic, MIT. See [the notice](licenses/fast_cam.txt).
 - Person and vehicle detection model from [Ultralytics YOLO](https://github.com/ultralytics/ultralytics), AGPL-3.0. See [the detector source snapshot](ai/README.md).
 - [Cloudflare connector notices](licenses/cloudflared-notices.txt) and [zrok notices](licenses/zrok-notices.txt).

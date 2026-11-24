@@ -157,7 +157,7 @@ Strike 1.0 includes rear-only detection and a **Rear camera only** profile.
 A rear-only vehicle uses its rear feed; camera selections that do not exist stay
 disabled. A 360-camera vehicle can show all four views in one clip or an individual view.
 
-Legacy/DiLink 3, DiLink 4 and DiLink 5 capture paths are included. Some units need
+Legacy/DiLink 3 and DiLink 4 capture paths are included. Some units need
 an explicit profile. Their presence does not establish compatibility with every
 head unit or firmware. The maintainer's reference vehicle is the Atto 2.
 
@@ -204,7 +204,7 @@ authorized ADB connection on compatible units:
 adb shell touch /data/local/tmp/.strike_pin_reset
 ```
 
-Some DiLink 5 units use another path; follow the exact command displayed by that
+Some units use another path; follow the exact command displayed by that
 unit's lock screen. Reopen Strike, then set a new PIN under **Settings > Security**.
 PIN recovery leaves recordings and other settings in place.
 
